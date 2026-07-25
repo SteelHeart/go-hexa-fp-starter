@@ -149,9 +149,10 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **224 tests de premier niveau**, répartis ainsi
-  (la table couvre les 217 d'avant les binaires ; les 7 nouveaux sont dans
-  `…/user_registration/tests`, `…/outbox/tests` et `…/relay/tests`) :
+- `go test -shuffle=on ./...` vert — **227 tests de premier niveau**, répartis ainsi
+  (la table couvre les 217 d'avant les binaires ; les 10 nouveaux sont dans
+  `…/user_registration/tests`, `…/adapters/primary/http/tests`, `…/outbox/tests` et
+  `…/relay/tests`) :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -171,6 +172,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `internal/infrastructure/security/tests` | 10 | Sel neuf à chaque hachage, nonce neuf à chaque chiffrement, **AES-128 refusé**, altération détectée |
 | `…/user_registration/tests` (boîte noire) | 4 | Le module inscrit **sans aucune infrastructure**, un pilote inconnu refuse le montage, 16 inscriptions concurrentes sur la même adresse n'en laissent passer qu'une, **chaque compte a son propre condensé** |
 | `internal/infrastructure/relay/tests` | 2 | Le mappage message → enveloppe ne perd aucun champ, et un échec de publication **remonte intact** au dépileur au lieu d'être avalé |
+| `…/adapters/primary/http/tests` (en processus) | 3 | 201 et **aucune fuite du condensé dans le corps brut**, 409 ≠ 422 sur adresse prise, chaque erreur de domaine sur son statut avec le message du domaine |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
@@ -318,6 +320,8 @@ est écrite à côté :
 
 | Piège | Effet | Remède |
 |---|---|---|
+| `tests/e2e/` est resté **vide** toute la phase 0 | `go test -tags=e2e` compilait zéro test et affichait `ok`. Le job CI `e2e` était vert **sans rien vérifier** | Tests écrits, et la CI **compte les `=== RUN`** : zéro test exécuté échoue désormais |
+| `Invoke-WebRequest.Content` rend un `byte[]` | `WriteAllText` écrit alors la liste décimale des octets. Fichier corrompu, d'apparence plausible | Ne pas générer d'artefact par le shell ; vérifier les premiers octets |
 | `arch-go` cherche **`arch-go.yml`**, sans point | Le fichier s'appelait `.arch-go.yml` : l'outil n'a JAMAIS pu le lire | Renommé. Ne pas remettre le point. Le garde d'inertie de la CI le nommait aussi — corrigé |
 | `arch-go` a changé de chemin de module | `go install github.com/fdaines/arch-go` échoue | C'est `github.com/arch-go/arch-go`. Corrigé dans `Taskfile.yml` et la CI |
 | Écriture PowerShell mal encodée | 408 séquences d'accents doublement encodées dans 8 fichiers | Réparé. Toujours écrire en UTF-8 sans BOM |
@@ -337,10 +341,11 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-1. **Test e2e du parcours d'inscription** : ce qui vient d'être vérifié à la main (201, 409, 422,
-   normalisation, UUID v7) n'est verrouillé par aucun test. Une régression passerait
-2. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`
+1. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`.
+   **C'est le seul obstacle purement mécanique qui reste avant le tag**
+2. **F006** : installer `task` et `govulncheck` pour que `task check` tourne réellement en local
 3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+4. **Fusionner PR #20**, puis cette branche : `main` est très en retard
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 

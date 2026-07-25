@@ -437,12 +437,10 @@ jobs:
           psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
           goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
-      - name: Démarre l'API et le worker
+      - name: Démarre l'API
         run: |
           go build -o bin/server ./cmd/server
-          go build -o bin/worker ./cmd/worker
           ./bin/server > server.log 2>&1 &
-          ./bin/worker > worker.log 2>&1 &
           for i in $(seq 1 40); do
             if curl -fsS "$E2E_BASE_URL/healthz" > /dev/null 2>&1; then
               echo "API prête après ${i} tentative(s)"; exit 0
@@ -451,8 +449,39 @@ jobs:
           done
           echo "::error::l'API n'a pas démarré"; cat server.log; exit 1
 
+      # Le dépileur n'est PAS lancé ici, et ce n'est pas un oubli : la
+      # configuration livrée met l'outbox sur le pilote `memory`, qui vit dans le
+      # processus. Le worker refuse alors de démarrer, délibérément — il
+      # dépilerait un magasin que le serveur ne partage pas.
+      #
+      # On vérifie donc que le refus SE PRODUIT, plutôt que de lancer un binaire
+      # dont on sait qu'il s'arrêtera. Un job qui démarre un processus condamné
+      # et n'en tient pas compte finit par masquer une vraie panne.
+      - name: Le dépileur refuse une outbox non partagée
+        run: |
+          go build -o bin/worker ./cmd/worker
+          if ./bin/worker > worker.log 2>&1; then
+            echo '::error::le worker a démarré sur une outbox memory : il dépilerait un magasin vide'
+            cat worker.log; exit 1
+          fi
+          grep -q "non partagé entre processus" worker.log || {
+            echo "::error::le worker a échoué, mais pas pour la bonne raison"; cat worker.log; exit 1; }
+          echo "refus confirmé, avec son motif"
+
+      # `-v` puis comptage des `=== RUN` : sans tag, ce paquet compile ZÉRO test
+      # et `go test` affiche `ok`. Vérifier le code de retour ne suffit donc pas —
+      # c'est le piège du faux vert documenté dans CLAUDE.md, et il a déjà eu
+      # cours ici : `tests/e2e/` est resté vide pendant toute la phase 0 pendant
+      # que ce job affichait vert.
       - name: go test -tags=e2e
-        run: go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/...
+        run: |
+          go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/... 2>&1 | tee e2e.log
+          ran=$(grep -c '^=== RUN' e2e.log || true)
+          echo "tests e2e exécutés : ${ran}"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::aucun test e2e n'a été exécuté — sortie verte, couverture nulle"
+            exit 1
+          fi
 
       - name: Logs des services (en cas d'échec)
         if: failure()
