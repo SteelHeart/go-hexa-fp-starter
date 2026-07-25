@@ -1,12 +1,12 @@
 # Definition of Done
 
-La barre à franchir pour dire « livré ». Tant qu'une ligne n'est pas cochée, la feature n'est pas
+La barre à franchir pour dire « livré ». Tant qu'une ligne n'est pas cochée, le travail n'est pas
 terminée — elle est *en cours*. Cette liste est reprise telle quelle dans le gabarit de PR.
 
 ## 1. Besoin
 
 - [ ] Une **issue** existe, avec des critères d'acceptation explicites et vérifiables.
-- [ ] La **carte d'impact** est produite : features touchées, ports ajoutés ou modifiés, migrations,
+- [ ] La **carte d'impact** est produite : modules touchés, ports ajoutés ou modifiés, migrations,
       événements outbox, contrat OpenAPI, **surfaces concernées** (web / mobile / CLI / événements).
 - [ ] Ce qui est **hors périmètre** est écrit dans la PR — pas laissé en `TODO` dans le code.
 
@@ -23,7 +23,7 @@ terminée — elle est *en cours*. Cette liste est reprise telle quelle dans le 
 
 - [ ] Les règles métier sont des **fonctions pures** dans `domain/` ; les effets sont injectés.
 - [ ] `domain/`, `ports/`, `application/` n'importent ni transport, ni persistance, ni logger.
-- [ ] Aucune feature n'importe une autre feature.
+- [ ] Aucun module métier n'importe un autre module métier.
 - [ ] Les préoccupations transverses sont des **décorateurs**, pas du code inséré dans le cas d'usage.
 - [ ] Aucun secret, aucune donnée personnelle dans les logs.
 - [ ] `arch-go` vert · `golangci-lint` vert · `go vet` vert.
@@ -32,7 +32,7 @@ terminée — elle est *en cours*. Cette liste est reprise telle quelle dans le 
 
 - [ ] **Deny par défaut** vérifié sur les nouveaux chemins, avec un test qui prouve le refus.
 - [ ] Ligne(s) ajoutée(s) à la **matrice rôle × endpoint** pour toute nouvelle route.
-- [ ] Si la feature touche l'argent ou la preuve : **idempotence** et journal d'audit vérifiés.
+- [ ] Si le module touche l'argent ou la preuve : **idempotence** et journal d'audit vérifiés.
 - [ ] `govulncheck` et `gitleaks` verts.
 
 ## 5. Données

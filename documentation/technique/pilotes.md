@@ -3,8 +3,35 @@
 > Surface d'extension du framework. Un module déclare des **ports** ; un **pilote** en est une
 > implémentation interchangeable, choisie par configuration.
 >
-> **État au 2026-07-25 : aucun pilote n'est implémenté sous cette forme.** Ce document est une
-> cible de conception. Il définit le périmètre d'extension, pas l'existant.
+> **Ce document est un catalogue d'INTENTIONS, pas un inventaire.** Il définit le périmètre
+> d'extension, pas l'existant.
+
+## Ce qui est réellement construit
+
+Une centaine de pilotes sont décrits plus bas. **Onze existent.** La table qui fait autorité sur ce
+qu'on peut activer est `knownDrivers`, dans
+[`internal/config/modules.go`](../../internal/config/modules.go) : elle ne liste que les pilotes
+écrits, testés, et qui documentent leurs NON-garanties.
+
+| Module noyau | Pilotes construits |
+|---|---|
+| `outbox` | `memory` · `postgres` |
+| `idempotency` | `memory` · `postgres` · `redis` |
+| `dynconf` | `file` · `postgres` |
+| `audit` | `log` · `postgres` |
+| `storage` | `disk` |
+| `scheduler` | `cron-inproc` · `advisory-lock` |
+
+Tout le reste **refuse le démarrage**. C'est délibéré : accepter `driver: s3` dans la configuration
+puis échouer plus loin avec « pilote inconnu » ferait se contredire deux sources de vérité, et le
+message accuserait l'utilisateur d'une faute qui serait la nôtre.
+
+Un pilote migre de ce catalogue vers `knownDrivers` le jour où il est écrit, testé, et où il déclare
+ce qu'il ne garantit pas — jamais avant.
+
+> Les pilotes `postgres` et `redis` ci-dessus sont **écrits mais jamais exécutés** : aucune migration
+> n'existe (issue #2) et aucun service ne tourne sur la machine de référence (friction F001). Ils
+> compilent, ils ont été relus, rien ne les a éprouvés.
 
 ## Six règles qui gouvernent tout pilote
 

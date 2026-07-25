@@ -8,9 +8,15 @@
 
 ## Ce que ce dépôt est
 
-Un **socle réutilisable**, pas une application. Sa valeur n'est pas le code métier de démonstration
-(`user_registration`) : c'est la **forme** que ce code impose. Un socle dont la forme se dégrade en
-trois semaines n'a servi à rien.
+Un **socle réutilisable**, pas une application — et, à terme, un **framework** : un noyau de modules
+fournis (`internal/core/`), un générateur, et ce règlement. Sa valeur n'est pas le code métier de
+démonstration (`user_registration`) : c'est la **forme** que ce code impose. Un socle dont la forme
+se dégrade en trois semaines n'a servi à rien.
+
+Ce glissement de « base de projet » vers « framework » a une conséquence directe sur les règles :
+elles ne protègent plus seulement le code d'ici, elles protègent **tout projet qui en sera engendré**.
+Une entorse tolérée une fois se retrouve dupliquée dans chaque application créée ensuite, et ne se
+rattrape plus.
 
 Deux propriétés sont non négociables, et tout le reste en découle :
 
@@ -24,7 +30,11 @@ Deux propriétés sont non négociables, et tout le reste en découle :
 
 | Terme | Signification **dans ce dépôt** |
 |---|---|
-| **Feature** | Un *bounded context* : un dossier sous `internal/modules/`, étanche aux autres |
+| **Module noyau** | Une capacité technique fournie par le socle : un dossier sous `internal/core/` |
+| **Module métier** | Un *bounded context* : un dossier sous `internal/modules/`, étanche aux autres |
+| **Pilote** | Une implémentation interchangeable d'un module, choisie par configuration |
+| **Surface** | Un frontend servi — web, mobile, CLI, événements |
+| ~~Service~~ | ⛔ **proscrit** — ambigu, et rend les recherches dans le code inexploitables |
 | **Port** | Un **type fonction** déclaré dans `ports/`. Jamais une interface |
 | **Port primaire** | Un cas d'usage : ce que le monde extérieur peut demander au cœur |
 | **Port secondaire** | Un besoin du cœur envers le monde (persister, publier, envoyer) |

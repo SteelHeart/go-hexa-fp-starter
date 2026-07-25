@@ -28,7 +28,7 @@ Trois obligations :
    `GenerateID`) n'en prend pas.
 
 Go 1.24+ autorise les **alias génériques** — utilisables si un port doit être paramétré, mais dans
-le doute, un port concret est préférable : un port appartient à sa feature, pas au dépôt.
+le doute, un port concret est préférable : un port appartient à son module, pas au dépôt.
 
 ## 2. Ports primaires et secondaires
 

@@ -10,8 +10,13 @@
 Un **socle Go réutilisable** : architecture hexagonale modulaire, programmation fonctionnelle,
 exposé à **N frontends simultanés** (web, mobile, CLI, événements).
 
-Ce n'est pas une application. Sa valeur n'est pas le code de démonstration (`user_registration`),
-c'est la **forme** qu'il impose — et les gardes qui empêchent cette forme de se dégrader.
+Ce n'est pas une application, et ce n'est plus un simple modèle de projet à copier une fois. La
+cible est un **framework** : un noyau de modules réutilisables (`internal/core/`), un générateur
+(`hexa new`), et un règlement outillé. Le passage en monorepo `core/` + `cli/` + `template/` attend
+le tag `v0.1.0` — décision de séquencement : **stabiliser avant de restructurer**.
+
+Sa valeur n'est pas le code de démonstration (`user_registration`), c'est la **forme** qu'il impose —
+et les gardes qui empêchent cette forme de se dégrader.
 
 Deux propriétés non négociables, dont tout le reste découle :
 
@@ -94,21 +99,29 @@ rules/                        règlement d'ingénierie — fait foi
 documentation/adr/            décisions d'architecture — font foi
 documentation/process/        nomenclature, labels, templates
 documentation/securite/       registre de failles, matrice d'accès
-cmd/{server,worker,cli}       composition root — le seul code qui connaît tout
-config/                       lecture d'environnement, immuable, validée au démarrage
-internal/pkg/                 primitives sans dépendance : result, fp, middleware
+cmd/{server,worker,cli}       composition root — le seul code qui connaît tout   ⟨absent⟩
+config/*.yaml                 configuration par groupes, secrets par ${VAR} uniquement
+internal/config/              lecture, fusion, validation — refuse le démarrage sur incohérence
+internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
 internal/infrastructure/      socle technique sans métier : db, cache, http, telemetry, security
-internal/modules/{f}/        un bounded context étanche
-  ├── domain/                 pur
-  ├── ports/                  types fonction uniquement
-  ├── application/            pipeline + décorateurs
+internal/contracts/           langage publié — ce que les modules s'échangent sans s'importer
+internal/core/{nom}/          MODULE NOYAU — fourni par le socle
+internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
+  ├── domain/                 pur : ni I/O, ni time.Now(), ni logger
+  ├── ports/                  types fonction uniquement — ni struct, ni interface
+  ├── application/            pipeline + décorateurs — rend compte, ne journalise pas
+  ├── drivers/{nom}/          une implémentation interchangeable, avec ses NON-garanties
   ├── adapters/primary/       http · cli · events — une surface par dossier
-  ├── adapters/secondary/     postgres · outbox · mailer
-  └── module.go               composition root local
-migrations/                   SQL versionné, rétro-compatible N-1
-api/openapi.yaml              généré depuis le code — jamais édité
+  ├── adapters/secondary/     postgres · mailer
+  ├── tests/                  boîte noire, un fichier par test
+  └── module.go               composition root local — le SEUL à connaître les pilotes
+migrations/                   SQL versionné, rétro-compatible N-1                 ⟨absent⟩
+api/openapi.yaml              généré depuis le code — jamais édité                ⟨absent⟩
 tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 ```
+
+Six modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`.
+Un seul module métier, `user_registration`, qui est un **exemple de référence incomplet**.
 
 ## État réel du dépôt — vérifié le 2026-07-25
 
@@ -120,27 +133,44 @@ tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 
 - `go build ./...` vert
 - `go vet ./...` vert
-- `go test -shuffle=on ./...` vert — **38 tests** dans `internal/config`, `internal/config/tests`
-  et `internal/core/outbox`
+- `go test -shuffle=on ./...` vert — **123 tests**, répartis ainsi :
+
+| Paquet | Tests | Ce que ça prouve |
+|---|---|---|
+| `internal/config` + `internal/config/tests` | 32 | Le chargement en couches, les durées, les options de pilote, et le fait que la configuration **livrée** charge sans aucun service |
+| `internal/core/outbox/tests` | 12 | Exclusivité de `Claim`, recul exponentiel borné, pilote `memory` sans base |
+| `internal/core/idempotency/tests` | 24 | Exclusivité sous concurrence, refus de la clé vide, expiration, empreintes |
+| `internal/core/audit/tests` | 11 | Refus d'une entrée incomplète, horodatage injecté, normalisation UTC |
+| `internal/core/dynconf/tests` | 13 | Deny par défaut d'un drapeau, options non scalaires refusées, lecture seule |
+| `internal/core/storage/tests` | 12 | Traversée de répertoire refusée à l'écriture **et** à la lecture, clés réparties |
+| `internal/core/scheduler/tests` | 11 | Aucune exécution sans élection, libération même après échec, tâches homonymes refusées |
+
+- **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
+  `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
+- **`knownDrivers` ne liste plus que le construit.** Un module absent de la table refuse d'être
+  activé : on n'active pas un module dont le code n'existe pas.
 
 ### Écrit, NON prouvé
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
 | `golangci-lint` et `arch-go` | Installés, **jamais exécutés** sur l'état courant. Attendre des violations |
-| Pilote `postgres` de l'outbox et de l'audit | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
+| Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
+| Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
-| `messaging`, `modulebus`, `httpserver`, `telemetry`, `security`, `cache`, `scheduler`, `storage`, `dynconf`, `idempotency` | Compilent, **zéro test** |
+| `messaging`, `modulebus`, `httpserver`, `telemetry`, `security`, `cache` | Compilent, **zéro test** |
 | Cœur de `user_registration` | Compile, **zéro test** |
 
 ### Absent
 
-- **Aucun binaire** : ni adaptateur primaire, ni secondaire, ni `module.go`, ni `cmd/`
+- **Aucun binaire** : ni adaptateur primaire, ni secondaire, ni `module.go` métier, ni `cmd/`
 - **Aucune migration** — 6 tables référencées par du code écrit
 - **Aucune authentification ni autorisation**. Ne jamais parler de « zéro faille » tant que c'est vrai
 - i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010 et 011,
   `deploy/docker-compose.deploy.yml`
 - Le **dispatcher de l'outbox** : retiré avec la conversion en module, à réécrire dans `application/`
+- Les modules `auth`, `notification`, `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`,
+  `search`, `document` : décrits dans `documentation/technique/modules-noyau.md`, **aucun code**
 
 ### Jamais déployé
 
@@ -186,6 +216,11 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 - **Chaque module a un pilote sans dépendance externe, choisi par défaut.** `hexa new` puis
   `go run` doit démarrer sans base, sans Redis, sans Docker.
 - **Un pilote documente ses NON-garanties** en tête de paquet.
+- **`knownDrivers` (`internal/config/modules.go`) liste ce qui EXISTE**, pas ce qui est prévu. Le
+  catalogue d'intentions vit dans `documentation/technique/pilotes.md` ; un pilote y migre le jour
+  où il est écrit, testé, et documente ses NON-garanties.
+- **`application/` ne journalise pas et ne lit pas l'horloge.** Il rend compte par un port et reçoit
+  son horloge — c'est ce qui le garde pur et testable sans analyser des journaux.
 - Tests : `{paquet}/tests/` en boîte noire · `{paquet}/internal_test.go` pour les internes ·
   **un fichier par test**, nommé d'après lui en `snake_case`, aides partagées dans
   `helpers_test.go`.
@@ -203,8 +238,8 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **Finir #21** : convertir `idempotency`, `dynconf`, `storage`, `scheduler` ; réécrire le
-   dispatcher de l'outbox dans `application/`
+1. **Finir #21** : réécrire le dispatcher de l'outbox dans `application/` — six modules sur six sont
+   convertis, il ne reste que lui
 2. **#6 / #7** : tests du cœur `user_registration` et des primitives (`result`, `fp`, `pagination`)
 3. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
 4. **#2** : migrations, un schéma et un rôle SQL par module

@@ -33,7 +33,7 @@ Et l'instrumentation s'ajoute ou se retire sans toucher au métier.
 
 ## 3. Traces
 
-- Un span par cas d'usage, nommé `{feature}.{usecase}` — pas le nom de la fonction Go, qui change
+- Un span par cas d'usage, nommé `{module}.{usecase}` — pas le nom de la fonction Go, qui change
   au refactoring.
 - Attributs : identifiants métier, jamais de valeur sensible.
 - Une erreur métier n'est **pas** un span en erreur : `CodeEmailAlreadyExists` est un
@@ -49,7 +49,7 @@ Quatre familles suffisent au démarrage :
 | Métrique | Type | Dimensions |
 |---|---|---|
 | `http_server_request_duration` | histogramme | route, méthode, statut |
-| `usecase_duration` | histogramme | feature, cas d'usage, issue (`ok` / code d'erreur) |
+| `usecase_duration` | histogramme | module, cas d'usage, issue (`ok` / code d'erreur) |
 | `outbox_pending_messages` | jauge | — |
 | `outbox_message_attempts` | compteur | type d'événement, issue |
 

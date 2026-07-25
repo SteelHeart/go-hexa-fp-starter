@@ -2,25 +2,42 @@
 
 > Anatomie et règles communes : [ADR 012](../adr/012-anatomie-d-un-module-et-pilotes.md).
 >
-> **État au 2026-07-25 : aucun de ces modules n'est implémenté sous cette forme.**
-> Ce document est une **cible de conception**, pas une description de l'existant. Six briques
-> existent en code mais en version « infrastructure directe », non encore convertie en modules à
-> pilotes. Voir la colonne *État*.
+> Ce document est une **cible de conception**. La colonne *État* dit, module par module, ce qui
+> existe réellement — et le relevé qui fait foi reste [`CLAUDE.md`](../../CLAUDE.md).
 
 ## Vue d'ensemble
 
-| Module | Rôle | Pilote par défaut | Pilotes prévus | État |
+Six modules sont convertis à l'anatomie de l'ADR 012 : `domain/` pur, `ports/` en types fonction,
+un pilote par magasin, `module.go` seul à connaître les pilotes. Ils sont activables par
+`config/modules.yaml` et couverts par des tests. Les autres n'existent pas — et un module absent de
+`knownDrivers` **refuse d'être activé**, précisément pour qu'on ne puisse pas croire le contraire.
+
+| Module | Rôle | Pilote par défaut | Autres pilotes | État |
 |---|---|---|---|---|
-| `auth` | Identité et autorisation | — | `oauth2` · `oidc` · `saml` · `password` · `apikey` | 🔴 rien |
-| `notification` | Messages sortants | `log` | `smtp` · `mailjet` · `ses` · `twilio` · `fcm` · `totp` | 🔴 port et gabarit seuls |
+| `outbox` | Publication garantie | `memory` | `postgres` | ✅ converti · `memory` prouvé |
+| `idempotency` | Écritures rejouables | `memory` | `postgres` · `redis` | ✅ converti · `memory` prouvé |
+| `dynconf` | Drapeaux et réglages à chaud | `file` | `postgres` | ✅ converti · `file` prouvé |
+| `audit` | Journal en ajout seul | `log` | `postgres` | ✅ converti · `log` prouvé |
+| `storage` | Objets et fichiers | `disk` | — | ✅ converti · `disk` prouvé |
+| `scheduler` | Tâches périodiques | `cron-inproc` | `advisory-lock` | ✅ converti · `cron-inproc` prouvé |
+| `auth` | Identité et autorisation | — | `oauth2` · `oidc` · `saml` · `password` · `apikey` | 🔴 rien — arbitrages en attente (#9) |
+| `notification` | Messages sortants | `log` | `smtp` · `mailjet` · `ses` · `twilio` · `fcm` · `totp` | 🔴 rien |
 | `payment` | Encaissement et remboursement | `log` | `stripe` · `mobile_money` · autres | 🔴 rien |
-| `outbox` | Publication garantie | `memory` | `postgres` | ⚠️ pilote postgres écrit, non converti |
-| `idempotency` | Écritures rejouables | `memory` | `postgres` · `redis` | ⚠️ idem |
-| `dynconf` | Drapeaux et réglages à chaud | `file` | `postgres` | ⚠️ idem |
-| `audit` | Journal en ajout seul | `log` | `postgres` | ⚠️ idem |
-| `storage` | Objets et fichiers | `disk` | `s3` | ⚠️ idem |
-| `i18n` | Traduction par surface | `embedded` | — | 🔴 configuration seule |
-| `scheduler` | Tâches périodiques | `advisory_lock` | — | ⚠️ écrit, non converti |
+| `i18n` | Traduction par surface | `embedded` | `file` · `postgres` | 🔴 configuration seule |
+| `ratelimit` | Limitation de débit | `memory` | `redis` · `postgres` · `gateway` | 🔴 rien |
+| `tenancy` | Multi-locataire | `rls` | `schema` · `database` | 🔴 rien (#23) |
+| `secrets` | Rotation et audit d'accès | `env` | `vault` · `sops` · gestionnaires infonuagiques | 🔴 rien (#26) |
+| `workflow` | Machine à états | `builtin` | `temporal` | 🔴 rien (#25) |
+| `search` | Recherche | `postgres-fts` | `bleve` · `meilisearch` · `opensearch` | 🔴 rien (#29) |
+| `document` | Rendu PDF | `html` | `gotenberg` · `weasyprint` · `chromedp` | 🔴 rien (#32) |
+
+**« Prouvé » ne concerne que le pilote nommé.** Les pilotes `postgres` et `redis` des modules
+convertis sont écrits et relus, **jamais exécutés** : aucune migration n'existe (#2) et aucun service
+ne tourne sur la machine de référence (F001).
+
+Le pilote par défaut du `scheduler` était `advisory-lock` : il exigeait donc une base pour
+simplement répéter une tâche, y compris dans un binaire mono-instance qui n'a personne avec qui
+s'accorder. C'est `cron-inproc` depuis la conversion — l'élection est devenue un pilote.
 
 ---
 
