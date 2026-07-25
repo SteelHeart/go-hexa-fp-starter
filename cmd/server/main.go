@@ -88,9 +88,12 @@ func run() error {
 	userhttp.Mount(router.API, modules.users)
 	userhttp.MountAvailability(router.API, modules.users)
 
+	// Les chemins annoncés sont ceux qui RÉPONDENT : huma sert le contrat sous
+	// `/openapi.json` et `/openapi.yaml`, jamais sous `/openapi` nu — qui rend 404.
+	// Annoncer un chemin qui ne répond pas envoie chercher une panne inexistante.
 	logger.InfoContext(ctx, "surfaces montées",
-		slog.String("openapi", "/openapi"),
 		slog.String("docs", "/docs"),
+		slog.String("openapi", "/openapi.json · /openapi.yaml"),
 	)
 
 	if err := httpserver.New(cfg, router.Mux, logger).Run(ctx); err != nil {

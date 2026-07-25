@@ -8,10 +8,39 @@ cible est un **framework** : un noyau de modules réutilisables, un générateur
 règlement outillé qui empêche la forme de se dégrader. Le chemin y menant est décrit dans
 [`documentation/technique/parite-frameworks.md`](documentation/technique/parite-frameworks.md).
 
-> **État d'avancement.** Le socle compile et ses modules noyau sont testés, mais **aucun binaire
-> n'existe encore** : ni serveur HTTP, ni worker, ni CLI. Le relevé factuel, daté et sans
-> complaisance, est dans [`CLAUDE.md`](CLAUDE.md) § « État réel du dépôt ». Il fait foi sur les
-> faits — pas ce README.
+> **État d'avancement.** Le serveur HTTP et le dépileur d'événements existent et tournent.
+> **Manquent l'authentification, le multi-locataire et les notifications** — trois modules noyau
+> décrits, sans aucun code. Le relevé factuel, daté et sans complaisance, est dans
+> [`CLAUDE.md`](CLAUDE.md) § « État réel du dépôt ». Il fait foi sur les faits — pas ce README.
+
+## En trente secondes, sans rien installer
+
+```bash
+export SECURITY_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+go run ./cmd/server
+```
+
+```bash
+curl -s -X POST localhost:8080/v1/users \
+  -H 'content-type: application/json' \
+  -d '{"email":"Alice@Example.COM ","password":"correct cheval batterie agrafe"}'
+```
+
+```json
+{
+  "user_id": "019f9b46-3aec-735a-977d-129192ef130f",
+  "email": "alice@example.com",
+  "status": "pending",
+  "created_at": "2026-07-25T21:54:58.924Z"
+}
+```
+
+Ni base, ni Redis, ni Docker. Trois choses se lisent dans cette réponse :
+l'identifiant est un **UUID v7** — ordonné dans le temps, donc utilisable en clé primaire sans
+fragmenter l'index ; l'adresse est **normalisée** par le domaine, espace et casse compris ; et le
+compte naît **`pending`**, jamais actif, parce que l'adresse n'est pas encore prouvée.
+
+La documentation interactive est sur `/docs`, le contrat sur `/openapi.json` et `/openapi.yaml`.
 
 ## Deux propriétés, et tout le reste en découle
 
@@ -50,6 +79,10 @@ Chaque module a un pilote **sans aucune dépendance externe**, choisi par défau
 | `storage` | `disk` | — |
 | `scheduler` | `cron-inproc` | `advisory-lock` |
 
+La règle vaut aussi pour les modules **métier** : `user_registration` a son pilote `memory`, et c'est
+lui le défaut. Un module métier dont le seul pilote exigerait PostgreSQL briserait cette promesse au
+premier module écrit — c'est-à-dire au moment exact où on l'éprouve.
+
 Avec cette configuration, rien n'est requis : ni base, ni Redis, ni Docker. Un test verrouille cette
 promesse — tous les modules actifs, tous sur leur pilote par défaut, ne doivent exiger aucun service.
 
@@ -71,8 +104,18 @@ task check                            # fmt · vet · lint · arch · test · vu
 **Docker n'est pas requis** pour développer : `go test ./...` sans tag n'exige aucun service. Les
 niveaux qui en ont besoin (`-tags=integration`, `-tags=e2e`) sont fournis par la CI.
 
-> ⚠️ `task run` et `task up` sont écrits mais **ne peuvent pas encore fonctionner** : `cmd/` est
-> vide. Le premier binaire est suivi par les issues #3 à #8, #10.
+Deux binaires :
+
+| Commande | Rôle | Prérequis |
+|---|---|---|
+| `go run ./cmd/server` | surfaces HTTP | aucun |
+| `go run ./cmd/worker` | dépilage de l'outbox vers le courtier | une outbox **partagée entre processus** |
+
+> ⚠️ Le dépileur **refuse de démarrer** sur le pilote `outbox: memory`, et c'est voulu : ce pilote
+> vit dans le processus, donc un worker lancé séparément dépilerait son propre magasin — vide —
+> pendant que les événements du serveur resteraient dans la mémoire du serveur. Il tournerait sans
+> rien publier **et sans aucune erreur**. Un composant silencieusement inerte est le seul défaut qui
+> ne se signale jamais.
 
 ## Repartir de ce socle
 
@@ -84,8 +127,15 @@ Le chemin de module est la **seule** valeur nominative du dépôt. Aucun pseudo,
 `CODEOWNERS` : les contraintes portent sur des **règles** vérifiées par la CI, pas sur des personnes.
 Le socle fonctionne à un contributeur comme à vingt.
 
-Ensuite : supprimer `internal/modules/user_registration/` — rien d'autre n'en dépend — et créer son
-propre module métier sur le même patron.
+Ensuite : supprimer `internal/modules/user_registration/` et créer son propre module métier sur le
+même patron. **Un seul fichier du socle le nomme** — `cmd/server/main.go`, qui le monte et l'expose.
+C'est le composition root, et c'est précisément son rôle de connaître les modules ; aucun autre code
+ne le mentionne.
+
+`user_registration` est la **tranche de référence**, pas l'application. Elle existe pour montrer la
+forme complète — domaine pur, ports en types fonction, pipeline composé, pilotes interchangeables,
+adaptateurs par surface — parce que c'est cette forme qui sera copiée pour écrire `billing` ou
+`crm`. Tout dossier qui lui manquerait serait reproduit comme « pas nécessaire ».
 
 ## Structure
 
@@ -95,7 +145,8 @@ documentation/adr/           décisions d'architecture — FONT FOI
 CLAUDE.md                    amorçage et état réel : à lire en premier
 
 config/*.yaml                configuration par groupes, secrets par ${VAR} uniquement
-cmd/{server,worker,cli}      composition root — le seul code qui connaît tout   ⟨absent⟩
+cmd/{server,worker}          composition root — le seul code qui connaît tout
+cmd/cli                      ⟨absent⟩
 internal/pkg/                primitives sans dépendance : result · fp · pagination · middleware
 internal/infrastructure/      socle technique sans métier : db · cache · http · telemetry · security
 internal/contracts/           langage publié : ce que les modules s'échangent, sans s'importer
@@ -109,8 +160,9 @@ internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   ├── adapters/secondary/     postgres · mailer
   ├── tests/                  boîte noire, un fichier par test
   └── module.go               composition root local — le SEUL à connaître les pilotes
-migrations/                  SQL versionné, rétro-compatible N-1                 ⟨absent⟩
-api/openapi.yaml             généré depuis le code — jamais édité à la main      ⟨absent⟩
+migrations/{moteur}/         SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
+deploy/postgres/             provision.sql — les RÔLES, exécuté une fois, hors goose
+api/openapi.yaml             ⟨absent — le contrat est SERVI, pas encore versionné⟩
 tests/{e2e,perf}             tags `e2e` — hors du `go test ./...` par défaut
 ```
 
@@ -121,33 +173,47 @@ si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécu
 
 | Contrainte | Garde | Éprouvé |
 |---|---|---|
-| Le cœur n'importe ni transport, ni persistance, ni logger | `arch-go` · `depguard` | non |
-| Un module métier n'importe pas un autre module métier | `arch-go` | non |
-| Un module noyau ne connaît aucun module métier | `arch-go` | non |
-| Un port est un type fonction, pas une interface | `arch-go` | non |
-| Fonctions courtes, peu de paramètres, complexité bornée | `funlen` · `cyclop` · `arch-go` | non |
-| Aucune erreur ignorée, aucun `switch` non exhaustif | `errcheck` · `exhaustive` | non |
-| Aucun état global, aucune `func init()` | `gochecknoglobals` · `gochecknoinits` | non |
-| Aucun ORM | `depguard` | non |
+| Le cœur n'importe ni transport, ni persistance, ni logger | `arch-go` · `depguard` | **oui** |
+| Un module métier n'importe pas un autre module métier | `arch-go` | **oui** |
+| Un module noyau ne connaît aucun module métier | `arch-go` | **oui** |
+| Un port est un type fonction, pas une interface | `arch-go` | **oui** |
+| Un binaire n'exporte que `main` | `arch-go` | **oui** |
+| Fonctions courtes, peu de paramètres, complexité bornée | `funlen` · `cyclop` · `arch-go` | **oui** |
+| Aucune erreur ignorée, aucun `switch` non exhaustif | `errcheck` · `exhaustive` | **oui** |
+| Aucun état global, aucune `func init()` | `gochecknoglobals` · `gochecknoinits` | **oui** |
+| Aucun ORM | `depguard` | **oui** |
 | Le code compile, `go vet` passe, les tests passent | `go build` · `go vet` · `go test` | **oui** |
 | La configuration livrée charge et n'exige aucun service | tests de `internal/config/tests/` | **oui** |
+| Aucun commit direct sur le tronc | crochet `pre-push` | **oui** |
+| Un module n'atteint pas le schéma SQL d'un autre | `migrations/postgres/verify.sql` | CI seulement |
+| Le journal d'audit refuse `UPDATE` et `DELETE` | job CI `migrations` | CI seulement |
+| Le retour arrière d'une migration fonctionne | job CI `migrations` (il le **rejoue**) | CI seulement |
 | Aucun secret dans l'historique | `gitleaks` | CI seulement |
-| Aucune vulnérabilité connue | `govulncheck` · CodeQL | CI seulement |
 | Couverture ≥ 70 % global, ≥ 90 % sur le cœur | CI, cliquets | CI seulement |
 | Toucher au règlement exige un ADR | CI, job `inertia` | CI seulement |
 | Aucune dette dissimulée en `TODO` | CI, job `inertia` | CI seulement |
-| Aucun commit direct sur le tronc | crochet `pre-push` | **oui** |
+| Aucune vulnérabilité connue | `govulncheck` · CodeQL | **NON — échoue, voir ci-dessous** |
 
-`golangci-lint` et `arch-go` sont installés et configurés strictement, mais **n'ont jamais été
-exécutés** sur l'état courant. Des violations sont donc à attendre. C'est la PREMIÈRE action de la liste
-de `CLAUDE.md`, et le dire vaut mieux que de laisser croire à un vert qui n'existe pas.
+**`golangci-lint` rend 0 signalement** (~50 analyseurs, parti de 239) et **`arch-go` 18 règles sur
+18, couverture 100 %**. Les deux ont réellement tourné sur la machine de référence, et le code de
+retour a été vérifié — pas seulement la sortie.
+
+⚠️ **`govulncheck` échoue**, et c'est écrit ici plutôt que passé sous silence : la chaîne d'outils
+Go de la machine de référence porte **20 vulnérabilités de la bibliothèque standard** atteignables
+depuis le code (`crypto/tls`, `crypto/x509`, `net/url`, `net/mail`, `html/template`, `os`). Aucune
+ne vient d'une dépendance du dépôt : toutes sont corrigées par une chaîne d'outils Go ≥ 1.25.12.
+**Cela bloque la première version taguée** (friction F007).
+
+⚠️ **`task check` n'a jamais été exécuté tel quel** : `task` n'est pas installé sur la machine de
+référence, seules ses étapes ont tourné une par une (friction F006). La barrière qu'on croit
+franchir n'est pas exactement celle qui tourne.
 
 ## Stack
 
 | Couche | Choix | Pourquoi |
 |---|---|---|
 | Routage | `chi` | 100 % `http.Handler` — réversible en une journée ([ADR 008](documentation/adr/008-chi-huma-plutot-qu-un-framework.md)) |
-| Contrat | `huma` v2, *code-first* | `api/openapi.yaml` généré ; les SDK clients en découlent |
+| Contrat | `huma` v2, *code-first* | Servi sur `/openapi.{json,yaml}` ; les SDK clients en découlent |
 | Persistance | `pgx` v5, SQL explicite | Aucun ORM : ils fuient dans le domaine ([ADR 009](documentation/adr/009-strategie-d-acces-aux-donnees.md)) |
 | Moteur de base | **aucun imposé** | `postgres` est un pilote parmi d'autres (issue #36) |
 | Asynchrone | outbox transactionnel | Ni perte, ni fantôme ([ADR 006](documentation/adr/006-outbox-transactionnel.md)) |
@@ -166,10 +232,17 @@ C'est une règle d'or, pas une intention. Trois niveaux, jamais confondus :
 Un document qui coche « ✅ testé » sans test est pire qu'aucun document. Le relevé complet, avec sa
 date, est dans [`CLAUDE.md`](CLAUDE.md).
 
-Deux conséquences à ne pas oublier : `user_registration` est un exemple de référence **incomplet** —
-son cœur est couvert par 31 tests, mais il n'a encore aucun adaptateur, donc aucune surface ne
-l'appelle — et le dépôt **n'a aucune authentification ni autorisation**. Il ne faut donc jamais
-parler de « zéro faille » à son sujet.
+Trois conséquences à ne pas oublier :
+
+- **Le dépôt n'a aucune authentification ni autorisation.** Il ne faut donc jamais parler de « zéro
+  faille » à son sujet. `POST /v1/users` est ouvert, et `GET /v1/users/availability` permet
+  d'**énumérer** les adresses enregistrées — acceptable derrière une limitation de débit, et le
+  module `ratelimit` n'existe pas.
+- **Personne ne consomme les événements.** `user.registered.v1` est écrit dans l'outbox puis publié
+  vers le courtier, et aucun abonné n'écoute. Le courriel de bienvenue attend le module
+  `notification`, qui n'a aucun code.
+- **Les pilotes `postgres` n'ont jamais tourné ici.** La migration existe, mais aucune base ne
+  tourne sur la machine de référence : seule la CI les exécute.
 
 ## Documentation
 

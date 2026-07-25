@@ -118,7 +118,8 @@ internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   └── module.go               composition root local — le SEUL à connaître les pilotes
 migrations/{moteur}/          SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
 deploy/postgres/              provision.sql — les RÔLES, exécuté une fois, hors goose
-api/openapi.yaml              généré depuis le code — jamais édité                ⟨absent⟩
+api/openapi.yaml              ⟨absent⟩ — le contrat est SERVI sur /openapi.{json,yaml},
+                              pas encore versionné : un fichier généré à la main dériverait
 tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 ```
 
