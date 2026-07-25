@@ -48,6 +48,29 @@ dependenciesRules:
       internal:
         - "**.internal.modules.!(user_registration).**"
 
+  # ── 4c. Les modules NOYAU ne connaissent aucun module métier ────────────────
+  # La dépendance va toujours du métier vers le noyau, jamais l'inverse : un
+  # module noyau qui nommerait un module métier ne serait plus réutilisable.
+  # C'est cette règle qui rendra possible d'extraire internal/core en module Go
+  # indépendant (ADR 012).
+  - package: "**.internal.core.**"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.**"
+
+  # ── 4d. Le domaine d'un module noyau est pur lui aussi ──────────────────────
+  - package: "**.internal.core.*.domain"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+  # ── 4e. Les ports d'un module noyau ne nomment que leur domaine ─────────────
+  - package: "**.internal.core.*.ports"
+    shouldOnlyDependsOn:
+      internal:
+        - "**.internal.core.*.domain"
+      external: []
+
   # ── 4b. Le langage publié ne dépend de rien ─────────────────────────────────
   # internal/contracts ne contient que des types primitifs sérialisables. S'il
   # importait un domaine, il recréerait le couplage qu'il sert à éviter.
@@ -92,6 +115,15 @@ contentsRules:
     shouldNotContainStructs: true
 
 functionsRules:
+  # Mêmes seuils pour le noyau et le métier : une seule anatomie, donc une seule
+  # exigence de composabilité (ADR 012). Le seuil de fonctions publiques est
+  # légèrement plus haut car un pilote expose une méthode par port.
+  - package: "**.internal.core.**"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 50
+    maxPublicFunctionPerFile: 8
+
   # Des fonctions courtes et peu paramétrées sont la condition de la
   # composabilité. Ces seuils sont volontairement serrés.
   - package: "**.internal.modules.**"
