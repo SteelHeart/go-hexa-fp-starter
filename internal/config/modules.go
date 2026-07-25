@@ -92,17 +92,45 @@ func (m Modules) IsEnabled(name string) bool { return m.Get(name).Enabled }
 // DriverOf retourne le pilote retenu pour un module.
 func (m Modules) DriverOf(name string) string { return m.Get(name).Driver }
 
-// RequiresDatabase indique si la configuration exige une connexion Postgres.
+// sqlBackedDrivers énumère les pilotes qui exigent une base SQL, quel que soit
+// le MOTEUR.
 //
-// C'est ce qui permet à un binaire de n'ouvrir le pool que s'il en a besoin —
-// et donc de démarrer sans base quand tous les pilotes sont en mémoire.
-func (m Modules) RequiresDatabase() bool {
+// # Aucun moteur n'est imposé par le socle
+//
+// `postgres` figure ici comme un pilote parmi d'autres, pas comme une
+// obligation. Le jour où un pilote `mysql`, `sqlite` ou `mssql` existe, il
+// s'ajoute à cette table et rien d'autre ne change : les ports ne nomment aucun
+// moteur, et chaque pilote possède son propre SQL et son propre client.
+//
+// C'est le sens de l'ADR 012 : le socle définit des contrats, pas une pile.
+//
+//nolint:gochecknoglobals // table de référence immuable
+var sqlBackedDrivers = map[string]struct{}{
+	"postgres":     {},
+	"postgres-fts": {},
+	"mysql":        {},
+	"sqlite":       {},
+	"mssql":        {},
+	// Stratégies de multi-locataire : toutes reposent sur une base SQL.
+	"rls":      {},
+	"schema":   {},
+	"database": {},
+	// Élection entre répliques par verrou consultatif.
+	"advisory-lock": {},
+}
+
+// RequiresSQL indique si la configuration exige une base SQL — sans présumer
+// du moteur.
+//
+// C'est ce qui permet à un binaire de n'ouvrir une connexion que s'il en a
+// besoin, et donc de démarrer sans base quand tous les pilotes actifs sont en
+// mémoire ou sur fichier.
+func (m Modules) RequiresSQL() bool {
 	for name := range knownDrivers {
 		if !m.IsEnabled(name) {
 			continue
 		}
-		switch m.DriverOf(name) {
-		case "postgres", "postgres-fts", "advisory-lock", "rls", "schema", "database":
+		if _, needsSQL := sqlBackedDrivers[m.DriverOf(name)]; needsSQL {
 			return true
 		}
 	}
