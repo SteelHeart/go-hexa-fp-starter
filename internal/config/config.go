@@ -1,11 +1,11 @@
-﻿// Package config lit la configuration de dÃ©marrage depuis les fichiers de conf/.
+// Package config lit la configuration de dÃ©marrage depuis les fichiers de conf/.
 //
 // Quatre principes, et ils expliquent tout le paquet :
 //
 //  1. Fichiers, pas variables d'environnement. La configuration est versionnÃ©e,
 //     groupÃ©e par domaine, relisible en revue. Les variables d'environnement ne
 //     servent QU'aux secrets, rÃ©fÃ©rencÃ©s par ${VAR} dans les fichiers.
-//  2. Immuable â€” lue UNE fois au dÃ©marrage, passÃ©e par valeur. Aucun accÃ¨s Ã 
+//  2. Immuable â€” lue UNE fois au dÃ©marrage, passÃ©e par valeur. Aucun accÃ¨s Ã
 //     os.Getenv ailleurs dans le dÃ©pÃ´t.
 //  3. Fail-fast â€” une configuration invalide refuse le dÃ©marrage. Un service qui
 //     dÃ©marre Ã  moitiÃ© configurÃ© Ã©choue plus tard, ailleurs, et pour une raison
@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 )
 
 // Environment nomme l'environnement d'exÃ©cution.
@@ -49,19 +48,20 @@ const encryptionKeyBytes = 32
 // Config porte l'intÃ©gralitÃ© de la configuration de dÃ©marrage.
 // Un groupe = un fichier dans conf/.
 type Config struct {
-	App       App       `yaml:"app"`
-	HTTP      HTTP      `yaml:"http"`
-	Limits    Limits    `yaml:"limits"`
-	Database  DB        `yaml:"database"`
-	Cache     Cache     `yaml:"cache"`
-	DynConf   DynConf   `yaml:"dynconf"`
-	Worker    Worker    `yaml:"worker"`
-	Storage   Storage   `yaml:"storage"`
-	Messaging Messaging `yaml:"messaging"`
-	Modules   Modules   `yaml:"modules"`
-	Security  Security  `yaml:"security"`
-	Mail      Mail      `yaml:"mail"`
-	Telemetry Telemetry `yaml:"telemetry"`
+	App           App           `yaml:"app"`
+	HTTP          HTTP          `yaml:"http"`
+	Limits        Limits        `yaml:"limits"`
+	Database      DB            `yaml:"database"`
+	Cache         Cache         `yaml:"cache"`
+	DynConf       DynConf       `yaml:"dynconf"`
+	Worker        Worker        `yaml:"worker"`
+	Storage       Storage       `yaml:"storage"`
+	Messaging     Messaging     `yaml:"messaging"`
+	Modules       Modules       `yaml:"modules"`
+	Interop       Interop       `yaml:"interop"`
+	Security      Security      `yaml:"security"`
+	Mail          Mail          `yaml:"mail"`
+	Telemetry     Telemetry     `yaml:"telemetry"`
 	I18n          I18n          `yaml:"i18n"`
 	Observability Observability `yaml:"observability"`
 }
@@ -75,14 +75,14 @@ type App struct {
 
 // HTTP porte les paramÃ¨tres du serveur HTTP.
 type HTTP struct {
-	Host            string        `yaml:"host"`
-	Port            int           `yaml:"port"`
-	ReadTimeout     time.Duration `yaml:"read_timeout"`
-	WriteTimeout    time.Duration `yaml:"write_timeout"`
-	IdleTimeout     time.Duration `yaml:"idle_timeout"`
-	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
-	MaxBodyBytes    int64         `yaml:"max_body_bytes"`
-	AllowedOrigins  []string      `yaml:"allowed_origins"`
+	Host            string   `yaml:"host"`
+	Port            int      `yaml:"port"`
+	ReadTimeout     Duration `yaml:"read_timeout"`
+	WriteTimeout    Duration `yaml:"write_timeout"`
+	IdleTimeout     Duration `yaml:"idle_timeout"`
+	ShutdownTimeout Duration `yaml:"shutdown_timeout"`
+	MaxBodyBytes    int64    `yaml:"max_body_bytes"`
+	AllowedOrigins  []string `yaml:"allowed_origins"`
 }
 
 // Addr retourne l'adresse d'Ã©coute.
@@ -105,36 +105,36 @@ type Limits struct {
 // schÃ©ma, ce qui empÃªche une injection SQL rÃ©ussie de le modifier ou de
 // dÃ©sactiver une politique RLS (rules/donnees-et-migrations.md Â§6).
 type DB struct {
-	DSN             string        `yaml:"dsn"`
-	MigrationDSN    string        `yaml:"migration_dsn"`
-	MaxConns        int32         `yaml:"max_conns"`
-	MinConns        int32         `yaml:"min_conns"`
-	MaxConnLifetime time.Duration `yaml:"max_conn_lifetime"`
-	ConnectTimeout  time.Duration `yaml:"connect_timeout"`
+	DSN             string   `yaml:"dsn"`
+	MigrationDSN    string   `yaml:"migration_dsn"`
+	MaxConns        int32    `yaml:"max_conns"`
+	MinConns        int32    `yaml:"min_conns"`
+	MaxConnLifetime Duration `yaml:"max_conn_lifetime"`
+	ConnectTimeout  Duration `yaml:"connect_timeout"`
 }
 
 // Cache porte la connexion au cache.
 type Cache struct {
-	Addr       string        `yaml:"addr"`
-	Password   string        `yaml:"password"`
-	DB         int           `yaml:"db"`
-	DefaultTTL time.Duration `yaml:"default_ttl"`
+	Addr       string   `yaml:"addr"`
+	Password   string   `yaml:"password"`
+	DB         int      `yaml:"db"`
+	DefaultTTL Duration `yaml:"default_ttl"`
 }
 
 // DynConf paramÃ¨tre le MÃ‰CANISME de configuration dynamique ; les valeurs, elles,
 // vivent en base.
 type DynConf struct {
-	TTL       time.Duration `yaml:"ttl"`
-	EnvPrefix string        `yaml:"env_prefix"`
+	TTL       Duration `yaml:"ttl"`
+	EnvPrefix string   `yaml:"env_prefix"`
 }
 
 // Worker porte le dÃ©pilage de l'outbox et les tÃ¢ches planifiÃ©es.
 type Worker struct {
-	PollInterval   time.Duration `yaml:"poll_interval"`
-	BatchSize      int           `yaml:"batch_size"`
-	MaxAttempts    int           `yaml:"max_attempts"`
-	BaseBackoff    time.Duration `yaml:"base_backoff"`
-	IdempotencyTTL time.Duration `yaml:"idempotency_ttl"`
+	PollInterval   Duration `yaml:"poll_interval"`
+	BatchSize      int      `yaml:"batch_size"`
+	MaxAttempts    int      `yaml:"max_attempts"`
+	BaseBackoff    Duration `yaml:"base_backoff"`
+	IdempotencyTTL Duration `yaml:"idempotency_ttl"`
 }
 
 // Storage porte le stockage d'objets.
@@ -149,12 +149,12 @@ type Storage struct {
 // Le relais est INTERCHANGEABLE : l'outbox garantit la durabilitÃ© en amont, donc
 // changer de broker ne touche aucune ligne du cÅ“ur (ADR 010).
 type Messaging struct {
-	Driver         string        `yaml:"driver"`
-	TopicPrefix    string        `yaml:"topic_prefix"`
-	ConsumerGroup  string        `yaml:"consumer_group"`
-	PublishTimeout time.Duration `yaml:"publish_timeout"`
-	Kafka          Kafka         `yaml:"kafka"`
-	RabbitMQ       RabbitMQ      `yaml:"rabbitmq"`
+	Driver         string   `yaml:"driver"`
+	TopicPrefix    string   `yaml:"topic_prefix"`
+	ConsumerGroup  string   `yaml:"consumer_group"`
+	PublishTimeout Duration `yaml:"publish_timeout"`
+	Kafka          Kafka    `yaml:"kafka"`
+	RabbitMQ       RabbitMQ `yaml:"rabbitmq"`
 }
 
 // Kafka porte les paramÃ¨tres du relais Kafka.
@@ -175,28 +175,6 @@ type RabbitMQ struct {
 // hiÃ©rarchique, et Kafka le rÃ©serve Ã  ses conventions de mÃ©triques.
 func (m Messaging) Topic(eventType string) string {
 	return m.TopicPrefix + "." + strings.ReplaceAll(eventType, ".", "-")
-}
-
-// Modules porte les modes de communication inter-modules.
-//
-// Un module n'accÃ¨de JAMAIS aux tables d'un autre : il passe par le langage
-// publiÃ© puis par l'un de ces modes (ADR 011).
-type Modules struct {
-	DefaultTransport string            `yaml:"default_transport"`
-	CallTimeout      time.Duration     `yaml:"call_timeout"`
-	Transports       map[string]string `yaml:"transports"`
-	BaseURLs         map[string]string `yaml:"base_urls"`
-}
-
-// TransportFor rÃ©sout le mode applicable Ã  un module.
-func (m Modules) TransportFor(module string) string {
-	if raw, found := m.Transports[module]; found && strings.TrimSpace(raw) != "" {
-		return strings.TrimSpace(raw)
-	}
-	if m.DefaultTransport == "" {
-		return "inproc"
-	}
-	return m.DefaultTransport
 }
 
 // Security porte les paramÃ¨tres cryptographiques.
@@ -276,14 +254,14 @@ func (c *Config) applyDefaults() {
 	if c.Messaging.Driver == "" {
 		c.Messaging.Driver = "inproc"
 	}
-	if c.Modules.DefaultTransport == "" {
-		c.Modules.DefaultTransport = "inproc"
+	if c.Interop.DefaultTransport == "" {
+		c.Interop.DefaultTransport = "inproc"
 	}
-	if c.Modules.Transports == nil {
-		c.Modules.Transports = map[string]string{}
+	if c.Interop.Transports == nil {
+		c.Interop.Transports = map[string]string{}
 	}
-	if c.Modules.BaseURLs == nil {
-		c.Modules.BaseURLs = map[string]string{}
+	if c.Interop.BaseURLs == nil {
+		c.Interop.BaseURLs = map[string]string{}
 	}
 	c.Observability.applyDefaults()
 	if c.I18n.DefaultLocale == "" {
@@ -301,6 +279,8 @@ func (c Config) validate() error {
 	problems = append(problems, c.validateCore()...)
 	problems = append(problems, c.validateHardening()...)
 	problems = append(problems, c.Observability.validate(c.App.Env.IsLocal())...)
+	problems = append(problems, c.Modules.validate()...)
+	problems = append(problems, c.Interop.validate()...)
 
 	if len(problems) > 0 {
 		return fmt.Errorf("configuration invalide: %w", errors.Join(problems...))
@@ -344,20 +324,6 @@ func (c Config) validateCore() []error {
 	default:
 		problems = append(problems, fmt.Errorf(
 			"messaging.driver=%q inconnu (attendu: inproc, kafka, rabbitmq, noop)", c.Messaging.Driver))
-	}
-
-	for module, mode := range c.Modules.Transports {
-		switch mode {
-		case "inproc", "event", "disabled":
-		case "http":
-			if c.Modules.BaseURLs[module] == "" {
-				problems = append(problems, fmt.Errorf(
-					"modules.base_urls.%s est requis quand le transport est http", module))
-			}
-		default:
-			problems = append(problems, fmt.Errorf(
-				"modules.transports.%s=%q inconnu", module, mode))
-		}
 	}
 
 	if !contains(c.I18n.SupportedLocales, c.I18n.DefaultLocale) {

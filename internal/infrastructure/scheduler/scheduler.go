@@ -22,10 +22,10 @@ import (
 
 // Task est une tâche périodique.
 type Task struct {
-	Name     string
-	Every    time.Duration
-	Run      func(context.Context, database.Querier) error
-	Timeout  time.Duration
+	Name    string
+	Every   time.Duration
+	Run     func(context.Context, database.Querier) error
+	Timeout time.Duration
 }
 
 // Scheduler exécute les tâches enregistrées.

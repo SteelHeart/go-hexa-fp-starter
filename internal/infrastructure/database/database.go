@@ -1,4 +1,4 @@
-﻿// Package database porte le pool Postgres, l'unitÃ© de travail et la portÃ©e RLS.
+// Package database porte le pool Postgres, l'unitÃ© de travail et la portÃ©e RLS.
 //
 // Point central du paquet : la fonction Querier. Un adaptateur secondaire ne
 // reÃ§oit jamais le pool directement â€” il demande le Â« querier Â» du contexte,
@@ -45,15 +45,15 @@ func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	}
 	poolCfg.MaxConns = cfg.MaxConns
 	poolCfg.MinConns = cfg.MinConns
-	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime
-	poolCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime.Duration()
+	poolCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout.Duration()
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("ouverture du pool: %w", err)
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout)
+	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout.Duration())
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
@@ -178,10 +178,10 @@ func ReleaseAdvisoryLock(ctx context.Context, q Querier, key int64) error {
 // Un adaptateur secondaire ne doit jamais laisser remonter une erreur de pilote
 // (rules/donnees-et-migrations.md Â§2).
 const (
-	CodeUniqueViolation     = "23505"
-	CodeForeignKeyViolation = "23503"
-	CodeCheckViolation      = "23514"
-	CodeQueryCanceled       = "57014"
+	CodeUniqueViolation      = "23505"
+	CodeForeignKeyViolation  = "23503"
+	CodeCheckViolation       = "23514"
+	CodeQueryCanceled        = "57014"
 	CodeSerializationFailure = "40001"
 )
 

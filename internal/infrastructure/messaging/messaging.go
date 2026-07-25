@@ -1,4 +1,4 @@
-﻿// Package messaging abstrait le transport d'Ã©vÃ©nements entre modules.
+// Package messaging abstrait le transport d'Ã©vÃ©nements entre modules.
 //
 // # L'outbox n'est pas Ã  la place du broker, elle est devant lui
 //

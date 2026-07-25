@@ -1,4 +1,4 @@
-﻿// Package telemetry cÃ¢ble les traces, les mÃ©triques et les logs, et les relie
+// Package telemetry cÃ¢ble les traces, les mÃ©triques et les logs, et les relie
 // par le trace_id.
 //
 // Un log sans trace_id est un log qu'on ne pourra pas recouper en incident :
@@ -93,7 +93,7 @@ func (h *traceHandler) WithGroup(name string) slog.Handler {
 
 // Setup installe les fournisseurs de traces et de mÃ©triques.
 //
-// DÃ©sactivÃ©e, la fonction retourne un arrÃªt inerte : le code appelant n'a pas Ã 
+// DÃ©sactivÃ©e, la fonction retourne un arrÃªt inerte : le code appelant n'a pas Ã
 // savoir si la tÃ©lÃ©mÃ©trie est active, et les no-op providers d'OpenTelemetry
 // rendent tout appel gratuit.
 func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {

@@ -39,28 +39,5 @@ messaging:
     url: ${AMQP_URL:-amqp://guest:guest@localhost:5672/}
     exchange: hexa.events
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Communication inter-modules
-# ─────────────────────────────────────────────────────────────────────────────
-# Un module n'accède JAMAIS aux tables d'un autre (chaque module possède son
-# schéma Postgres exclusif). Il passe par le langage publié
-# (internal/contracts/) et par l'un de ces trois modes :
-#
-#   inproc    appel de fonction direct — même binaire (le moins coûteux)
-#   http      appel réseau — déploiements séparés
-#   event     dépôt d'un événement — asynchrone, SANS réponse
-#   disabled  refus explicite
-#
-# Passer de l'un à l'autre est une valeur de ce fichier, pas un changement de
-# code : c'est ce qui permet d'extraire un module en service sans réécriture.
-modules:
-  default_transport: inproc
-  call_timeout: 5s
-
-  # Surcharge par module. La clé est le nom du module.
-  transports: {}
-  #   user_registration: http
-
-  # Adresse d'un module appelé en HTTP.
-  base_urls: {}
-  #   user_registration: http://user-registration:8080
+# La communication INTER-modules (modes inproc/http/event) vit dans
+# config/modules.yaml, sous la cle interop.

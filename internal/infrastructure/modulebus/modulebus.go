@@ -1,4 +1,4 @@
-﻿// Package modulebus choisit COMMENT un module en appelle un autre, par
+// Package modulebus choisit COMMENT un module en appelle un autre, par
 // configuration et sans changement de code.
 //
 // Trois modes, un par cycle de vie de dÃ©ploiement :
@@ -64,16 +64,16 @@ var (
 
 // Bus rÃ©sout les capacitÃ©s selon la configuration.
 type Bus struct {
-	cfg       config.Modules
+	cfg       config.Interop
 	client    *http.Client
 	publisher messaging.Publisher
 }
 
 // New construit le bus.
-func New(cfg config.Modules, publisher messaging.Publisher) *Bus {
+func New(cfg config.Interop, publisher messaging.Publisher) *Bus {
 	return &Bus{
 		cfg:       cfg,
-		client:    &http.Client{Timeout: cfg.CallTimeout},
+		client:    &http.Client{Timeout: cfg.CallTimeout.Duration()},
 		publisher: publisher,
 	}
 }
@@ -116,7 +116,7 @@ func Resolve[I any, O any](
 
 // httpCaller appelle le module distant.
 //
-// Le corps d'erreur n'est PAS interprÃ©tÃ© : un module appelant n'a pas Ã 
+// Le corps d'erreur n'est PAS interprÃ©tÃ© : un module appelant n'a pas Ã
 // connaÃ®tre la taxonomie d'erreurs interne d'un autre. Il obtient le statut et
 // le corps brut, et traduit lui-mÃªme.
 func httpCaller[I any, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {

@@ -1,0 +1,107 @@
+# Activation et choix de pilote de chaque module noyau.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Zéro prérequis d'infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
+# Les pilotes ci-dessous n'ont AUCUNE dépendance externe. Avec cette
+# configuration, `go run ./cmd/server` démarre : ni Postgres, ni Redis, ni
+# Docker. C'est la promesse de l'ADR 012, et elle est vérifiée par un test
+# (Modules.RequiresDatabase).
+#
+# Un module ABSENT de ce fichier est DÉSACTIVÉ. On n'active jamais une capacité
+# que personne n'a demandée — deny par défaut jusque dans la configuration.
+#
+# Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
+# jamais en « le pilote le plus proche ». Catalogue complet des pilotes :
+# documentation/technique/pilotes.md
+#
+# ⚠️ Chaque pilote documente ses NON-garanties. Les pilotes en mémoire ne
+# survivent pas à un redémarrage — c'est le bon choix en développement et en
+# test, jamais en production.
+modules:
+  # Publication garantie d'événements.
+  # memory : perdu au redémarrage · postgres : durable, transactionnel
+  outbox:
+    enabled: true
+    driver: memory
+
+  # Écritures rejouables sans effet de bord. Obligatoire dès qu'il y a du mobile.
+  # memory : par instance, donc inefficace derrière plusieurs répliques
+  idempotency:
+    enabled: true
+    driver: memory
+
+  # Drapeaux de fonctionnalité et réglages métier modifiables à chaud.
+  # file : lu depuis config/, donc PAS modifiable à chaud — c'est le compromis
+  # du pilote par défaut, et il est assumé
+  dynconf:
+    enabled: true
+    driver: file
+
+  # Journal en ajout seul.
+  # log : ni requêtable, ni inaltérable · postgres : UPDATE et DELETE révoqués
+  audit:
+    enabled: true
+    driver: log
+
+  # Objets et fichiers.
+  # disk : non partagé entre répliques
+  storage:
+    enabled: true
+    driver: disk
+
+  # Messages sortants. Le pilote log n'envoie rien : il journalise.
+  notification:
+    enabled: false
+    driver: log
+
+  # Tâches périodiques. advisory-lock exige Postgres (élection entre répliques).
+  scheduler:
+    enabled: false
+    driver: advisory-lock
+
+  # Limitation de débit. memory se multiplie par le nombre d'instances.
+  ratelimit:
+    enabled: true
+    driver: memory
+
+  # ── Modules non encore implémentés ──────────────────────────────────────────
+  # Laissés désactivés et documentés pour que la configuration reflète la cible
+  # sans prétendre que le code existe. Voir documentation/technique/modules-noyau.md.
+  #
+  # secrets:  { enabled: false, driver: env }
+  # i18n:     { enabled: false, driver: embedded }
+  # tenancy:  { enabled: false, driver: rls }
+  # workflow: { enabled: false, driver: builtin }
+  # search:   { enabled: false, driver: postgres-fts }
+  # document: { enabled: false, driver: html }
+  # payment:  { enabled: false, driver: log }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Communication ENTRE modules
+# ─────────────────────────────────────────────────────────────────────────────
+# Distinct de `modules` : ici on décide comment deux modules se PARLENT, pas
+# comment un module s'implémente.
+#
+# Un module n'accède JAMAIS aux tables d'un autre. Il passe par le langage
+# publié (internal/contracts/) puis par l'un de ces modes :
+#
+#   inproc    appel de fonction direct — même binaire (le moins coûteux)
+#   http      appel réseau — déploiements séparés
+#   event     dépôt d'un événement — asynchrone, SANS réponse
+#   disabled  refus explicite
+#
+# Passer un module de `inproc` à `http`, c'est l'extraire en service sans
+# changer une ligne de code. C'est le premier pas vers les microservices.
+interop:
+  default_transport: inproc
+  call_timeout: 5s
+
+  # Surcharge par module. La clé est le nom du module.
+  transports: {}
+  #   user_registration: http
+
+  # Requis quand le transport d'un module est `http`. La validation refuse le
+  # démarrage si l'adresse manque.
+  base_urls: {}
+  #   user_registration: http://user-registration:8080

@@ -1,4 +1,4 @@
-﻿// Package httpserver monte le routeur, l'API documentÃ©e et l'arrÃªt propre.
+// Package httpserver monte le routeur, l'API documentÃ©e et l'arrÃªt propre.
 //
 // C'est le SEUL paquet qui connaÃ®t chi et huma en dehors des adaptateurs
 // primaires HTTP. Le coÃ»t de sortie du framework tient donc dans ce fichier
@@ -105,13 +105,13 @@ func New(cfg config.Config, handler http.Handler, logger *slog.Logger) *Server {
 			Handler: otelhttp.NewHandler(handler, "http.server"),
 			// ReadHeaderTimeout non nul : sans lui, une connexion qui n'envoie
 			// jamais ses en-tÃªtes immobilise une goroutine indÃ©finiment.
-			ReadHeaderTimeout: cfg.HTTP.ReadTimeout,
-			ReadTimeout:       cfg.HTTP.ReadTimeout,
-			WriteTimeout:      cfg.HTTP.WriteTimeout,
-			IdleTimeout:       cfg.HTTP.IdleTimeout,
+			ReadHeaderTimeout: cfg.HTTP.ReadTimeout.Duration(),
+			ReadTimeout:       cfg.HTTP.ReadTimeout.Duration(),
+			WriteTimeout:      cfg.HTTP.WriteTimeout.Duration(),
+			IdleTimeout:       cfg.HTTP.IdleTimeout.Duration(),
 		},
 		logger: logger,
-		grace:  cfg.HTTP.ShutdownTimeout,
+		grace:  cfg.HTTP.ShutdownTimeout.Duration(),
 	}
 }
 

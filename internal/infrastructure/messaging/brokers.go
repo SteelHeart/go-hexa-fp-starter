@@ -1,4 +1,4 @@
-﻿package messaging
+package messaging
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func newKafka(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, C
 		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: kafka.RequireAll,
-		WriteTimeout: cfg.PublishTimeout,
+		WriteTimeout: cfg.PublishTimeout.Duration(),
 		// Allow n'Ã©crit pas les topics manquants en production : les crÃ©er Ã  la
 		// volÃ©e masque une erreur de configuration. Vrai en dev uniquement.
 		AllowAutoTopicCreation: cfg.Kafka.AllowAutoTopicCreation,
@@ -169,7 +169,7 @@ func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer
 		if err != nil {
 			return fmt.Errorf("sÃ©rialisation de l'enveloppe: %w", err)
 		}
-		pubCtx, cancel := context.WithTimeout(ctx, cfg.PublishTimeout)
+		pubCtx, cancel := context.WithTimeout(ctx, cfg.PublishTimeout.Duration())
 		defer cancel()
 		err = channel.PublishWithContext(pubCtx, cfg.RabbitMQ.Exchange, cfg.Topic(env.Type), false, false,
 			amqp.Publishing{

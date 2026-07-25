@@ -1,4 +1,4 @@
-﻿// Package cache fournit un cache typÃ© au-dessus de Redis.
+// Package cache fournit un cache typÃ© au-dessus de Redis.
 //
 // L'API est faite de types fonction (Getter, Setter) pour qu'un dÃ©corateur
 // puisse les recevoir sans dÃ©pendre de Redis, et qu'un test les remplace par

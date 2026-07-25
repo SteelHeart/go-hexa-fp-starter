@@ -135,9 +135,14 @@ tasks:
 
   # ── Tests ───────────────────────────────────────────────────────────────────
   test:
-    desc: Tests unitaires + course aux données
+    desc: 'Tests unitaires (sans -race : CGO absent sur Windows sans compilateur C)'
     cmds:
-      - go test -race -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=atomic ./...
+      - go test -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=count ./...
+
+  test:race:
+    desc: 'Tests + detecteur de courses (exige CGO : CI Linux)'
+    cmds:
+      - go test -race -shuffle=on -covermode=atomic ./...
 
   test:cover:
     desc: Rapport de couverture HTML

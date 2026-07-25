@@ -56,10 +56,10 @@ func Dir() string {
 //
 // Ordre de priorité croissant :
 //
-//	1. config/*.yaml           groupes — valeurs par défaut, versionnées
-//	2. config/env/{env}.yaml   surcharges par environnement, versionnées
-//	3. config/local.yaml       surcharges du développeur — NON versionné
-//	4. ${VAR} dans les valeurs secrets, depuis l'environnement d'exécution
+//  1. config/*.yaml           groupes — valeurs par défaut, versionnées
+//  2. config/env/{env}.yaml   surcharges par environnement, versionnées
+//  3. config/local.yaml       surcharges du développeur — NON versionné
+//  4. ${VAR} dans les valeurs secrets, depuis l'environnement d'exécution
 //
 // Les secrets ne sont dans AUCUN fichier : seulement référencés.
 func Load() (Config, error) {
