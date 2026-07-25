@@ -48,7 +48,7 @@ n'était pas encore fixé — c'est-à-dire à faire croire qu'il l'avait toujou
   déclare *Remplacé par NNN*. L'historique des décisions vaut autant que la décision courante.
 - Statuts : `Proposé` · `Accepté` · `Remplacé par NNN` · `Abandonné`.
 - Numérotation continue sur trois chiffres, jamais réutilisée.
-- Un ADR est **obligatoire** pour toute PR touchant `rules/`, `.arch-go.yml`, `.golangci.yml`,
+- Un ADR est **obligatoire** pour toute PR touchant `rules/`, `arch-go.yml`, `.golangci.yml`,
   `internal/pkg/` ou `migrations/` — la CI le vérifie (job `inertia`).
 
 Gabarit : [`000-template.md`](000-template.md).

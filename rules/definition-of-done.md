@@ -62,7 +62,7 @@ terminée — elle est *en cours*. Cette liste est reprise telle quelle dans le 
 ## 8. Documentation
 
 - [ ] **ADR écrit** si une décision d'architecture a été prise, ou si la PR touche une zone à haute
-      inertie (`rules/`, `.arch-go.yml`, `.golangci.yml`, `internal/pkg/`, `migrations/`).
+      inertie (`rules/`, `arch-go.yml`, `.golangci.yml`, `internal/pkg/`, `migrations/`).
 - [ ] La doc reflète l'**état réel** — ce qui est bouchonné est écrit « bouchon » ; ce qui est
       **écrit** n'est pas présenté comme **prouvé** ni comme **déployé**.
 - [ ] Le fichier remplacé est marqué obsolète en tête, avec sa date et son remplaçant.

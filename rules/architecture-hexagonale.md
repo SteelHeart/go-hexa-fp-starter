@@ -1,7 +1,7 @@
 # Architecture hexagonale
 
 > Décision de référence : [ADR 001](../documentation/adr/001-hexagonal-modulaire-et-fonctionnel.md).
-> Garde : [`.arch-go.yml`](../.arch-go.yml) + `depguard` dans [`.golangci.yml`](../.golangci.yml).
+> Garde : [`arch-go.yml`](../arch-go.yml) + `depguard` dans [`.golangci.yml`](../.golangci.yml).
 
 ## 1. La seule règle qui compte
 

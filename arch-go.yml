@@ -1,4 +1,4 @@
-# arch-go — https://github.com/fdaines/arch-go
+# arch-go — https://github.com/arch-go/arch-go
 #
 # C'est le fichier le plus important du dépôt : il transforme les règles
 # d'architecture en test automatisé. Sans lui, l'hexagone se dégrade en trois

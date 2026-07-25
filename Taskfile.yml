@@ -32,7 +32,7 @@ tasks:
     desc: Installe l'outillage (linter, arch guardrails, migrations, vuln scan)
     cmds:
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - go install github.com/fdaines/arch-go@latest
+      - go install github.com/arch-go/arch-go@latest
       - go install github.com/pressly/goose/v3/cmd/goose@latest
       - go install golang.org/x/vuln/cmd/govulncheck@latest
 
@@ -124,7 +124,7 @@ tasks:
       - golangci-lint run ./...
 
   arch:
-    desc: Vérifie les guardrails d'architecture (.arch-go.yml)
+    desc: Vérifie les guardrails d'architecture (arch-go.yml)
     cmds:
       - arch-go --verbose
 

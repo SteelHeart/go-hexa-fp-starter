@@ -88,7 +88,7 @@ suivante — la CI de production refuse d'ailleurs un tag qui n'est pas ancêtre
 
 ## 7. Zones à haute inertie
 
-Toucher à `rules/`, `.arch-go.yml`, `.golangci.yml`, `internal/pkg/` ou `migrations/` exige un
+Toucher à `rules/`, `arch-go.yml`, `.golangci.yml`, `internal/pkg/` ou `migrations/` exige un
 **ADR dans la même PR**, ou le label `inertia:justified` avec la justification dans le corps.
 
 Ce mécanisme remplace un fichier `CODEOWNERS` : il contraint sur des **règles**, pas sur des

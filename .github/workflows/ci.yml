@@ -117,7 +117,7 @@ jobs:
           changed=$(git diff --name-only "$BASE" "$HEAD")
           echo "$changed" | sed 's/^/  /'
 
-          inertia=$(echo "$changed" | grep -E '^(rules/|\.arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
+          inertia=$(echo "$changed" | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
           [ -z "$inertia" ] && { echo "Aucune zone à haute inertie touchée."; exit 0; }
 
           echo ""
@@ -197,7 +197,7 @@ jobs:
 
       - name: arch-go
         run: |
-          go install github.com/fdaines/arch-go@${ARCHGO_VERSION}
+          go install github.com/arch-go/arch-go@${ARCHGO_VERSION}
           arch-go --verbose
 
       # ── Isolation des données par module (ADR 011) ──────────────────────────

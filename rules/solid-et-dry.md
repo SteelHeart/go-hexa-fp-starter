@@ -57,7 +57,7 @@ jamais côté implémentation, et `arch-go` interdit de la mettre dans `domain/`
 ### D — Inversion des dépendances
 
 Le cœur déclare ses besoins (`ports/`), les adaptateurs les satisfont, `cmd/` les relie. La flèche
-d'import est vérifiée mécaniquement par `.arch-go.yml` : c'est le seul principe SOLID de ce dépôt
+d'import est vérifiée mécaniquement par `arch-go.yml` : c'est le seul principe SOLID de ce dépôt
 qui est **impossible** à violer sans faire rougir la CI.
 
 ## DRY — et sa limite

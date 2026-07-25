@@ -168,7 +168,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| `golangci-lint` | **Exécuté**. 239 signalements au départ, **30 restants** — campagne en cours |
+| `golangci-lint` | **Exécuté**. 239 signalements au départ, **42 restants** — campagne en cours |
 | Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
@@ -238,6 +238,69 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
   `helpers_test.go`.
 - Configuration : fichiers `config/*.yaml` groupés, secrets par `${VAR}` uniquement.
 
+### Campagne de signalements — 42 restants sur 239
+
+> Reprise directe : `golangci-lint run ./...` rend la liste exacte. Les décisions de
+> configuration sont **déjà prises et écrites dans `.golangci.yml`** ; ce qui suit n'est que du
+> code à corriger, groupé par nature de décision.
+
+**Décisions de configuration déjà tranchées** — ne pas les rouvrir sans raison neuve :
+
+| Réglage | Décision | Pourquoi |
+|---|---|---|
+| `misspell` | **retiré** | Ne connaît que l'anglais : 143 signalements, **zéro** vraie faute. À réactiver en #34 |
+| `errcheck.check-blank` | **false** | Condamnait `v, _ := x.(T)`, la forme SÛRE de l'assertion |
+| `gocritic hugeParam` · `rangeValCopy` | **désactivés** | Contredisent l'immuabilité par valeur, qui est une décision d'architecture |
+
+**Corrections mécaniques, sans décision** (18) :
+
+- `gofumpt` ×5 — `golangci-lint fmt ./...`. ⚠️ `database.go` était **verrouillé par un autre
+  processus** pendant la session : relancer quand l'éditeur est fermé.
+- `govet shadow` ×4 — renommer le `err` interne (`copyErr`, `markErr`…).
+- `goconst` ×5 — `"inproc"`, `"memory"`, `"file"` répétés dans `internal/config`. Extraire des
+  constantes ; elles nomment des pilotes, donc leur place est près de `knownDrivers`.
+- `lll` ×2 · `gocritic commentedOutCode` ×1 · `unused spy.events` ×1
+
+**Corrections avec un vrai choix de conception** (12) :
+
+- `revive function-result-limit` ×3 dans `messaging` — `New`, `newKafka`, `newRabbitMQ` rendent
+  `(Publisher, Consumer, Closer, error)`. **Même faute déjà corrigée deux fois** : dans
+  `scheduler.elector` (type `election`) et `security.decodeHash` (type `decodedHash`). Appliquer
+  le même remède : un type `Broker{Publish, Consume, Close}`.
+- `cyclop` ×3 — `validateCore` (13) et `validateHardening` (11) dans `internal/config` ; moyenne
+  du paquet `audit` à 8. Découper les validations par groupe de configuration.
+- `revive flag-parameter` ×2 — `Observability.validate(local bool)` et
+  `middleware.SecurityHeaders(secure bool)`. Un booléen de contrôle cache deux fonctions.
+- `contextcheck` ×2 — `httpserver.shutdown` et le `Recover` du middleware ne propagent pas le
+  contexte.
+- `gocritic unnamedResult` ×3 — `Result.Get()`, `cache.JSON`. Nommer les retours ; sur un triplet
+  `(T, E, bool)` c'est un gain réel de lisibilité.
+
+**Signalements à conserver avec un `//nolint` MOTIVÉ** (5+3) — chacun est correct dans son
+contexte, et la justification doit être écrite :
+
+- `gochecknoglobals` ×4 — `txKey`, `tenantKey`, `requestIDKey` sont des clés de contexte : le type
+  privé au niveau paquet **est** l'idiome Go qui empêche les collisions. `RegisterRoute` est une
+  constante de langage publié.
+- `govet nilness` ×1 — `panicking_handler_does_not_kill_the_dispatcher_test.go` écrit dans une
+  carte nil **exprès**, pour provoquer la panique que le test vérifie.
+- `gocritic redundantSprint` ×2 — `password_never_appears_in_a_log_test.go` passe par
+  `fmt.Sprintf("%v")` **exprès** : c'est le chemin de fuite qu'on teste, `String()` le
+  contournerait.
+- `gosec G304` ×1 — `disk.Get` ouvre un fichier depuis une clé, mais `domain.IsWithin` l'a validée
+  **avant**. `gosec G104` ×1 — `hijacked.Close` sur un chemin d'erreur déjà signalé.
+- `unparam` ×1 — l'aide de test `hash` ne reçoit qu'une valeur ; élargir un test plutôt que
+  restreindre l'aide.
+
+### Pièges d'outillage découverts — ne pas les redécouvrir
+
+| Piège | Effet | Remède |
+|---|---|---|
+| `arch-go` cherche **`arch-go.yml`**, sans point | Le fichier s'appelait `.arch-go.yml` : l'outil n'a JAMAIS pu le lire | Renommé. Ne pas remettre le point. Le garde d'inertie de la CI le nommait aussi — corrigé |
+| `arch-go` a changé de chemin de module | `go install github.com/fdaines/arch-go` échoue | C'est `github.com/arch-go/arch-go`. Corrigé dans `Taskfile.yml` et la CI |
+| Écriture PowerShell mal encodée | 408 séquences d'accents doublement encodées dans 8 fichiers | Réparé. Toujours écrire en UTF-8 sans BOM |
+| Fichier verrouillé par l'éditeur | `golangci-lint fmt` échoue sur « Accès refusé » | Fermer l'éditeur, relancer |
+
 ### Frictions ouvertes (`documentation/process/JOURNAL_FRICTION.md`)
 
 | Réf | Effet concret |
@@ -250,12 +313,7 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **Finir la campagne `golangci-lint`** : 30 signalements restants, triés par linter dans la
-   sortie de `golangci-lint run ./...`. Les décisions de configuration sont prises et documentées
-   (`misspell` retiré, `hugeParam`/`rangeValCopy` désactivés, `errcheck.check-blank` à false) ;
-   restent des corrections de code — `gosec` G115 et G304, `errorlint` sur la pagination,
-   `cyclop` sur `validateCore`, trois `function-result-limit` dans `messaging`, et les globales
-   de clé de contexte qui attendent une décision écrite
+1. **Finir la campagne `golangci-lint`** — voir § « Campagne de signalements » plus bas
 2. **#2** : migrations, un schéma et un rôle SQL par module
 3. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
    premier worker qui dépile réellement
