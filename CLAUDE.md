@@ -99,8 +99,8 @@ rules/                        règlement d'ingénierie — fait foi
 documentation/adr/            décisions d'architecture — font foi
 documentation/process/        nomenclature, labels, templates
 documentation/securite/       registre de failles, matrice d'accès
-cmd/server                    composition root — le seul code qui connaît tout
-cmd/{worker,cli}              ⟨absents⟩
+cmd/{server,worker}           composition root — le seul code qui connaît tout
+cmd/cli                       ⟨absent⟩
 config/*.yaml                 configuration par groupes, secrets par ${VAR} uniquement
 internal/config/              lecture, fusion, validation — refuse le démarrage sur incohérence
 internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
@@ -144,9 +144,13 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   **C'est la première fois que ce socle exécute quoi que ce soit de bout en bout.**
 - `golangci-lint run ./...` — **0 signalement**, ~50 analyseurs. Parti de 239.
 - `arch-go` — **100 %, 18 règles sur 18**, couverture 100 %
-- `go test -shuffle=on ./...` vert — **221 tests de premier niveau**, répartis ainsi
-  (la table couvre les 217 d'avant la tranche verticale ; les 4 nouveaux sont dans
-  `…/user_registration/tests`) :
+- **`go run ./cmd/worker` REFUSE de démarrer sur le pilote `memory`**, avec un code de retour non
+  nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
+  événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
+  signale jamais.
+- `go test -shuffle=on ./...` vert — **224 tests de premier niveau**, répartis ainsi
+  (la table couvre les 217 d'avant les binaires ; les 7 nouveaux sont dans
+  `…/user_registration/tests`, `…/outbox/tests` et `…/relay/tests`) :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -165,6 +169,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `…/user_registration/application/tests` | 13 | Ordre des étapes, court-circuit, **le clair n'atteint jamais le stockage**, pas d'événement fantôme |
 | `internal/infrastructure/security/tests` | 10 | Sel neuf à chaque hachage, nonce neuf à chaque chiffrement, **AES-128 refusé**, altération détectée |
 | `…/user_registration/tests` (boîte noire) | 4 | Le module inscrit **sans aucune infrastructure**, un pilote inconnu refuse le montage, 16 inscriptions concurrentes sur la même adresse n'en laissent passer qu'une, **chaque compte a son propre condensé** |
+| `internal/infrastructure/relay/tests` | 2 | Le mappage message → enveloppe ne perd aucun champ, et un échec de publication **remonte intact** au dépileur au lieu d'être avalé |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
@@ -203,7 +208,8 @@ le genre de chose qu'on oublie :
 
 ### Absent
 
-- **`cmd/worker`** : le dépileur de l'outbox est écrit et testé, mais aucun binaire ne le lance
+- **Aucun consommateur d'événement** : `user.registered.v1` est publié vers le relais, et personne
+  ne s'y abonne. Il faudra le module `notification` (🔴) pour que le courriel de bienvenue parte
 - **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire, donc pas
   de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
 - **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
@@ -330,10 +336,16 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-1. **#10 `cmd/worker`** : le dépileur est écrit, testé, et personne ne le lance. Tant qu'il manque,
-   la chaîne asynchrone s'arrête à l'écriture dans l'outbox — l'événement est durable et jamais publié
+1. **Test e2e du parcours d'inscription** : ce qui vient d'être vérifié à la main (201, 409, 422,
+   normalisation, UUID v7) n'est verrouillé par aucun test. Une régression passerait
 2. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`
 3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+
+### Invariant appris cinq fois : plus de deux retours = un type manquant
+
+`election` · `decodedHash` · `RetryPolicy` · `messaging.Broker` · `worker`. La cinquième a été
+attrapée par la règle `arch-go` sur `cmd/**`, pas par une relecture. C'est une faute de réflexe :
+la surveiller par un outil coûte moins cher que de la réapprendre.
 
 ### Lecture PRODUIT — ce que voit un dev qui veut sortir un SaaS
 

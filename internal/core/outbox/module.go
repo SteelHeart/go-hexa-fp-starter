@@ -23,6 +23,15 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "outbox"
 
+// Pilotes de l'outbox.
+//
+// Nommés une fois pour que le montage et la table de partage
+// (SharedAcrossProcesses) ne puissent pas parler de pilotes différents.
+const (
+	driverMemory   = "memory"
+	driverPostgres = "postgres"
+)
+
 // Module expose les ports de l'outbox.
 type Module struct {
 	Enqueue      ports.Enqueue
@@ -62,7 +71,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 
 	switch cfg.Driver {
-	case "memory":
+	case driverMemory:
 		store := memory.New(deps.Now)
 		return Module{
 			Enqueue:      store.Enqueue,
@@ -72,7 +81,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 			PendingCount: store.PendingCount,
 		}, nil
 
-	case "postgres":
+	case driverPostgres:
 		if deps.Pool == nil {
 			return Module{}, ErrPoolRequired
 		}
