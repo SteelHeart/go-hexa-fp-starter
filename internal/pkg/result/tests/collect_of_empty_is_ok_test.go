@@ -23,8 +23,8 @@ func TestCollectOfEmptyIsOk(t *testing.T) {
 		t.Errorf("valeurs = %v, attendu une liste vide", got)
 	}
 
-	nil_ := result.Collect[int, erreur](nil)
-	if !nil_.IsOk() {
+	absente := result.Collect[int, erreur](nil)
+	if !absente.IsOk() {
 		t.Error("une liste nil doit se comporter comme une liste vide")
 	}
 }

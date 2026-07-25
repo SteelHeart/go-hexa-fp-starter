@@ -1,16 +1,16 @@
-// Package config lit la configuration de dÃ©marrage depuis les fichiers de conf/.
+// Package config lit la configuration de démarrage depuis les fichiers de conf/.
 //
 // Quatre principes, et ils expliquent tout le paquet :
 //
-//  1. Fichiers, pas variables d'environnement. La configuration est versionnÃ©e,
-//     groupÃ©e par domaine, relisible en revue. Les variables d'environnement ne
-//     servent QU'aux secrets, rÃ©fÃ©rencÃ©s par ${VAR} dans les fichiers.
-//  2. Immuable â€” lue UNE fois au dÃ©marrage, passÃ©e par valeur. Aucun accÃ¨s Ã
-//     os.Getenv ailleurs dans le dÃ©pÃ´t.
-//  3. Fail-fast â€” une configuration invalide refuse le dÃ©marrage. Un service qui
-//     dÃ©marre Ã  moitiÃ© configurÃ© Ã©choue plus tard, ailleurs, et pour une raison
-//     qui n'aura plus rien Ã  voir.
-//  4. Ce qui change sans redÃ©ploiement n'est PAS ici : les seuils mÃ©tier et les
+//  1. Fichiers, pas variables d'environnement. La configuration est versionnée,
+//     groupée par domaine, relisible en revue. Les variables d'environnement ne
+//     servent QU'aux secrets, référencés par ${VAR} dans les fichiers.
+//  2. Immuable — lue UNE fois au démarrage, passée par valeur. Aucun accès Ã
+//     os.Getenv ailleurs dans le dépôt.
+//  3. Fail-fast — une configuration invalide refuse le démarrage. Un service qui
+//     démarre à moitié configuré échoue plus tard, ailleurs, et pour une raison
+//     qui n'aura plus rien à voir.
+//  4. Ce qui change sans redéploiement n'est PAS ici : les seuils métier et les
 //     drapeaux vivent en base (internal/infrastructure/dynconf).
 package config
 
@@ -21,10 +21,10 @@ import (
 	"strings"
 )
 
-// Environment nomme l'environnement d'exÃ©cution.
+// Environment nomme l'environnement d'exécution.
 type Environment string
 
-// Les environnements reconnus. Toute autre valeur refuse le dÃ©marrage.
+// Les environnements reconnus. Toute autre valeur refuse le démarrage.
 const (
 	EnvDevelopment Environment = "development"
 	EnvTest        Environment = "test"
@@ -35,17 +35,17 @@ const (
 // IsProduction indique si l'environnement exige les protections maximales.
 func (e Environment) IsProduction() bool { return e == EnvProduction }
 
-// IsDevelopment indique si l'on est en dÃ©veloppement local.
+// IsDevelopment indique si l'on est en développement local.
 func (e Environment) IsDevelopment() bool { return e == EnvDevelopment }
 
-// IsLocal regroupe dÃ©veloppement et test : les durcissements rÃ©seau ne s'y
-// appliquent pas, mais AUCUN affaiblissement de sÃ©curitÃ© n'y est permis.
+// IsLocal regroupe développement et test : les durcissements réseau ne s'y
+// appliquent pas, mais AUCUN affaiblissement de sécurité n'y est permis.
 func (e Environment) IsLocal() bool { return e == EnvDevelopment || e == EnvTest }
 
-// encryptionKeyBytes est la taille exigÃ©e par AES-256-GCM.
+// encryptionKeyBytes est la taille exigée par AES-256-GCM.
 const encryptionKeyBytes = 32
 
-// Config porte l'intÃ©gralitÃ© de la configuration de dÃ©marrage.
+// Config porte l'intégralité de la configuration de démarrage.
 // Un groupe = un fichier dans conf/.
 type Config struct {
 	App           App           `yaml:"app"`
@@ -66,14 +66,14 @@ type Config struct {
 	Observability Observability `yaml:"observability"`
 }
 
-// App porte l'identitÃ© du service.
+// App porte l'identité du service.
 type App struct {
 	Env     Environment `yaml:"env"`
 	Name    string      `yaml:"name"`
 	Version string      `yaml:"version"`
 }
 
-// HTTP porte les paramÃ¨tres du serveur HTTP.
+// HTTP porte les paramètres du serveur HTTP.
 type HTTP struct {
 	Host            string   `yaml:"host"`
 	Port            int      `yaml:"port"`
@@ -85,13 +85,13 @@ type HTTP struct {
 	AllowedOrigins  []string `yaml:"allowed_origins"`
 }
 
-// Addr retourne l'adresse d'Ã©coute.
+// Addr retourne l'adresse d'écoute.
 func (h HTTP) Addr() string { return fmt.Sprintf("%s:%d", h.Host, h.Port) }
 
-// Limits porte la limitation de dÃ©bit.
+// Limits porte la limitation de débit.
 //
-// âš ï¸ En mÃ©moire, donc PAR INSTANCE : derriÃ¨re N rÃ©pliques la limite effective
-// est multipliÃ©e par N (voir SECURITY.md).
+// ⚠️ En mémoire, donc PAR INSTANCE : derrière N répliques la limite effective
+// est multipliée par N (voir SECURITY.md).
 type Limits struct {
 	RPS       float64 `yaml:"rps"`
 	Burst     int     `yaml:"burst"`
@@ -101,9 +101,9 @@ type Limits struct {
 
 // DB porte la connexion Postgres.
 //
-// MigrationDSN est distinct de DSN : le rÃ´le applicatif ne possÃ¨de pas le
-// schÃ©ma, ce qui empÃªche une injection SQL rÃ©ussie de le modifier ou de
-// dÃ©sactiver une politique RLS (rules/donnees-et-migrations.md Â§6).
+// MigrationDSN est distinct de DSN : le rôle applicatif ne possède pas le
+// schéma, ce qui empêche une injection SQL réussie de le modifier ou de
+// désactiver une politique RLS (rules/donnees-et-migrations.md §6).
 type DB struct {
 	DSN             string   `yaml:"dsn"`
 	MigrationDSN    string   `yaml:"migration_dsn"`
@@ -121,14 +121,14 @@ type Cache struct {
 	DefaultTTL Duration `yaml:"default_ttl"`
 }
 
-// DynConf paramÃ¨tre le MÃ‰CANISME de configuration dynamique ; les valeurs, elles,
+// DynConf paramètre le MÉCANISME de configuration dynamique ; les valeurs, elles,
 // vivent en base.
 type DynConf struct {
 	TTL       Duration `yaml:"ttl"`
 	EnvPrefix string   `yaml:"env_prefix"`
 }
 
-// Worker porte le dÃ©pilage de l'outbox et les tÃ¢ches planifiÃ©es.
+// Worker porte le dépilage de l'outbox et les tâches planifiées.
 type Worker struct {
 	PollInterval   Duration `yaml:"poll_interval"`
 	BatchSize      int      `yaml:"batch_size"`
@@ -144,10 +144,10 @@ type Storage struct {
 	BaseURL string `yaml:"base_url"`
 }
 
-// Messaging porte le relais d'Ã©vÃ©nements.
+// Messaging porte le relais d'événements.
 //
-// Le relais est INTERCHANGEABLE : l'outbox garantit la durabilitÃ© en amont, donc
-// changer de broker ne touche aucune ligne du cÅ“ur (ADR 010).
+// Le relais est INTERCHANGEABLE : l'outbox garantit la durabilité en amont, donc
+// changer de broker ne touche aucune ligne du cœur (ADR 010).
 type Messaging struct {
 	Driver         string   `yaml:"driver"`
 	TopicPrefix    string   `yaml:"topic_prefix"`
@@ -157,42 +157,42 @@ type Messaging struct {
 	RabbitMQ       RabbitMQ `yaml:"rabbitmq"`
 }
 
-// Kafka porte les paramÃ¨tres du relais Kafka.
+// Kafka porte les paramètres du relais Kafka.
 type Kafka struct {
 	Brokers                []string `yaml:"brokers"`
 	AllowAutoTopicCreation bool     `yaml:"allow_auto_topic_creation"`
 }
 
-// RabbitMQ porte les paramÃ¨tres du relais AMQP.
+// RabbitMQ porte les paramètres du relais AMQP.
 type RabbitMQ struct {
 	URL      string `yaml:"url"`
 	Exchange string `yaml:"exchange"`
 }
 
-// Topic dÃ©rive le nom de destination d'un type d'Ã©vÃ©nement.
+// Topic dérive le nom de destination d'un type d'événement.
 //
 // Le point devient un tiret : AMQP donne au point un sens de routage
-// hiÃ©rarchique, et Kafka le rÃ©serve Ã  ses conventions de mÃ©triques.
+// hiérarchique, et Kafka le réserve à ses conventions de métriques.
 func (m Messaging) Topic(eventType string) string {
 	return m.TopicPrefix + "." + strings.ReplaceAll(eventType, ".", "-")
 }
 
-// Security porte les paramÃ¨tres cryptographiques.
+// Security porte les paramètres cryptographiques.
 type Security struct {
-	// EncryptionKey doit dÃ©coder sur exactement 32 octets (AES-256-GCM).
-	// Toujours une rÃ©fÃ©rence ${VAR} dans les fichiers, jamais une valeur.
+	// EncryptionKey doit décoder sur exactement 32 octets (AES-256-GCM).
+	// Toujours une référence ${VAR} dans les fichiers, jamais une valeur.
 	EncryptionKey string `yaml:"encryption_key"`
 	Argon2        Argon2 `yaml:"argon2"`
 }
 
-// Argon2 porte le coÃ»t du hachage de mot de passe.
+// Argon2 porte le coût du hachage de mot de passe.
 type Argon2 struct {
 	MemoryKiB  uint32 `yaml:"memory_kib"`
 	Iterations uint32 `yaml:"iterations"`
 	Threads    uint8  `yaml:"threads"`
 }
 
-// DecodedEncryptionKey dÃ©code et valide la clÃ© de chiffrement.
+// DecodedEncryptionKey décode et valide la clé de chiffrement.
 func (s Security) DecodedEncryptionKey() ([]byte, error) {
 	key, err := base64.StdEncoding.DecodeString(s.EncryptionKey)
 	if err != nil {
@@ -200,7 +200,7 @@ func (s Security) DecodedEncryptionKey() ([]byte, error) {
 	}
 	if len(key) != encryptionKeyBytes {
 		return nil, fmt.Errorf(
-			"security.encryption_key doit faire %d octets, reÃ§u %d",
+			"security.encryption_key doit faire %d octets, reçu %d",
 			encryptionKeyBytes, len(key),
 		)
 	}
@@ -232,22 +232,22 @@ type Telemetry struct {
 type I18n struct {
 	DefaultLocale    string   `yaml:"default_locale"`
 	SupportedLocales []string `yaml:"supported_locales"`
-	// FailOnMissingKey fait Ã©chouer la CI sur une clÃ© absente d'un catalogue.
-	// Une traduction manquante affiche sa clÃ©, ce qui est visible â€” mais mieux
+	// FailOnMissingKey fait échouer la CI sur une clé absente d'un catalogue.
+	// Une traduction manquante affiche sa clé, ce qui est visible — mais mieux
 	// vaut le voir en CI qu'en production.
 	FailOnMissingKey bool `yaml:"fail_on_missing_key"`
 }
 
 // applyDefaults comble les valeurs que les fichiers pourraient ne pas porter.
 //
-// Ce sont des dÃ©fauts STRUCTURELS, pas des valeurs mÃ©tier : ils garantissent
-// qu'un fichier de conf incomplet ne produit pas un pool Ã  zÃ©ro connexion.
+// Ce sont des défauts STRUCTURELS, pas des valeurs métier : ils garantissent
+// qu'un fichier de conf incomplet ne produit pas un pool à zéro connexion.
 func (c *Config) applyDefaults() {
 	if c.App.Env == "" {
 		c.App.Env = EnvDevelopment
 	}
 	if c.Database.MigrationDSN == "" {
-		// En local, les deux rÃ´les peuvent coÃ¯ncider ; validate() l'interdit
+		// En local, les deux rôles peuvent coïncider ; validate() l'interdit
 		// ailleurs.
 		c.Database.MigrationDSN = c.Database.DSN
 	}
@@ -272,8 +272,8 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// validate rassemble TOUTES les invaliditÃ©s plutÃ´t que de s'arrÃªter Ã  la
-// premiÃ¨re : corriger la configuration en six redÃ©marrages est inacceptable.
+// validate rassemble TOUTES les invalidités plutôt que de s'arrêter à la
+// première : corriger la configuration en six redémarrages est inacceptable.
 func (c Config) validate() error {
 	problems := make([]error, 0, 4)
 	problems = append(problems, c.validateCore()...)
@@ -309,14 +309,14 @@ func (c Config) validateCore() []error {
 	}
 	if c.HTTP.ReadTimeout <= 0 {
 		problems = append(problems, errors.New(
-			"http.read_timeout doit Ãªtre > 0 : une connexion sans dÃ©lai immobilise une goroutine"))
+			"http.read_timeout doit être > 0 : une connexion sans délai immobilise une goroutine"))
 	}
 	if c.Database.MinConns > c.Database.MaxConns {
 		problems = append(problems, fmt.Errorf(
 			"database.min_conns=%d > database.max_conns=%d", c.Database.MinConns, c.Database.MaxConns))
 	}
 	if c.Worker.MaxAttempts < 1 {
-		problems = append(problems, errors.New("worker.max_attempts doit Ãªtre >= 1"))
+		problems = append(problems, errors.New("worker.max_attempts doit être >= 1"))
 	}
 
 	switch c.Messaging.Driver {
@@ -335,7 +335,7 @@ func (c Config) validateCore() []error {
 
 // validateHardening porte les exigences qui ne s'appliquent qu'hors local.
 //
-// Deny par dÃ©faut : ce qui n'est pas explicitement sÃ»r est refusÃ©.
+// Deny par défaut : ce qui n'est pas explicitement sûr est refusé.
 func (c Config) validateHardening() []error {
 	if c.App.Env.IsLocal() {
 		return nil
@@ -344,30 +344,30 @@ func (c Config) validateHardening() []error {
 
 	if c.Database.MigrationDSN == c.Database.DSN {
 		problems = append(problems, errors.New(
-			"database.migration_dsn doit diffÃ©rer de database.dsn hors dÃ©veloppement "+
-				"(le rÃ´le applicatif ne possÃ¨de pas le schÃ©ma)"))
+			"database.migration_dsn doit différer de database.dsn hors développement "+
+				"(le rôle applicatif ne possède pas le schéma)"))
 	}
 	if len(c.HTTP.AllowedOrigins) == 0 {
-		problems = append(problems, errors.New("http.allowed_origins ne peut pas Ãªtre vide hors dÃ©veloppement"))
+		problems = append(problems, errors.New("http.allowed_origins ne peut pas être vide hors développement"))
 	}
 	for _, origin := range c.HTTP.AllowedOrigins {
 		switch {
 		case origin == "*":
-			problems = append(problems, errors.New("http.allowed_origins ne peut pas contenir '*' hors dÃ©veloppement"))
+			problems = append(problems, errors.New("http.allowed_origins ne peut pas contenir '*' hors développement"))
 		case strings.HasPrefix(origin, "http://"):
-			problems = append(problems, fmt.Errorf("origine non chiffrÃ©e interdite hors dÃ©veloppement: %s", origin))
+			problems = append(problems, fmt.Errorf("origine non chiffrée interdite hors développement: %s", origin))
 		case origin == "":
-			problems = append(problems, errors.New("http.allowed_origins contient une entrÃ©e vide (rÃ©fÃ©rence ${VAR} non rÃ©solue ?)"))
+			problems = append(problems, errors.New("http.allowed_origins contient une entrée vide (référence ${VAR} non résolue ?)"))
 		}
 	}
 	if c.Messaging.Driver == "kafka" && c.Messaging.Kafka.AllowAutoTopicCreation {
 		problems = append(problems, errors.New(
-			"messaging.kafka.allow_auto_topic_creation doit Ãªtre false hors dÃ©veloppement : "+
-				"crÃ©er un topic Ã  la volÃ©e masque une erreur de configuration"))
+			"messaging.kafka.allow_auto_topic_creation doit être false hors développement : "+
+				"créer un topic à la volée masque une erreur de configuration"))
 	}
 	if !c.Telemetry.Enabled {
 		problems = append(problems, errors.New(
-			"telemetry.enabled doit Ãªtre true hors dÃ©veloppement : un service non observable n'est pas exploitable"))
+			"telemetry.enabled doit être true hors développement : un service non observable n'est pas exploitable"))
 	}
 	return problems
 }

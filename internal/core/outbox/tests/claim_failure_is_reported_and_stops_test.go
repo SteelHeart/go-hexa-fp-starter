@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
 // TestClaimFailureIsReportedAndStops : un magasin injoignable arrête le tour sans
@@ -18,7 +17,7 @@ func TestClaimFailureIsReportedAndStops(t *testing.T) {
 	panne := errors.New("base injoignable")
 	failingClaim := func(context.Context, int) ([]domain.Message, error) { return nil, panne }
 
-	var handle ports.Handler = func(context.Context, domain.Message) error {
+	handle := func(context.Context, domain.Message) error {
 		t.Error("aucun message ne doit être publié quand la réservation échoue")
 		return nil
 	}

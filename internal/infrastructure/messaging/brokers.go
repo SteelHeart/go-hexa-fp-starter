@@ -15,32 +15,32 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// â”€â”€â”€ Kafka â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Kafka ───────────────────────────────────────────────────────────────────
 
 // newKafka construit le relais Kafka.
 //
-// âš ï¸ Ã‰CRIT, NON PROUVÃ‰ : aucune exÃ©cution contre un Kafka rÃ©el n'a eu lieu.
-// Ne pas le prÃ©senter comme fonctionnel (rules/README.md Â§ rÃ¨gle d'or 2).
+// ⚠️ ÉCRIT, NON PROUVÉ : aucune exécution contre un Kafka réel n'a eu lieu.
+// Ne pas le présenter comme fonctionnel (rules/README.md § règle d'or 2).
 func newKafka(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: kafka.RequireAll,
 		WriteTimeout: cfg.PublishTimeout.Duration(),
-		// Allow n'Ã©crit pas les topics manquants en production : les crÃ©er Ã  la
-		// volÃ©e masque une erreur de configuration. Vrai en dev uniquement.
+		// Allow n'écrit pas les topics manquants en production : les créer à la
+		// volée masque une erreur de configuration. Vrai en dev uniquement.
 		AllowAutoTopicCreation: cfg.Kafka.AllowAutoTopicCreation,
 	}
 
 	publish := func(ctx context.Context, env Envelope) error {
 		raw, err := json.Marshal(env)
 		if err != nil {
-			return fmt.Errorf("sÃ©rialisation de l'enveloppe: %w", err)
+			return fmt.Errorf("sérialisation de l'enveloppe: %w", err)
 		}
 		msg := kafka.Message{
 			Topic: cfg.Topic(env.Type),
-			// La clÃ© est l'agrÃ©gat : Kafka garantit l'ordre par partition, donc
-			// tous les Ã©vÃ©nements d'un mÃªme agrÃ©gat restent ordonnÃ©s.
+			// La clé est l'agrégat : Kafka garantit l'ordre par partition, donc
+			// tous les événements d'un même agrégat restent ordonnés.
 			Key:     []byte(env.AggregateID),
 			Value:   raw,
 			Headers: kafkaHeaders(env),
@@ -82,10 +82,10 @@ func (c *kafkaConsumer) Subscribe(eventType string, handler Handler) {
 	c.handlers[eventType] = handler
 }
 
-// Run ouvre un lecteur par type d'Ã©vÃ©nement.
+// Run ouvre un lecteur par type d'événement.
 //
-// Un lecteur par topic plutÃ´t qu'un lecteur multi-topics : le dÃ©calage
-// (Â« offset Â») est commitÃ© par topic, donc un consommateur lent n'empÃªche pas
+// Un lecteur par topic plutôt qu'un lecteur multi-topics : le décalage
+// (« offset ») est commité par topic, donc un consommateur lent n'empêche pas
 // les autres d'avancer.
 func (c *kafkaConsumer) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
@@ -114,19 +114,19 @@ func (c *kafkaConsumer) consume(ctx context.Context, eventType string, handler H
 			if ctx.Err() != nil {
 				return
 			}
-			c.logger.ErrorContext(ctx, "lecture Kafka en Ã©chec",
+			c.logger.ErrorContext(ctx, "lecture Kafka en échec",
 				slog.String("event_type", eventType), slog.Any("error", err))
 			continue
 		}
 		if err := c.handle(ctx, msg, handler); err != nil {
-			// Pas de commit : le message sera relivrÃ©. Le consommateur Ã©tant
-			// idempotent, c'est le comportement souhaitÃ©.
-			c.logger.ErrorContext(ctx, "consommation en Ã©chec, message non commitÃ©",
+			// Pas de commit : le message sera relivré. Le consommateur étant
+			// idempotent, c'est le comportement souhaité.
+			c.logger.ErrorContext(ctx, "consommation en échec, message non commité",
 				slog.String("event_type", eventType), slog.Any("error", err))
 			continue
 		}
 		if err := reader.CommitMessages(ctx, msg); err != nil {
-			c.logger.ErrorContext(ctx, "commit Kafka en Ã©chec", slog.Any("error", err))
+			c.logger.ErrorContext(ctx, "commit Kafka en échec", slog.Any("error", err))
 		}
 	}
 }
@@ -134,7 +134,7 @@ func (c *kafkaConsumer) consume(ctx context.Context, eventType string, handler H
 func (c *kafkaConsumer) handle(ctx context.Context, msg kafka.Message, handler Handler) error {
 	var env Envelope
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
-		// Message illisible : le rejouer ne servira Ã  rien. On le commite pour
+		// Message illisible : le rejouer ne servira à rien. On le commite pour
 		// ne pas bloquer la partition, mais on journalise en Error.
 		c.logger.ErrorContext(ctx, "enveloppe Kafka illisible", slog.Any("error", err))
 		return nil
@@ -142,11 +142,11 @@ func (c *kafkaConsumer) handle(ctx context.Context, msg kafka.Message, handler H
 	return handler(ctx, env)
 }
 
-// â”€â”€â”€ RabbitMQ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── RabbitMQ ────────────────────────────────────────────────────────────────
 
 // newRabbitMQ construit le relais AMQP.
 //
-// âš ï¸ Ã‰CRIT, NON PROUVÃ‰ : aucune exÃ©cution contre un RabbitMQ rÃ©el n'a eu lieu.
+// ⚠️ ÉCRIT, NON PROUVÉ : aucune exécution contre un RabbitMQ réel n'a eu lieu.
 func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer, error) {
 	conn, err := amqp.Dial(cfg.RabbitMQ.URL)
 	if err != nil {
@@ -157,17 +157,17 @@ func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer
 		_ = conn.Close()
 		return nil, nil, nil, fmt.Errorf("ouverture du canal AMQP: %w", err)
 	}
-	// Ã‰change durable de type topic : les consommateurs se lient par motif,
+	// Échange durable de type topic : les consommateurs se lient par motif,
 	// donc ajouter un consommateur ne touche pas le producteur.
 	if err := channel.ExchangeDeclare(cfg.RabbitMQ.Exchange, amqp.ExchangeTopic, true, false, false, false, nil); err != nil {
 		_ = conn.Close()
-		return nil, nil, nil, fmt.Errorf("dÃ©claration de l'Ã©change: %w", err)
+		return nil, nil, nil, fmt.Errorf("déclaration de l'échange: %w", err)
 	}
 
 	publish := func(ctx context.Context, env Envelope) error {
 		raw, err := json.Marshal(env)
 		if err != nil {
-			return fmt.Errorf("sÃ©rialisation de l'enveloppe: %w", err)
+			return fmt.Errorf("sérialisation de l'enveloppe: %w", err)
 		}
 		pubCtx, cancel := context.WithTimeout(ctx, cfg.PublishTimeout.Duration())
 		defer cancel()
@@ -177,7 +177,7 @@ func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer
 				Body:        raw,
 				MessageId:   env.ID,
 				Timestamp:   env.OccurredAt,
-				// Persistant : sans cela, un redÃ©marrage du broker perd les
+				// Persistant : sans cela, un redémarrage du broker perd les
 				// messages en file.
 				DeliveryMode: amqp.Persistent,
 				Headers:      amqp.Table{"traceparent": env.TraceParent},
@@ -231,13 +231,13 @@ func (c *amqpConsumer) Run(ctx context.Context) error {
 	return nil
 }
 
-// bind dÃ©clare une file durable et nommÃ©e par groupe de consommateurs, pour que
-// N rÃ©pliques se partagent la charge au lieu de la dupliquer.
+// bind déclare une file durable et nommée par groupe de consommateurs, pour que
+// N répliques se partagent la charge au lieu de la dupliquer.
 func (c *amqpConsumer) bind(eventType string) (<-chan amqp.Delivery, error) {
 	name := c.cfg.ConsumerGroup + "." + c.cfg.Topic(eventType)
 	queue, err := c.channel.QueueDeclare(name, true, false, false, false, nil)
 	if err != nil {
-		return nil, fmt.Errorf("dÃ©claration de la file %s: %w", name, err)
+		return nil, fmt.Errorf("déclaration de la file %s: %w", name, err)
 	}
 	if err := c.channel.QueueBind(queue.Name, c.cfg.Topic(eventType), c.cfg.RabbitMQ.Exchange, false, nil); err != nil {
 		return nil, fmt.Errorf("liaison de la file %s: %w", name, err)
@@ -266,7 +266,7 @@ func (c *amqpConsumer) consume(ctx context.Context, handler Handler, in <-chan a
 				continue
 			}
 			if err := handler(ctx, env); err != nil {
-				c.logger.ErrorContext(ctx, "consommation AMQP en Ã©chec",
+				c.logger.ErrorContext(ctx, "consommation AMQP en échec",
 					slog.String("event_type", env.Type), slog.Any("error", err))
 				_ = delivery.Nack(false, true)
 				continue

@@ -1,8 +1,8 @@
-// Package telemetry cÃ¢ble les traces, les mÃ©triques et les logs, et les relie
+// Package telemetry câble les traces, les métriques et les logs, et les relie
 // par le trace_id.
 //
 // Un log sans trace_id est un log qu'on ne pourra pas recouper en incident :
-// c'est pour cela que le gestionnaire slog l'injecte lui-mÃªme plutÃ´t que de
+// c'est pour cela que le gestionnaire slog l'injecte lui-même plutôt que de
 // compter sur les appelants.
 package telemetry
 
@@ -26,13 +26,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Shutdown libÃ¨re les exportateurs. Ã€ appeler sur un contexte NON annulÃ©,
-// sinon les spans en tampon sont perdus au moment oÃ¹ ils sont les plus utiles.
+// Shutdown libère les exportateurs. À appeler sur un contexte NON annulé,
+// sinon les spans en tampon sont perdus au moment où ils sont les plus utiles.
 type Shutdown = func(context.Context) error
 
-// NewLogger construit le journal structurÃ©.
+// NewLogger construit le journal structuré.
 //
-// JSON hors dÃ©veloppement : c'est ce que les collecteurs savent lire. Texte en
+// JSON hors développement : c'est ce que les collecteurs savent lire. Texte en
 // local, parce qu'un humain lit mieux du texte.
 func NewLogger(cfg config.Config) *slog.Logger {
 	level := parseLevel(cfg.Telemetry.LogLevel)
@@ -80,7 +80,7 @@ func (h *traceHandler) Handle(ctx context.Context, record slog.Record) error {
 			slog.String("span_id", sc.SpanID().String()),
 		)
 	}
-	return h.inner.Handle(ctx, record) //nolint:wrapcheck // dÃ©lÃ©gation directe
+	return h.inner.Handle(ctx, record) //nolint:wrapcheck // délégation directe
 }
 
 func (h *traceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
@@ -91,10 +91,10 @@ func (h *traceHandler) WithGroup(name string) slog.Handler {
 	return &traceHandler{inner: h.inner.WithGroup(name)}
 }
 
-// Setup installe les fournisseurs de traces et de mÃ©triques.
+// Setup installe les fournisseurs de traces et de métriques.
 //
-// DÃ©sactivÃ©e, la fonction retourne un arrÃªt inerte : le code appelant n'a pas Ã
-// savoir si la tÃ©lÃ©mÃ©trie est active, et les no-op providers d'OpenTelemetry
+// Désactivée, la fonction retourne un arrêt inerte : le code appelant n'a pas Ã
+// savoir si la télémétrie est active, et les no-op providers d'OpenTelemetry
 // rendent tout appel gratuit.
 func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 	if !cfg.Telemetry.Enabled {
@@ -137,12 +137,12 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 	otel.SetMeterProvider(meterProvider)
 
 	return func(shutdownCtx context.Context) error {
-		return fmt.Errorf("arrÃªt de la tÃ©lÃ©mÃ©trie: %w",
+		return fmt.Errorf("arrêt de la télémétrie: %w",
 			errJoin(tracerProvider.Shutdown(shutdownCtx), meterProvider.Shutdown(shutdownCtx)))
 	}, nil
 }
 
-// errJoin Ã©vite d'importer errors pour un seul appel et garde la lisibilitÃ©.
+// errJoin évite d'importer errors pour un seul appel et garde la lisibilité.
 func errJoin(errs ...error) error {
 	for _, err := range errs {
 		if err != nil {

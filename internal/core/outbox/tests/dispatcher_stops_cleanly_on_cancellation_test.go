@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
 // TestDispatcherStopsCleanlyOnCancellation : l'annulation est la fin NORMALE d'un
@@ -27,7 +26,7 @@ func TestDispatcherStopsCleanlyOnCancellation(t *testing.T) {
 	claim := func(context.Context, int) ([]domain.Message, error) {
 		return []domain.Message{pending("m-1", 0)}, nil
 	}
-	var handle ports.Handler = func(context.Context, domain.Message) error {
+	handle := func(context.Context, domain.Message) error {
 		select {
 		case published <- struct{}{}:
 		default:

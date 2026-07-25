@@ -68,7 +68,7 @@ func (s *Store) Put(_ context.Context, obj domain.Object) (domain.Located, error
 	}
 	key, err := domain.SafeKey(obj.Name)
 	if err != nil {
-		return domain.Located{}, err
+		return domain.Located{}, fmt.Errorf("dérivation de la clé de stockage: %w", err)
 	}
 
 	full := s.path(key)
@@ -82,8 +82,8 @@ func (s *Store) Put(_ context.Context, obj domain.Object) (domain.Located, error
 	}
 	defer func() { _ = file.Close() }()
 
-	if _, err := io.Copy(file, obj.Content); err != nil {
-		return domain.Located{}, fmt.Errorf("écriture de l'objet %s: %w", key, err)
+	if _, copyErr := io.Copy(file, obj.Content); copyErr != nil {
+		return domain.Located{}, fmt.Errorf("écriture de l'objet %s: %w", key, copyErr)
 	}
 	return domain.Located{Key: key, URL: s.baseURL + "/" + key.String()}, nil
 }

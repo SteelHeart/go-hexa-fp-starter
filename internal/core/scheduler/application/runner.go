@@ -93,7 +93,7 @@ func validate(scheduled []Scheduled) error {
 	seen := make(map[domain.TaskName]struct{}, len(scheduled))
 	for _, entry := range scheduled {
 		if err := entry.Task.Validate(); err != nil {
-			return err
+			return fmt.Errorf("tâche planifiée refusée: %w", err)
 		}
 		if entry.Job == nil {
 			return fmt.Errorf("%w: %s", ErrNoJob, entry.Task.Name)

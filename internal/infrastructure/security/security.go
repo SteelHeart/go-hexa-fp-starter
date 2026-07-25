@@ -26,9 +26,38 @@ const (
 	argon2Parts   = 6
 )
 
+// Bornes du condensé décodé.
+//
+// Un condensé est censé venir de notre propre base, mais rien ne le garantit : une
+// reprise de données, une colonne mal migrée, un magasin externe suffisent à y
+// glisser autre chose. Sans borne, la longueur de clé annoncée pilote directement
+// une allocation dans argon2.IDKey — un « condensé » forgé annonçant quatre
+// gigaoctets ferait tomber le processus à la première vérification.
+//
+// Les bornes couvrent large pour ne pas invalider un condensé légitime produit
+// avec une autre longueur de clé, tout en fermant le cas absurde.
+const (
+	argon2MinKeyLen = 16
+	argon2MaxKeyLen = 64
+)
+
+// aesKeyLen impose AES-256, et rien d'autre.
+//
+// `aes.NewCipher` accepte 16, 24 ou 32 octets : une clé de 16 octets produit
+// silencieusement de l'AES-128. Le repli est invisible — tout chiffre et déchiffre
+// normalement — alors que la garantie annoncée par ce paquet, et par la
+// documentation qui s'appuie dessus, est AES-256.
+//
+// C'est un fail-open : on croit avoir 256 bits, on en a 128. Deny par défaut exige
+// de refuser plutôt que de dégrader.
+const aesKeyLen = 32
+
 // ErrInvalidHash signale un condensé illisible : format inconnu, version
 // inattendue, ou encodage corrompu.
 var ErrInvalidHash = errors.New("condensé de mot de passe invalide")
+
+// ErrInvalidKey signale une clé de chiffrement de mauvaise longueur.
+var ErrInvalidKey = errors.New("clé de chiffrement invalide")
 
 // Argon2Params porte le coût du hachage.
 //
@@ -74,61 +103,85 @@ func (h Hasher) Hash(plain string) (string, error) {
 // Une erreur de format et un mot de passe incorrect sont deux choses
 // différentes : la première est un défaut de données, la seconde un cas nominal.
 func (h Hasher) Verify(plain, encoded string) (bool, error) {
-	params, salt, key, err := decodeHash(encoded)
+	decoded, err := decodeHash(encoded)
 	if err != nil {
 		return false, err
 	}
+	// La conversion est sûre : decodeHash a déjà refusé toute longueur hors bornes.
+	keyLen := uint32(len(decoded.key)) //nolint:gosec // borné par decodeHash
 	candidate := argon2.IDKey(
-		[]byte(plain), salt,
-		params.Iterations, params.MemoryKiB, params.Threads, uint32(len(key)),
+		[]byte(plain), decoded.salt,
+		decoded.params.Iterations, decoded.params.MemoryKiB, decoded.params.Threads, keyLen,
 	)
-	return subtle.ConstantTimeCompare(key, candidate) == 1, nil
+	return subtle.ConstantTimeCompare(decoded.key, candidate) == 1, nil
 }
 
 // NeedsRehash indique si un condensé a été produit avec un coût inférieur au
 // coût courant. À appeler après une vérification réussie pour remonter le coût
 // de façon transparente.
 func (h Hasher) NeedsRehash(encoded string) bool {
-	params, _, _, err := decodeHash(encoded)
+	decoded, err := decodeHash(encoded)
 	if err != nil {
+		// Un condensé illisible mérite d'être refait, pas d'être conservé.
 		return true
 	}
-	return params.MemoryKiB < h.params.MemoryKiB ||
-		params.Iterations < h.params.Iterations
+	return decoded.params.MemoryKiB < h.params.MemoryKiB ||
+		decoded.params.Iterations < h.params.Iterations
 }
 
-func decodeHash(encoded string) (Argon2Params, []byte, []byte, error) {
+// decodedHash porte les trois morceaux d'un condensé.
+//
+// Regroupés en type plutôt qu'en trois valeurs de retour : ils n'ont de sens
+// qu'ensemble — vérifier une clé avec le sel d'un autre condensé ne veut rien dire —
+// et trois retours de même forme (`[]byte`, `[]byte`) s'inversent sans que le
+// compilateur bronche.
+type decodedHash struct {
+	params Argon2Params
+	salt   []byte
+	key    []byte
+}
+
+func decodeHash(encoded string) (decodedHash, error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != argon2Parts || parts[1] != "argon2id" {
-		return Argon2Params{}, nil, nil, fmt.Errorf("%w: préfixe", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: préfixe", ErrInvalidHash)
 	}
 	var version int
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2Version {
-		return Argon2Params{}, nil, nil, fmt.Errorf("%w: version", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: version", ErrInvalidHash)
 	}
 	var params Argon2Params
 	if _, err := fmt.Sscanf(
 		parts[3], "m=%d,t=%d,p=%d",
 		&params.MemoryKiB, &params.Iterations, &params.Threads,
 	); err != nil {
-		return Argon2Params{}, nil, nil, fmt.Errorf("%w: paramètres", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: paramètres", ErrInvalidHash)
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return Argon2Params{}, nil, nil, fmt.Errorf("%w: sel", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: sel", ErrInvalidHash)
 	}
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return Argon2Params{}, nil, nil, fmt.Errorf("%w: clé", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: clé", ErrInvalidHash)
 	}
-	return params, salt, key, nil
+	if len(key) < argon2MinKeyLen || len(key) > argon2MaxKeyLen {
+		return decodedHash{}, fmt.Errorf("%w: longueur de clé (%d octets)", ErrInvalidHash, len(key))
+	}
+	return decodedHash{params: params, salt: salt, key: key}, nil
 }
 
 // Cipher chiffre et déchiffre des données au repos en AES-256-GCM.
 type Cipher struct{ aead cipher.AEAD }
 
 // NewCipher construit un chiffreur à partir d'une clé de 32 octets.
+//
+// Toute autre longueur est REFUSÉE, y compris celles qu'AES accepte : voir aesKeyLen.
 func NewCipher(key []byte) (Cipher, error) {
+	if len(key) != aesKeyLen {
+		return Cipher{}, fmt.Errorf(
+			"%w: %d octets fournis, %d attendus (AES-256)", ErrInvalidKey, len(key), aesKeyLen)
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return Cipher{}, fmt.Errorf("clé AES invalide: %w", err)

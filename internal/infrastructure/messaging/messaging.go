@@ -1,22 +1,22 @@
-// Package messaging abstrait le transport d'Ã©vÃ©nements entre modules.
+// Package messaging abstrait le transport d'événements entre modules.
 //
-// # L'outbox n'est pas Ã  la place du broker, elle est devant lui
+// # L'outbox n'est pas à la place du broker, elle est devant lui
 //
-// Une feature Ã©crit TOUJOURS dans l'outbox, dans sa transaction mÃ©tier : c'est
-// ce qui garantit qu'aucun Ã©vÃ©nement n'est perdu ni fantÃ´me (ADR 006). Le
-// worker dÃ©pile ensuite et remet l'enveloppe Ã  un RELAIS â€” c'est le relais qui
-// connaÃ®t Kafka, RabbitMQ, ou rien du tout.
+// Une feature écrit TOUJOURS dans l'outbox, dans sa transaction métier : c'est
+// ce qui garantit qu'aucun événement n'est perdu ni fantôme (ADR 006). Le
+// worker dépile ensuite et remet l'enveloppe à un RELAIS — c'est le relais qui
+// connaît Kafka, RabbitMQ, ou rien du tout.
 //
-// ConsÃ©quence : changer de broker ne touche aucune ligne de `domain/`, `ports/`
+// Conséquence : changer de broker ne touche aucune ligne de `domain/`, `ports/`
 // ou `application/`. C'est une variable d'environnement.
 //
-//	feature â”€â”€â–º outbox (Postgres, transactionnel)  â”€â”€â–º worker â”€â”€â–º relais â”€â”€â–º Kafka / AMQP / inproc
+//	feature ──► outbox (Postgres, transactionnel)  ──► worker ──► relais ──► Kafka / AMQP / inproc
 //
 // # Choisir le relais
 //
-//	MESSAGING_DRIVER=inproc     tout dans le mÃªme processus (dÃ©faut)
+//	MESSAGING_DRIVER=inproc     tout dans le même processus (défaut)
 //	MESSAGING_DRIVER=kafka      MESSAGING_BROKERS=host:9092
-//	MESSAGING_DRIVER=rabbitmq   MESSAGING_AMQP_URL=amqp://â€¦
+//	MESSAGING_DRIVER=rabbitmq   MESSAGING_AMQP_URL=amqp://…
 //	MESSAGING_DRIVER=noop       aucune publication (tests, migrations)
 package messaging
 
@@ -42,10 +42,10 @@ const (
 	DriverNoop     Driver = "noop"
 )
 
-// Envelope est le format de transport d'un Ã©vÃ©nement.
+// Envelope est le format de transport d'un événement.
 //
 // Il est volontairement pauvre et sans type Go du domaine : c'est ce qui permet
-// Ã  un consommateur Ã©crit dans un autre langage, ou dÃ©ployÃ© sÃ©parÃ©ment, de le
+// à un consommateur écrit dans un autre langage, ou déployé séparément, de le
 // lire. Payload est du JSON opaque.
 type Envelope struct {
 	ID          string            `json:"id"`
@@ -59,16 +59,16 @@ type Envelope struct {
 
 // Publisher remet une enveloppe au transport.
 //
-// Type fonction, donc substituable par une closure en test â€” et un dÃ©corateur
-// (retry, mÃ©trique) est un simple `func(Publisher) Publisher`.
+// Type fonction, donc substituable par une closure en test — et un décorateur
+// (retry, métrique) est un simple `func(Publisher) Publisher`.
 type Publisher = func(ctx context.Context, env Envelope) error
 
 // Handler consomme une enveloppe.
 //
-// Il DOIT Ãªtre idempotent : tous les transports d'ici sont Â« au moins une fois Â».
+// Il DOIT être idempotent : tous les transports d'ici sont « au moins une fois ».
 type Handler = func(ctx context.Context, env Envelope) error
 
-// Consumer s'abonne Ã  des types d'Ã©vÃ©nements et boucle jusqu'Ã  annulation.
+// Consumer s'abonne à des types d'événements et boucle jusqu'à annulation.
 type Consumer interface {
 	Subscribe(eventType string, handler Handler)
 	Run(ctx context.Context) error
@@ -76,16 +76,16 @@ type Consumer interface {
 
 // ErrUnknownDriver signale un MESSAGING_DRIVER non reconnu.
 //
-// Deny par dÃ©faut : un pilote inconnu refuse le dÃ©marrage plutÃ´t que de se
-// rabattre silencieusement sur Â« aucune publication Â».
+// Deny par défaut : un pilote inconnu refuse le démarrage plutôt que de se
+// rabattre silencieusement sur « aucune publication ».
 var ErrUnknownDriver = errors.New("relais de messagerie inconnu")
 
-// Closer libÃ¨re les ressources du transport.
+// Closer libère les ressources du transport.
 type Closer = func() error
 
-// New construit le publieur et le consommateur correspondant Ã  la configuration.
+// New construit le publieur et le consommateur correspondant à la configuration.
 //
-// C'est le SEUL point du dÃ©pÃ´t qui choisit un broker. Ajouter un transport se
+// C'est le SEUL point du dépôt qui choisit un broker. Ajouter un transport se
 // fait ici et nulle part ailleurs.
 func New(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer, error) {
 	switch Driver(cfg.Driver) {
@@ -103,19 +103,19 @@ func New(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer
 	}
 }
 
-// Inproc est un bus en mÃ©moire : les consommateurs tournent dans le mÃªme
+// Inproc est un bus en mémoire : les consommateurs tournent dans le même
 // processus que le producteur.
 //
 // Ce n'est pas un bouchon. C'est le mode NORMAL d'un monolithe modulaire : la
-// durabilitÃ© est dÃ©jÃ  assurÃ©e par l'outbox, le bus n'a donc pas Ã  l'Ãªtre. On ne
-// paie un broker que le jour oÃ¹ les modules sont dÃ©ployÃ©s sÃ©parÃ©ment.
+// durabilité est déjà assurée par l'outbox, le bus n'a donc pas à l'être. On ne
+// paie un broker que le jour où les modules sont déployés séparément.
 type Inproc struct {
 	mu       sync.RWMutex
 	handlers map[string][]Handler
 	logger   *slog.Logger
 }
 
-// NewInproc construit le bus en mÃ©moire.
+// NewInproc construit le bus en mémoire.
 func NewInproc(logger *slog.Logger) *Inproc {
 	return &Inproc{handlers: make(map[string][]Handler), logger: logger}
 }
@@ -127,10 +127,10 @@ func (b *Inproc) Subscribe(eventType string, handler Handler) {
 	b.handlers[eventType] = append(b.handlers[eventType], handler)
 }
 
-// Publish remet l'enveloppe aux consommateurs, de faÃ§on synchrone.
+// Publish remet l'enveloppe aux consommateurs, de façon synchrone.
 //
 // Synchrone volontairement : l'appelant est le worker, qui ne marquera le
-// message traitÃ© qu'aprÃ¨s succÃ¨s. Publier en asynchrone ici perdrait la
+// message traité qu'après succès. Publier en asynchrone ici perdrait la
 // garantie de livraison que l'outbox vient d'apporter.
 func (b *Inproc) Publish(ctx context.Context, env Envelope) error {
 	b.mu.RLock()
@@ -138,7 +138,7 @@ func (b *Inproc) Publish(ctx context.Context, env Envelope) error {
 	b.mu.RUnlock()
 
 	if len(handlers) == 0 {
-		b.logger.WarnContext(ctx, "Ã©vÃ©nement sans consommateur",
+		b.logger.WarnContext(ctx, "événement sans consommateur",
 			slog.String("event_type", env.Type))
 		return nil
 	}
@@ -154,7 +154,7 @@ func (b *Inproc) Publish(ctx context.Context, env Envelope) error {
 	return nil
 }
 
-// Run ne fait rien : les consommateurs sont appelÃ©s par Publish.
+// Run ne fait rien : les consommateurs sont appelés par Publish.
 func (b *Inproc) Run(ctx context.Context) error {
 	<-ctx.Done()
 	return nil
@@ -162,7 +162,7 @@ func (b *Inproc) Run(ctx context.Context) error {
 
 func noopPublisher(logger *slog.Logger) Publisher {
 	return func(ctx context.Context, env Envelope) error {
-		logger.DebugContext(ctx, "publication ignorÃ©e (relais noop)",
+		logger.DebugContext(ctx, "publication ignorée (relais noop)",
 			slog.String("event_type", env.Type))
 		return nil
 	}
@@ -177,9 +177,9 @@ func (noopConsumer) Run(ctx context.Context) error {
 	return nil
 }
 
-// WithRetry enveloppe un publieur d'un rÃ©essai bornÃ©.
+// WithRetry enveloppe un publieur d'un réessai borné.
 //
-// Utile pour les transports rÃ©seau : une coupure d'une seconde ne doit pas
+// Utile pour les transports réseau : une coupure d'une seconde ne doit pas
 // consommer une tentative de l'outbox, dont le recul est bien plus long.
 func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher {
 	return func(ctx context.Context, env Envelope) error {
@@ -188,7 +188,7 @@ func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher 
 			if i > 0 {
 				select {
 				case <-ctx.Done():
-					return ctx.Err() //nolint:wrapcheck // erreur de contexte, explicite
+					return ctx.Err()
 				case <-time.After(wait * time.Duration(1<<(i-1))):
 				}
 			}
@@ -197,6 +197,6 @@ func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher 
 				return nil
 			}
 		}
-		return fmt.Errorf("publication Ã©chouÃ©e aprÃ¨s %d tentatives: %w", attempts, last)
+		return fmt.Errorf("publication échouée après %d tentatives: %w", attempts, last)
 	}
 }

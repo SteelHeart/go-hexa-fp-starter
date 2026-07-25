@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
 // TestCatchUpDrainsMoreThanOneBatch : un lot PLEIN signifie « il en reste ».
@@ -42,7 +41,7 @@ func TestCatchUpDrainsMoreThanOneBatch(t *testing.T) {
 	}
 
 	observed := &spy{}
-	var handle ports.Handler = func(context.Context, domain.Message) error { return nil }
+	handle := func(context.Context, domain.Message) error { return nil }
 
 	policy := testPolicy()
 	policy.BatchSize = batchSize
