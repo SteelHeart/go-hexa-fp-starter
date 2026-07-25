@@ -133,20 +133,24 @@ Un seul module métier, `user_registration`, qui est un **exemple de référence
 
 - `go build ./...` vert
 - `go vet ./...` vert
-- `go test -shuffle=on ./...` vert — **123 tests**, répartis ainsi :
+- `go test -shuffle=on ./...` vert — **135 tests**, 252 avec les sous-tests, répartis ainsi :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
-| `internal/config` + `internal/config/tests` | 32 | Le chargement en couches, les durées, les options de pilote, et le fait que la configuration **livrée** charge sans aucun service |
-| `internal/core/outbox/tests` | 12 | Exclusivité de `Claim`, recul exponentiel borné, pilote `memory` sans base |
+| `internal/config` (`internal_test.go`) | 15 | Substitution des secrets, fusion des couches, cohérence des tables de pilotes |
+| `internal/config/tests` | 21 | Durées, options de pilote, et le fait que la configuration **livrée** charge sans aucun service |
+| `internal/core/outbox/tests` | 22 | Exclusivité de `Claim`, recul exponentiel borné, et toute la politique du **dépileur** |
 | `internal/core/idempotency/tests` | 24 | Exclusivité sous concurrence, refus de la clé vide, expiration, empreintes |
 | `internal/core/audit/tests` | 11 | Refus d'une entrée incomplète, horodatage injecté, normalisation UTC |
-| `internal/core/dynconf/tests` | 13 | Deny par défaut d'un drapeau, options non scalaires refusées, lecture seule |
-| `internal/core/storage/tests` | 12 | Traversée de répertoire refusée à l'écriture **et** à la lecture, clés réparties |
-| `internal/core/scheduler/tests` | 11 | Aucune exécution sans élection, libération même après échec, tâches homonymes refusées |
+| `internal/core/dynconf/tests` | 14 | Deny par défaut d'un drapeau, options non scalaires refusées, lecture seule |
+| `internal/core/storage/tests` | 13 | Traversée de répertoire refusée à l'écriture **et** à la lecture, clés réparties |
+| `internal/core/scheduler/tests` | 15 | Aucune exécution sans élection, libération même après échec, tâches homonymes refusées |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
+- **Le dépileur de l'outbox est réécrit** dans `application/` : recul exponentiel, abandon après N
+  essais, survie à un publieur qui panique, et un compte rendu distinct pour « publié mais non
+  marqué » — le seul cas qui produit un doublon chez le consommateur.
 - **`knownDrivers` ne liste plus que le construit.** Un module absent de la table refuse d'être
   activé : on n'active pas un module dont le code n'existe pas.
 
@@ -168,7 +172,6 @@ Un seul module métier, `user_registration`, qui est un **exemple de référence
 - **Aucune authentification ni autorisation**. Ne jamais parler de « zéro faille » tant que c'est vrai
 - i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010 et 011,
   `deploy/docker-compose.deploy.yml`
-- Le **dispatcher de l'outbox** : retiré avec la conversion en module, à réécrire dans `application/`
 - Les modules `auth`, `notification`, `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`,
   `search`, `document` : décrits dans `documentation/technique/modules-noyau.md`, **aucun code**
 
@@ -238,13 +241,12 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **Finir #21** : réécrire le dispatcher de l'outbox dans `application/` — six modules sur six sont
-   convertis, il ne reste que lui
-2. **#6 / #7** : tests du cœur `user_registration` et des primitives (`result`, `fp`, `pagination`)
-3. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
-4. **#2** : migrations, un schéma et un rôle SQL par module
-5. **#3 / #4 / #5 / #8** : adaptateurs puis binaires — le premier `curl` qui répond
-6. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+1. **#6 / #7** : tests du cœur `user_registration` et des primitives (`result`, `fp`, `pagination`)
+2. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
+3. **#2** : migrations, un schéma et un rôle SQL par module
+4. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
+   premier worker qui dépile réellement
+5. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
 
 ### Arbitrages en attente côté produit
 
