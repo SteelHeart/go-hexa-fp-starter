@@ -14,6 +14,8 @@ Une friction ouverte a son issue, avec le label `friction`.
 | F003 | 2026-07-25 | Aucun test de mutation | La couverture mesure ce qui est **exécuté**, pas ce qui est **vérifié** : 90 % sur le cœur ne prouve pas que les assertions sont justes | **Ouvert** |
 | F004 | 2026-07-25 | Les versions d'outillage sont en `latest` en CI | Un linter qui change de comportement rend la CI non reproductible et peut casser une PR sans rapport | **Ouvert** — à figer à la première release ([`rules/dependances.md`](../../rules/dependances.md) §5) |
 | F005 | 2026-07-25 | `-race` exige CGO et un compilateur C, absents de la machine de référence Windows | Le détecteur de courses ne tourne qu'en CI. Un défaut de concurrence introduit en local n'est vu qu'à la PR | **Ouvert** — assumé : `task test` sans `-race` en local, `task test:race` en CI Linux |
+| F006 | 2026-07-25 | `task` (go-task) et `govulncheck` ne sont pas installés sur la machine de référence | `task check` n'a **jamais** été exécuté tel quel en local : les étapes sont lancées une par une, donc rien ne garantit que l'enchaînement est le même qu'en CI. C'est un faux vert en puissance — la barrière qu'on croit franchir n'est pas celle qui tourne | **Ouvert** — `task init` est censé les poser ; vérifier pourquoi il ne l'a pas fait |
+| F007 | 2026-07-25 | Chaîne d'outils Go en 1.25.4, **20 vulnérabilités de la bibliothèque standard** atteignables | `govulncheck` échoue, donc `task check` ne peut pas être vert. Toutes sont corrigées par Go ≥ **1.25.12** : `crypto/tls`, `crypto/x509`, `net/url`, `net/mail`, `html/template`, `os`. Aucune ne vient d'une dépendance du dépôt | **Ouvert** — monter la chaîne d'outils Go. **Bloque le tag `v0.1.0` (#1)** |
 
 ## Quand écrire une entrée
 

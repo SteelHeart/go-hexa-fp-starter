@@ -72,10 +72,17 @@ func (s *Store) Put(_ context.Context, obj domain.Object) (domain.Located, error
 	}
 
 	full := s.path(key)
-	if err := os.MkdirAll(filepath.Dir(full), dirPerm); err != nil {
-		return domain.Located{}, fmt.Errorf("création du sous-répertoire: %w", err)
+	if mkdirErr := os.MkdirAll(filepath.Dir(full), dirPerm); mkdirErr != nil {
+		return domain.Located{}, fmt.Errorf("création du sous-répertoire: %w", mkdirErr)
 	}
 
+	// gosec G304 signale l'ouverture d'un chemin variable, et c'est correct en
+	// général. Ici le chemin ne vient PAS de `obj.Name` : il est dérivé par
+	// domain.SafeKey, qui réduit le nom à son dernier segment et le préfixe d'un
+	// condensé. Une traversée (`../../etc/passwd`) n'y survit pas, et deux tests du
+	// domaine le verrouillent. La validation est en amont, dans du code pur et
+	// testé — pas ici, dans le pilote.
+	//nolint:gosec // chemin dérivé par domain.SafeKey, jamais fourni par l'appelant
 	file, err := os.OpenFile(full, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
 	if err != nil {
 		return domain.Located{}, fmt.Errorf("ouverture de l'objet %s: %w", key, err)

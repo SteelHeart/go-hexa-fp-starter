@@ -29,6 +29,16 @@ type Querier interface {
 
 type contextKey struct{ name string }
 
+// Clés de contexte du paquet.
+//
+// Globales assumées : c'est l'idiome Go qui rend toute collision IMPOSSIBLE. Le
+// type `contextKey` est privé au paquet, donc aucun autre paquet ne peut fabriquer
+// une clé égale à celles-ci, même en copiant le littéral. Les rendre locales ou
+// exportées casserait précisément la propriété recherchée, et une collision de clé
+// de contexte se manifeste par une transaction attribuée à la mauvaise requête —
+// donc par une écriture dans les données d'un autre client.
+//
+//nolint:gochecknoglobals // clés de contexte : le type privé au niveau paquet EST le remède aux collisions
 var (
 	txKey     = &contextKey{name: "pgx-tx"}
 	tenantKey = &contextKey{name: "tenant-id"}
@@ -99,7 +109,7 @@ func InTx(ctx context.Context) bool {
 // Une transaction déjà ouverte n'est pas imbriquée : la fonction est exécutée
 // dans la transaction courante. C'est ce qui permet de composer plusieurs
 // décorateurs transactionnels sans surprise.
-func RunInTx[T any, E any](
+func RunInTx[T, E any](
 	pool *pgxpool.Pool,
 ) func(context.Context, func(context.Context) result.Result[T, E]) result.Result[T, E] {
 	return func(ctx context.Context, fn func(context.Context) result.Result[T, E]) result.Result[T, E] {
@@ -116,7 +126,7 @@ func RunInTx[T any, E any](
 }
 
 // runWithRollback isole la mécanique de validation/annulation.
-func runWithRollback[T any, E any](
+func runWithRollback[T, E any](
 	ctx context.Context,
 	tx pgx.Tx,
 	fn func(context.Context) result.Result[T, E],

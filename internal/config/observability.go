@@ -74,11 +74,20 @@ type Sentry struct {
 	SendDefaultPII bool `yaml:"send_default_pii"`
 }
 
+// Puits de journalisation admis.
+//
+// Homonymie assumée avec driverFile : un puits de journal n'est pas un pilote de
+// module, les deux ne partagent pas de constante.
+const (
+	sinkStdout = "stdout"
+	sinkFile   = "file"
+)
+
 // applyObservabilityDefaults comble les valeurs absentes par les choix les plus
 // sûrs : stdout, OTLP, Prometheus, aucun rapporteur d'erreurs.
 func (o *Observability) applyDefaults() {
 	if o.Logs.Sink == "" {
-		o.Logs.Sink = "stdout"
+		o.Logs.Sink = sinkStdout
 	}
 	if o.Traces.Exporter == "" {
 		o.Traces.Exporter = "otlp"
@@ -97,11 +106,16 @@ func (o *Observability) applyDefaults() {
 	}
 }
 
-// validateObservability vérifie la cohérence des choix d'outillage.
-func (o Observability) validate(local bool) []error {
+// validate vérifie la cohérence des choix d'outillage — partout, local compris.
+//
+// Le booléen `local` qui pilotait autrefois cette fonction cachait deux fonctions
+// dans une seule : les règles de forme, toujours vraies, et les règles de
+// durcissement, vraies hors développement. Elles vivent maintenant séparément, et
+// `hardened` est appelée par validateHardening avec toutes les autres.
+func (o Observability) validate() []error {
 	var problems []error
 
-	problems = appendUnlessOneOf(problems, "observability.logs.sink", o.Logs.Sink, "stdout", "file")
+	problems = appendUnlessOneOf(problems, "observability.logs.sink", o.Logs.Sink, sinkStdout, sinkFile)
 	problems = appendUnlessOneOf(problems, "observability.traces.exporter", o.Traces.Exporter, "otlp", "none")
 	problems = appendUnlessOneOf(problems, "observability.traces.protocol", o.Traces.Protocol, "grpc", "http")
 	problems = appendUnlessOneOf(problems, "observability.metrics.exporter", o.Metrics.Exporter,
@@ -114,12 +128,18 @@ func (o Observability) validate(local bool) []error {
 	if o.Errors.Reporter == "sentry" && o.Errors.Sentry.DSN == "" {
 		problems = append(problems, errorf("observability.errors.sentry.dsn est requis quand le rapporteur est sentry"))
 	}
-	if !local && o.Errors.Sentry.SendDefaultPII {
+	return problems
+}
+
+// hardened porte les exigences d'observabilité qui ne valent qu'hors local.
+func (o Observability) hardened() []error {
+	var problems []error
+	if o.Errors.Sentry.SendDefaultPII {
 		problems = append(problems, errorf(
 			"observability.errors.sentry.send_default_pii doit être false : "+
 				"les données personnelles ne sortent pas du système"))
 	}
-	if !local && o.Logs.Sink == "file" {
+	if o.Logs.Sink == sinkFile {
 		problems = append(problems, errorf(
 			"observability.logs.sink=file est refusé hors développement : "+
 				"en conteneur, c'est l'agent qui collecte stdout"))

@@ -25,7 +25,8 @@ func TestExhaustedMessageStopsBeingReplayed(t *testing.T) {
 		return errors.New("charge illisible")
 	}
 
-	policy := testPolicy() // MaxAttempts = 3
+	// La politique de test autorise trois tentatives au total.
+	policy := testPolicy()
 	// Le message a déjà échoué deux fois : cet essai est le troisième.
 	dispatcher := newDispatcher(t,
 		dispatcherPorts(observed, claimOnce(pending("m-1", 2)), handle), policy)

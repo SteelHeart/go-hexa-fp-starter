@@ -15,13 +15,22 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
+// Réessai appliqué aux deux relais réseau.
+//
+// Il absorbe la coupure d'une seconde ; il ne remplace PAS le recul de l'outbox,
+// qui se compte en minutes et survit à un redémarrage du processus.
+const (
+	publishAttempts = 3
+	publishBackoff  = 200 * time.Millisecond
+)
+
 // ─── Kafka ───────────────────────────────────────────────────────────────────
 
 // newKafka construit le relais Kafka.
 //
 // ⚠️ ÉCRIT, NON PROUVÉ : aucune exécution contre un Kafka réel n'a eu lieu.
 // Ne pas le présenter comme fonctionnel (rules/README.md § règle d'or 2).
-func newKafka(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer, error) {
+func newKafka(cfg config.Messaging, logger *slog.Logger) (Broker, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
 		Balancer:     &kafka.Hash{},
@@ -51,14 +60,17 @@ func newKafka(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, C
 		return nil
 	}
 
-	consumer := &kafkaConsumer{cfg: cfg, logger: logger, handlers: map[string]Handler{}}
 	closer := func() error {
 		if err := writer.Close(); err != nil {
 			return fmt.Errorf("fermeture du writer Kafka: %w", err)
 		}
 		return nil
 	}
-	return WithRetry(publish, 3, 200*time.Millisecond), consumer, closer, nil
+	return Broker{
+		Publish: WithRetry(publish, publishAttempts, publishBackoff),
+		Consume: &kafkaConsumer{cfg: cfg, logger: logger, handlers: map[string]Handler{}},
+		Close:   closer,
+	}, nil
 }
 
 func kafkaHeaders(env Envelope) []kafka.Header {
@@ -147,21 +159,28 @@ func (c *kafkaConsumer) handle(ctx context.Context, msg kafka.Message, handler H
 // newRabbitMQ construit le relais AMQP.
 //
 // ⚠️ ÉCRIT, NON PROUVÉ : aucune exécution contre un RabbitMQ réel n'a eu lieu.
-func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer, Closer, error) {
+func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Broker, error) {
 	conn, err := amqp.Dial(cfg.RabbitMQ.URL)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("connexion AMQP: %w", err)
+		return Broker{}, fmt.Errorf("connexion AMQP: %w", err)
 	}
 	channel, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
-		return nil, nil, nil, fmt.Errorf("ouverture du canal AMQP: %w", err)
+		return Broker{}, fmt.Errorf("ouverture du canal AMQP: %w", err)
 	}
 	// Échange durable de type topic : les consommateurs se lient par motif,
 	// donc ajouter un consommateur ne touche pas le producteur.
-	if err := channel.ExchangeDeclare(cfg.RabbitMQ.Exchange, amqp.ExchangeTopic, true, false, false, false, nil); err != nil {
+	const (
+		durable    = true
+		autoDelete = false
+		internal   = false
+		noWait     = false
+	)
+	if declareErr := channel.ExchangeDeclare(cfg.RabbitMQ.Exchange, amqp.ExchangeTopic,
+		durable, autoDelete, internal, noWait, nil); declareErr != nil {
 		_ = conn.Close()
-		return nil, nil, nil, fmt.Errorf("déclaration de l'échange: %w", err)
+		return Broker{}, fmt.Errorf("déclaration de l'échange: %w", declareErr)
 	}
 
 	publish := func(ctx context.Context, env Envelope) error {
@@ -188,14 +207,17 @@ func newRabbitMQ(cfg config.Messaging, logger *slog.Logger) (Publisher, Consumer
 		return nil
 	}
 
-	consumer := &amqpConsumer{cfg: cfg, channel: channel, logger: logger, handlers: map[string]Handler{}}
 	closer := func() error {
-		if err := conn.Close(); err != nil {
-			return fmt.Errorf("fermeture AMQP: %w", err)
+		if closeErr := conn.Close(); closeErr != nil {
+			return fmt.Errorf("fermeture AMQP: %w", closeErr)
 		}
 		return nil
 	}
-	return WithRetry(publish, 3, 200*time.Millisecond), consumer, closer, nil
+	return Broker{
+		Publish: WithRetry(publish, publishAttempts, publishBackoff),
+		Consume: &amqpConsumer{cfg: cfg, channel: channel, logger: logger, handlers: map[string]Handler{}},
+		Close:   closer,
+	}, nil
 }
 
 type amqpConsumer struct {
@@ -239,8 +261,9 @@ func (c *amqpConsumer) bind(eventType string) (<-chan amqp.Delivery, error) {
 	if err != nil {
 		return nil, fmt.Errorf("déclaration de la file %s: %w", name, err)
 	}
-	if err := c.channel.QueueBind(queue.Name, c.cfg.Topic(eventType), c.cfg.RabbitMQ.Exchange, false, nil); err != nil {
-		return nil, fmt.Errorf("liaison de la file %s: %w", name, err)
+	if bindErr := c.channel.QueueBind(queue.Name, c.cfg.Topic(eventType),
+		c.cfg.RabbitMQ.Exchange, false, nil); bindErr != nil {
+		return nil, fmt.Errorf("liaison de la file %s: %w", name, bindErr)
 	}
 	deliveries, err := c.channel.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {

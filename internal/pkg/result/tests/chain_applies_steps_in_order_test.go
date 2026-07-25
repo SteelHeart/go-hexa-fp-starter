@@ -14,10 +14,16 @@ import (
 func TestChainAppliesStepsInOrder(t *testing.T) {
 	t.Parallel()
 
+	// La première et la troisième étape sont identiques, et c'est le cœur du test :
+	// la même fonction appliquée à deux positions différentes doit produire deux
+	// résultats différents (2 puis 6). Dédupliquer ce que gocritic croit être une
+	// répétition détruirait la démonstration — il ne resterait plus rien qui prouve
+	// que la position compte.
 	sortie := result.Chain(okInt(1),
 		func(n int) result.Result[int, erreur] { return okInt(double(n)) },     // 2
 		func(n int) result.Result[int, erreur] { return okInt(incremente(n)) }, // 3
-		func(n int) result.Result[int, erreur] { return okInt(double(n)) },     // 6
+		//nolint:gocritic // la répétition EST la démonstration : même étape, deux positions
+		func(n int) result.Result[int, erreur] { return okInt(double(n)) }, // 6
 	)
 
 	if !sortie.IsOk() {

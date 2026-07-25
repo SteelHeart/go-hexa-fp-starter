@@ -28,8 +28,8 @@ func TestDisabledModuleRefusesLoudly(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if err := mod.Run(ctx, []application.Scheduled{}); !errors.Is(err, scheduler.ErrDisabled) {
-		t.Errorf("Run = %v, attendu ErrDisabled", err)
+	if runErr := mod.Run(ctx, []application.Scheduled{}); !errors.Is(runErr, scheduler.ErrDisabled) {
+		t.Errorf("Run = %v, attendu ErrDisabled", runErr)
 	}
 
 	elected, err := mod.Acquire(ctx, "purge")
@@ -40,7 +40,7 @@ func TestDisabledModuleRefusesLoudly(t *testing.T) {
 		t.Error("un module désactivé ne doit élire personne")
 	}
 
-	if err := mod.Release(ctx, "purge"); !errors.Is(err, scheduler.ErrDisabled) {
-		t.Errorf("Release = %v, attendu ErrDisabled", err)
+	if releaseErr := mod.Release(ctx, "purge"); !errors.Is(releaseErr, scheduler.ErrDisabled) {
+		t.Errorf("Release = %v, attendu ErrDisabled", releaseErr)
 	}
 }

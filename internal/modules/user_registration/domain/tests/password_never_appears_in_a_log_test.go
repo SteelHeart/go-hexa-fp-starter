@@ -28,9 +28,15 @@ func TestPasswordNeverAppearsInALog(t *testing.T) {
 		t.Fatal("le mot de passe de test devait être accepté")
 	}
 
+	// Le passage par fmt est DÉLIBÉRÉ, et gocritic a tort de proposer
+	// `value.String()` : c'est précisément le chemin `fmt` qu'on teste. Un
+	// développeur qui laisse fuir un mot de passe ne le fait jamais en appelant
+	// String() — il le fait en passant la valeur à un `%v` de journal. Appeler
+	// String() ici testerait la méthode au lieu du chemin de fuite, et le test
+	// resterait vert le jour où quelqu'un retire l'implémentation de Stringer.
 	formats := map[string]string{
-		"%v":  fmt.Sprintf("%v", value),
-		"%s":  fmt.Sprintf("%s", value),
+		"%v":  fmt.Sprintf("%v", value), //nolint:gocritic // le chemin fmt EST l'objet du test, pas un détour
+		"%s":  fmt.Sprintf("%s", value), //nolint:gocritic,staticcheck // idem : String() contournerait la fuite testée
 		"%+v": fmt.Sprintf("%+v", struct{ Password domain.RawPassword }{value}),
 		"%v struct": fmt.Sprintf("%v", struct {
 			Email    string

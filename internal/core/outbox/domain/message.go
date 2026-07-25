@@ -2,7 +2,7 @@
 //
 // Il n'importe ni pilote, ni driver de base, ni générateur d'identifiants :
 // l'identifiant est fourni par le pilote, ce qui rend ce paquet testable sans
-// rien et vérifiable par .arch-go.yml.
+// rien et vérifiable par arch-go.yml.
 package domain
 
 import "time"

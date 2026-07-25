@@ -112,7 +112,13 @@ func (e *Elector) Release(ctx context.Context, task domain.TaskName) error {
 	err := conn.QueryRow(ctx, `SELECT pg_advisory_unlock($1)`, domain.LockKey(task)).Scan(&released)
 	if err != nil || !released {
 		if hijacked := conn.Hijack(); hijacked != nil {
-			hijacked.Close(ctx)
+			// Erreur de fermeture ignorée SCIEMMENT : on est déjà sur un chemin
+			// d'échec, dont l'erreur est retournée juste en dessous. La remonter à
+			// la place masquerait la cause réelle par son symptôme, et l'ajouter
+			// donnerait à l'appelant deux erreurs pour un seul incident. Le but
+			// n'est pas de fermer proprement, c'est de garantir que la session
+			// meurt — et une fermeture en échec la tue tout autant.
+			_ = hijacked.Close(ctx)
 		}
 		if err != nil {
 			return fmt.Errorf("libération du verrou d'élection de %s: %w", task, err)

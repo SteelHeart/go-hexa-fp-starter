@@ -1,7 +1,7 @@
 // Package application orchestre les cas d'usage et porte les décorateurs.
 //
 // Il ne connaît ni transport, ni persistance, ni logger : il reçoit des ports et
-// retourne des Result. Vérifié par .arch-go.yml.
+// retourne des Result. Vérifié par arch-go.yml.
 package application
 
 import (

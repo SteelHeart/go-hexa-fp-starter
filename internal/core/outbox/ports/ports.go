@@ -1,7 +1,7 @@
 // Package ports déclare les contrats de l'outbox.
 //
 // Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface (vérifié par .arch-go.yml).
+// ni interface (vérifié par arch-go.yml).
 //
 // # Pourquoi `error` et non `Result[T, domain.Error]`
 //

@@ -144,6 +144,19 @@ type Storage struct {
 	BaseURL string `yaml:"base_url"`
 }
 
+// Relais d'événements admis.
+//
+// Ces noms sont dupliqués depuis `internal/infrastructure/messaging` et NON
+// importés : messaging dépend de config, l'inverse ferait un cycle. La validation
+// ci-dessous est le seul point où la duplication compte, et un ajout de relais qui
+// oublierait cette liste se verrait au démarrage, pas en production.
+const (
+	relayInproc   = "inproc"
+	relayKafka    = "kafka"
+	relayRabbitMQ = "rabbitmq"
+	relayNoop     = "noop"
+)
+
 // Messaging porte le relais d'événements.
 //
 // Le relais est INTERCHANGEABLE : l'outbox garantit la durabilité en amont, donc
@@ -252,10 +265,10 @@ func (c *Config) applyDefaults() {
 		c.Database.MigrationDSN = c.Database.DSN
 	}
 	if c.Messaging.Driver == "" {
-		c.Messaging.Driver = "inproc"
+		c.Messaging.Driver = relayInproc
 	}
 	if c.Interop.DefaultTransport == "" {
-		c.Interop.DefaultTransport = "inproc"
+		c.Interop.DefaultTransport = transportInproc
 	}
 	if c.Interop.Transports == nil {
 		c.Interop.Transports = map[string]string{}
@@ -278,7 +291,7 @@ func (c Config) validate() error {
 	problems := make([]error, 0, 4)
 	problems = append(problems, c.validateCore()...)
 	problems = append(problems, c.validateHardening()...)
-	problems = append(problems, c.Observability.validate(c.App.Env.IsLocal())...)
+	problems = append(problems, c.Observability.validate()...)
 	problems = append(problems, c.Modules.validate()...)
 	problems = append(problems, c.Interop.validate()...)
 
@@ -288,49 +301,91 @@ func (c Config) validate() error {
 	return nil
 }
 
+// validateCore délègue à un vérificateur par GROUPE de configuration.
+//
+// Un seul bloc couvrant six groupes avait une complexité de 13 : personne ne
+// relit ce genre de fonction, on y ajoute une branche. Découpé par groupe, chaque
+// morceau tient sous les yeux et se déplace avec son groupe le jour où il bouge.
 func (c Config) validateCore() []error {
-	var problems []error
+	// Capacité indicative : une configuration valide n'en remplit aucune, une
+	// configuration bâclée en remplit une poignée.
+	problems := make([]error, 0, 8)
+	problems = append(problems, c.validateApp()...)
+	problems = append(problems, c.validateSecurity()...)
+	problems = append(problems, c.validateDatabase()...)
+	problems = append(problems, c.validateHTTP()...)
+	problems = append(problems, c.validateMessaging()...)
+	problems = append(problems, c.validateWorker()...)
+	problems = append(problems, c.validateI18n()...)
+	return problems
+}
 
+func (c Config) validateApp() []error {
 	switch c.App.Env {
 	case EnvDevelopment, EnvTest, EnvUAT, EnvProduction:
+		return nil
 	default:
-		problems = append(problems, fmt.Errorf(
-			"app.env=%q inconnu (attendu: development, test, uat, production)", c.App.Env))
+		return []error{fmt.Errorf(
+			"app.env=%q inconnu (attendu: development, test, uat, production)", c.App.Env)}
 	}
+}
 
+func (c Config) validateSecurity() []error {
 	if _, err := c.Security.DecodedEncryptionKey(); err != nil {
-		problems = append(problems, err)
+		return []error{err}
 	}
+	return nil
+}
+
+func (c Config) validateDatabase() []error {
+	var problems []error
 	if c.Database.DSN == "" {
 		problems = append(problems, errors.New("database.dsn est obligatoire"))
 	}
-	if c.HTTP.Port < 1 || c.HTTP.Port > 65535 {
+	if c.Database.MinConns > c.Database.MaxConns {
+		problems = append(problems, fmt.Errorf(
+			"database.min_conns=%d > database.max_conns=%d", c.Database.MinConns, c.Database.MaxConns))
+	}
+	return problems
+}
+
+func (c Config) validateHTTP() []error {
+	const maxPort = 65535
+	var problems []error
+	if c.HTTP.Port < 1 || c.HTTP.Port > maxPort {
 		problems = append(problems, fmt.Errorf("http.port=%d hors plage", c.HTTP.Port))
 	}
 	if c.HTTP.ReadTimeout <= 0 {
 		problems = append(problems, errors.New(
 			"http.read_timeout doit être > 0 : une connexion sans délai immobilise une goroutine"))
 	}
-	if c.Database.MinConns > c.Database.MaxConns {
-		problems = append(problems, fmt.Errorf(
-			"database.min_conns=%d > database.max_conns=%d", c.Database.MinConns, c.Database.MaxConns))
-	}
-	if c.Worker.MaxAttempts < 1 {
-		problems = append(problems, errors.New("worker.max_attempts doit être >= 1"))
-	}
-
-	switch c.Messaging.Driver {
-	case "inproc", "kafka", "rabbitmq", "noop":
-	default:
-		problems = append(problems, fmt.Errorf(
-			"messaging.driver=%q inconnu (attendu: inproc, kafka, rabbitmq, noop)", c.Messaging.Driver))
-	}
-
-	if !contains(c.I18n.SupportedLocales, c.I18n.DefaultLocale) {
-		problems = append(problems, fmt.Errorf(
-			"i18n.default_locale=%q absent de i18n.supported_locales", c.I18n.DefaultLocale))
-	}
 	return problems
+}
+
+func (c Config) validateMessaging() []error {
+	switch c.Messaging.Driver {
+	case relayInproc, relayKafka, relayRabbitMQ, relayNoop:
+		return nil
+	default:
+		return []error{fmt.Errorf(
+			"messaging.driver=%q inconnu (attendu: %s, %s, %s, %s)",
+			c.Messaging.Driver, relayInproc, relayKafka, relayRabbitMQ, relayNoop)}
+	}
+}
+
+func (c Config) validateWorker() []error {
+	if c.Worker.MaxAttempts < 1 {
+		return []error{errors.New("worker.max_attempts doit être >= 1")}
+	}
+	return nil
+}
+
+func (c Config) validateI18n() []error {
+	if !contains(c.I18n.SupportedLocales, c.I18n.DefaultLocale) {
+		return []error{fmt.Errorf(
+			"i18n.default_locale=%q absent de i18n.supported_locales", c.I18n.DefaultLocale)}
+	}
+	return nil
 }
 
 // validateHardening porte les exigences qui ne s'appliquent qu'hors local.
@@ -340,36 +395,60 @@ func (c Config) validateHardening() []error {
 	if c.App.Env.IsLocal() {
 		return nil
 	}
-	var problems []error
+	problems := make([]error, 0, 8)
+	problems = append(problems, c.hardenDatabase()...)
+	problems = append(problems, c.hardenOrigins()...)
+	problems = append(problems, c.hardenMessaging()...)
+	problems = append(problems, c.hardenTelemetry()...)
+	problems = append(problems, c.Observability.hardened()...)
+	return problems
+}
 
+func (c Config) hardenDatabase() []error {
 	if c.Database.MigrationDSN == c.Database.DSN {
-		problems = append(problems, errors.New(
-			"database.migration_dsn doit différer de database.dsn hors développement "+
-				"(le rôle applicatif ne possède pas le schéma)"))
+		return []error{errors.New(
+			"database.migration_dsn doit différer de database.dsn hors développement " +
+				"(le rôle applicatif ne possède pas le schéma)")}
 	}
+	return nil
+}
+
+func (c Config) hardenOrigins() []error {
 	if len(c.HTTP.AllowedOrigins) == 0 {
-		problems = append(problems, errors.New("http.allowed_origins ne peut pas être vide hors développement"))
+		return []error{errors.New("http.allowed_origins ne peut pas être vide hors développement")}
 	}
+	var problems []error
 	for _, origin := range c.HTTP.AllowedOrigins {
 		switch {
 		case origin == "*":
-			problems = append(problems, errors.New("http.allowed_origins ne peut pas contenir '*' hors développement"))
+			problems = append(problems, errors.New(
+				"http.allowed_origins ne peut pas contenir '*' hors développement"))
 		case strings.HasPrefix(origin, "http://"):
-			problems = append(problems, fmt.Errorf("origine non chiffrée interdite hors développement: %s", origin))
+			problems = append(problems, fmt.Errorf(
+				"origine non chiffrée interdite hors développement: %s", origin))
 		case origin == "":
-			problems = append(problems, errors.New("http.allowed_origins contient une entrée vide (référence ${VAR} non résolue ?)"))
+			problems = append(problems, errors.New(
+				"http.allowed_origins contient une entrée vide (référence ${VAR} non résolue ?)"))
 		}
 	}
-	if c.Messaging.Driver == "kafka" && c.Messaging.Kafka.AllowAutoTopicCreation {
-		problems = append(problems, errors.New(
-			"messaging.kafka.allow_auto_topic_creation doit être false hors développement : "+
-				"créer un topic à la volée masque une erreur de configuration"))
-	}
-	if !c.Telemetry.Enabled {
-		problems = append(problems, errors.New(
-			"telemetry.enabled doit être true hors développement : un service non observable n'est pas exploitable"))
-	}
 	return problems
+}
+
+func (c Config) hardenMessaging() []error {
+	if c.Messaging.Driver == relayKafka && c.Messaging.Kafka.AllowAutoTopicCreation {
+		return []error{errors.New(
+			"messaging.kafka.allow_auto_topic_creation doit être false hors développement : " +
+				"créer un topic à la volée masque une erreur de configuration")}
+	}
+	return nil
+}
+
+func (c Config) hardenTelemetry() []error {
+	if !c.Telemetry.Enabled {
+		return []error{errors.New(
+			"telemetry.enabled doit être true hors développement : un service non observable n'est pas exploitable")}
+	}
+	return nil
 }
 
 func contains(items []string, needle string) bool {

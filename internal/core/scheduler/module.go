@@ -36,7 +36,7 @@ const Name = "scheduler"
 // Run lance l'ordonnanceur jusqu'à l'annulation du contexte.
 //
 // Déclaré ici et non dans `ports/` parce qu'il nomme `application.Scheduled` : les
-// ports d'un module noyau ne dépendent que de leur domaine (.arch-go.yml §4e).
+// ports d'un module noyau ne dépendent que de leur domaine (arch-go.yml §4e).
 type Run = func(ctx context.Context, scheduled []application.Scheduled) error
 
 // Module expose les ports de l'ordonnanceur.

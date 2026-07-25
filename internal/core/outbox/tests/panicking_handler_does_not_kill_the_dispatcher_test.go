@@ -24,7 +24,11 @@ func TestPanickingHandlerDoesNotKillTheDispatcher(t *testing.T) {
 	observed := &spy{}
 	handle := func(context.Context, domain.Message) error {
 		var absent map[string]string
-		absent["boum"] = "panique" // écriture dans une carte nil
+		// L'écriture dans une carte nil est VOULUE : c'est le moyen le plus court de
+		// provoquer une vraie panique d'exécution, celle qu'un pilote défectueux
+		// produirait. `panic()` littéral serait moins fidèle : le dépileur doit
+		// survivre aux paniques qu'il n'a pas vues venir, pas seulement aux nôtres.
+		absent["boum"] = "panique" //nolint:govet,staticcheck // panique provoquée exprès, c'est l'objet du test
 		return nil
 	}
 

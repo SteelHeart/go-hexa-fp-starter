@@ -79,7 +79,7 @@ func (r Request) IsComplete() bool {
 // # Pourquoi une struct à deux champs et non fp.Option
 //
 // Les ports d'un module noyau ne dépendent que de leur domaine
-// (.arch-go.yml §4e) : ils ne peuvent pas nommer `fp.Option`. Le gain est réel —
+// (arch-go.yml §4e) : ils ne peuvent pas nommer `fp.Option`. Le gain est réel —
 // `Replayed` se lit à l'appel, là où un `Option` vide se confond avec « réponse
 // mémorisée mais vide ».
 type Reservation struct {

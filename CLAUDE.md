@@ -134,7 +134,10 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 - `go build ./...` vert
 - `go vet ./...` vert
-- `go test -shuffle=on ./...` vert — **217 tests**, répartis ainsi :
+- `golangci-lint run ./...` — **0 signalement**, ~50 analyseurs. Parti de 239.
+- `arch-go` — **100 %, 17 règles sur 17**, dont les 12 règles de dépendance
+- `go test -shuffle=on ./...` vert — **217 tests de premier niveau** (399 avec les sous-tests),
+  répartis ainsi :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -168,11 +171,24 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| `golangci-lint` | **Exécuté**. 239 signalements au départ, **42 restants** — campagne en cours |
 | Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** |
+
+### Vert, mais NON exécuté comme la CI
+
+`task check` enchaîne `fmt · vet · lint · arch · test · vuln`. Les cinq premières étapes ont été
+lancées **une par une** et sont vertes. Les deux réserves, écrites parce qu'elles sont exactement
+le genre de chose qu'on oublie :
+
+- **`task` n'est pas installé** sur la machine de référence : l'enchaînement lui-même n'a jamais
+  tourné, seulement ses étapes (friction F006).
+- **`vuln` échoue** : `govulncheck` trouve **20 vulnérabilités de la bibliothèque standard**
+  atteignables depuis le code (`crypto/tls`, `crypto/x509`, `net/url`, `net/mail`,
+  `html/template`, `os`). Aucune ne vient d'une dépendance du dépôt : **toutes** sont corrigées
+  par une chaîne d'outils Go ≥ 1.25.12, la machine est en 1.25.4. **Cela bloque le tag `v0.1.0`**
+  (friction F007).
 
 ### Absent
 
@@ -238,13 +254,13 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
   `helpers_test.go`.
 - Configuration : fichiers `config/*.yaml` groupés, secrets par `${VAR}` uniquement.
 
-### Campagne de signalements — 42 restants sur 239
+### Campagne de signalements — TERMINÉE, 239 → 0
 
-> Reprise directe : `golangci-lint run ./...` rend la liste exacte. Les décisions de
-> configuration sont **déjà prises et écrites dans `.golangci.yml`** ; ce qui suit n'est que du
-> code à corriger, groupé par nature de décision.
+> `golangci-lint run ./...` rend **0 signalement**. Ce qui suit dit ce qui a été DÉCIDÉ, pour que
+> personne ne rouvre le débat sans raison neuve — et surtout pour que personne ne « corrige » un
+> `//nolint` motivé en croyant nettoyer.
 
-**Décisions de configuration déjà tranchées** — ne pas les rouvrir sans raison neuve :
+**Décisions de configuration** (écrites dans `.golangci.yml`) :
 
 | Réglage | Décision | Pourquoi |
 |---|---|---|
@@ -252,45 +268,29 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | `errcheck.check-blank` | **false** | Condamnait `v, _ := x.(T)`, la forme SÛRE de l'assertion |
 | `gocritic hugeParam` · `rangeValCopy` | **désactivés** | Contredisent l'immuabilité par valeur, qui est une décision d'architecture |
 
-**Corrections mécaniques, sans décision** (18) :
+**Changements de conception induits** — ce sont eux qui valaient la campagne :
 
-- `gofumpt` ×5 — `golangci-lint fmt ./...`. ⚠️ `database.go` était **verrouillé par un autre
-  processus** pendant la session : relancer quand l'éditeur est fermé.
-- `govet shadow` ×4 — renommer le `err` interne (`copyErr`, `markErr`…).
-- `goconst` ×5 — `"inproc"`, `"memory"`, `"file"` répétés dans `internal/config`. Extraire des
-  constantes ; elles nomment des pilotes, donc leur place est près de `knownDrivers`.
-- `lll` ×2 · `gocritic commentedOutCode` ×1 · `unused spy.events` ×1
+| Signalement | Ce qu'il a fait apparaître |
+|---|---|
+| `revive function-result-limit` ×3 | `messaging` rendait `(Publisher, Consumer, Closer, error)` → type **`Broker`**. Un appelant pouvait oublier `Close`, et l'oubli ne se voit qu'en voyant fuir les connexions. **Troisième occurrence** de la même faute après `election` et `decodedHash` |
+| `revive flag-parameter` ×2 | `SecurityHeaders(secure bool)` → **`SecurityHeaders()`** et **`SecurityHeadersWithoutHSTS()`**. Le défaut protège, la renonciation se nomme. Idem `Observability.validate(local)` → `validate()` + `hardened()` |
+| `contextcheck` ×1 | `httpserver.shutdown` repartait de `context.Background()` → **`context.WithoutCancel(ctx)`**. L'arrêt était le seul moment du cycle de vie invisible dans la trace |
+| `contextcheck` ×1 | `Recover` lisait `r.Context()` DANS le `defer` → capturé avant. Un gestionnaire qui panique peut avoir remplacé `r`, et la panique se serait journalisée sans identifiant de corrélation |
+| `cyclop` ×3 | `validateCore` (13) et `validateHardening` (11) découpées **par groupe de configuration** ; `audit.New` séparée de ses constructeurs de pilote |
+| `unparam` ×1 | L'aide `hash` ne recevait qu'un mot de passe → test **élargi** (accents, idéogrammes, et un mot de passe contenant `$`, le séparateur du format encodé). L'aide n'a pas été restreinte |
 
-**Corrections avec un vrai choix de conception** (12) :
+**`//nolint` motivés — NE PAS les retirer** (9). Chacun est correct dans son contexte, la raison
+est écrite à côté :
 
-- `revive function-result-limit` ×3 dans `messaging` — `New`, `newKafka`, `newRabbitMQ` rendent
-  `(Publisher, Consumer, Closer, error)`. **Même faute déjà corrigée deux fois** : dans
-  `scheduler.elector` (type `election`) et `security.decodeHash` (type `decodedHash`). Appliquer
-  le même remède : un type `Broker{Publish, Consume, Close}`.
-- `cyclop` ×3 — `validateCore` (13) et `validateHardening` (11) dans `internal/config` ; moyenne
-  du paquet `audit` à 8. Découper les validations par groupe de configuration.
-- `revive flag-parameter` ×2 — `Observability.validate(local bool)` et
-  `middleware.SecurityHeaders(secure bool)`. Un booléen de contrôle cache deux fonctions.
-- `contextcheck` ×2 — `httpserver.shutdown` et le `Recover` du middleware ne propagent pas le
-  contexte.
-- `gocritic unnamedResult` ×3 — `Result.Get()`, `cache.JSON`. Nommer les retours ; sur un triplet
-  `(T, E, bool)` c'est un gain réel de lisibilité.
-
-**Signalements à conserver avec un `//nolint` MOTIVÉ** (5+3) — chacun est correct dans son
-contexte, et la justification doit être écrite :
-
-- `gochecknoglobals` ×4 — `txKey`, `tenantKey`, `requestIDKey` sont des clés de contexte : le type
-  privé au niveau paquet **est** l'idiome Go qui empêche les collisions. `RegisterRoute` est une
-  constante de langage publié.
-- `govet nilness` ×1 — `panicking_handler_does_not_kill_the_dispatcher_test.go` écrit dans une
-  carte nil **exprès**, pour provoquer la panique que le test vérifie.
-- `gocritic redundantSprint` ×2 — `password_never_appears_in_a_log_test.go` passe par
-  `fmt.Sprintf("%v")` **exprès** : c'est le chemin de fuite qu'on teste, `String()` le
-  contournerait.
-- `gosec G304` ×1 — `disk.Get` ouvre un fichier depuis une clé, mais `domain.IsWithin` l'a validée
-  **avant**. `gosec G104` ×1 — `hijacked.Close` sur un chemin d'erreur déjà signalé.
-- `unparam` ×1 — l'aide de test `hash` ne reçoit qu'une valeur ; élargir un test plutôt que
-  restreindre l'aide.
+| Où | Pourquoi le linter a tort ici |
+|---|---|
+| `database.go`, `middleware.go` — `gochecknoglobals` ×3 | `txKey`, `tenantKey`, `requestIDKey` : le type privé au niveau paquet **est** l'idiome Go qui rend la collision impossible. Une collision attribuerait une transaction à la mauvaise requête |
+| `contract.go` — `gochecknoglobals` ×1 | `RegisterRoute` est une constante du langage publié ; Go n'a pas de constante structurée |
+| `panicking_handler…_test.go` — `govet,staticcheck` | Écriture dans une carte nil **voulue** : provoque une vraie panique d'exécution, pas un `panic()` littéral que le code aurait pu anticiper |
+| `password_never_appears_in_a_log_test.go` — `gocritic,staticcheck` ×2 | `fmt.Sprintf("%v")` **est** le chemin de fuite testé. `String()` le contournerait, et le test resterait vert si quelqu'un retirait le `Stringer` |
+| `chain_applies_steps_in_order_test.go` — `gocritic dupOption` | La répétition de l'étape `double` **est** la démonstration : même fonction, deux positions, deux résultats |
+| `disk.go` — `gosec G304` | Le chemin est dérivé par `domain.SafeKey`, pas fourni par l'appelant. La validation est en amont, pure et testée |
+| `scheduler/drivers/postgres` — `gosec G104` | Erreur de `Close` ignorée sur un chemin d'échec dont l'erreur est déjà retournée. Le but est de tuer la session, pas de fermer proprement |
 
 ### Pièges d'outillage découverts — ne pas les redécouvrir
 
@@ -310,14 +310,18 @@ contexte, et la justification doit être écrite :
 | F003 | Aucun test de mutation |
 | F004 | Outillage en `latest` : CI non reproductible |
 | F005 | `-race` exige CGO : `task test` sans `-race` en local, `task test:race` en CI |
+| F006 | `task` et `govulncheck` absents de la machine : **`task check` n'a jamais tourné tel quel** |
+| F007 | Go 1.25.4 : **20 vulnérabilités stdlib atteignables**, corrigées en 1.25.12. Bloque `v0.1.0` |
 
 ### Prochaines actions, dans l'ordre
 
-1. **Finir la campagne `golangci-lint`** — voir § « Campagne de signalements » plus bas
-2. **#2** : migrations, un schéma et un rôle SQL par module
-3. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
+1. **#2** : migrations, un schéma et un rôle SQL par module — c'est le préalable qui débloque les
+   six pilotes `postgres` écrits et jamais exécutés
+2. **#5 / #6 / #7 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
    premier worker qui dépile réellement
-4. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+
+> La campagne `golangci-lint` est **terminée** : 239 → 0. Voir § « Campagne de signalements ».
 
 ### Arbitrages en attente côté produit
 

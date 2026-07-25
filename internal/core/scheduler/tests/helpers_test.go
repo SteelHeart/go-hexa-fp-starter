@@ -107,7 +107,7 @@ func (j *journal) last() (domain.Outcome, bool) {
 }
 
 // alwaysElected accorde toujours l'exécution.
-func alwaysElected() (ports.Acquire, ports.Release) {
+func alwaysElected() (acquire ports.Acquire, release ports.Release) {
 	return func(context.Context, domain.TaskName) (bool, error) { return true, nil },
 		func(context.Context, domain.TaskName) error { return nil }
 }

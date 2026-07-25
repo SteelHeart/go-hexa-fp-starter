@@ -54,10 +54,10 @@ func JSON[V any](
 	client *redis.Client,
 	namespace string,
 	ttl time.Duration,
-) (Getter[V], Setter[V], Deleter) {
+) (get Getter[V], set Setter[V], del Deleter) {
 	full := func(key string) string { return namespace + ":" + key }
 
-	get := func(ctx context.Context, key string) fp.Option[V] {
+	get = func(ctx context.Context, key string) fp.Option[V] {
 		raw, err := client.Get(ctx, full(key)).Bytes()
 		if err != nil {
 			// Absence comme panne : dans les deux cas on n'a pas la valeur, et
@@ -71,7 +71,7 @@ func JSON[V any](
 		return fp.Some(value)
 	}
 
-	set := func(ctx context.Context, key string, value V) {
+	set = func(ctx context.Context, key string, value V) {
 		raw, err := json.Marshal(value)
 		if err != nil {
 			return
@@ -79,7 +79,7 @@ func JSON[V any](
 		_ = client.Set(ctx, full(key), raw, ttl).Err()
 	}
 
-	del := func(ctx context.Context, key string) {
+	del = func(ctx context.Context, key string) {
 		_ = client.Del(ctx, full(key)).Err()
 	}
 

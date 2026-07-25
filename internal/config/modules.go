@@ -27,6 +27,27 @@ type Module struct {
 	Options map[string]any `yaml:"options"`
 }
 
+// Noms des pilotes de module.
+//
+// Ils sont écrits une fois ici parce que les tables de validation et de défaut
+// doivent parler du même pilote : une faute de frappe dans l'une des deux rendrait
+// un module inactivable, avec un message qui accuse la configuration de
+// l'utilisateur.
+//
+// ⚠️ Ces noms se recoupent avec ceux des relais de messagerie (relayInproc) et des
+// puits d'observabilité (sinkFile). L'homonymie est un accident d'orthographe :
+// ce sont trois vocabulaires distincts, ils ne partagent PAS de constante.
+const (
+	driverMemory       = "memory"
+	driverPostgres     = "postgres"
+	driverRedis        = "redis"
+	driverFile         = "file"
+	driverLog          = "log"
+	driverDisk         = "disk"
+	driverCronInproc   = "cron-inproc"
+	driverAdvisoryLock = "advisory-lock"
+)
+
 // knownDrivers énumère les pilotes admis par module.
 //
 // # Cette table liste ce qui EXISTE, pas ce qui est prévu
@@ -49,12 +70,12 @@ type Module struct {
 //
 //nolint:gochecknoglobals // table de référence immuable, lue en validation
 var knownDrivers = map[string][]string{
-	"outbox":      {"memory", "postgres"},
-	"idempotency": {"memory", "postgres", "redis"},
-	"dynconf":     {"file", "postgres"},
-	"audit":       {"log", "postgres"},
-	"storage":     {"disk"},
-	"scheduler":   {"cron-inproc", "advisory-lock"},
+	"outbox":      {driverMemory, driverPostgres},
+	"idempotency": {driverMemory, driverPostgres, driverRedis},
+	"dynconf":     {driverFile, driverPostgres},
+	"audit":       {driverLog, driverPostgres},
+	"storage":     {driverDisk},
+	"scheduler":   {driverCronInproc, driverAdvisoryLock},
 }
 
 // defaultDrivers donne le pilote sans dépendance externe de chaque module.
@@ -64,14 +85,14 @@ var knownDrivers = map[string][]string{
 //
 //nolint:gochecknoglobals // table de référence immuable, lue en validation
 var defaultDrivers = map[string]string{
-	"outbox":      "memory",
-	"idempotency": "memory",
-	"dynconf":     "file",
-	"audit":       "log",
-	"storage":     "disk",
+	"outbox":      driverMemory,
+	"idempotency": driverMemory,
+	"dynconf":     driverFile,
+	"audit":       driverLog,
+	"storage":     driverDisk,
 	// `advisory-lock` exigerait une base pour SIMPLEMENT répéter une tâche, y
 	// compris dans un binaire mono-instance qui n'a personne avec qui s'accorder.
-	"scheduler": "cron-inproc",
+	"scheduler": driverCronInproc,
 }
 
 // DurationOption lit une option de durée du pilote.
@@ -282,13 +303,24 @@ type Interop struct {
 	BaseURLs         map[string]string `yaml:"base_urls"`
 }
 
+// Modes de communication entre modules.
+//
+// Homonymie assumée avec relayInproc : ici « inproc » qualifie un APPEL direct
+// entre deux modules du même binaire, là un relais d'événements.
+const (
+	transportInproc   = "inproc"
+	transportHTTP     = "http"
+	transportEvent    = "event"
+	transportDisabled = "disabled"
+)
+
 // TransportFor résout le mode applicable à un module.
 func (i Interop) TransportFor(module string) string {
 	if raw, found := i.Transports[module]; found && raw != "" {
 		return raw
 	}
 	if i.DefaultTransport == "" {
-		return "inproc"
+		return transportInproc
 	}
 	return i.DefaultTransport
 }
@@ -296,7 +328,7 @@ func (i Interop) TransportFor(module string) string {
 // validate vérifie la cohérence des modes de communication.
 func (i Interop) validate() []error {
 	var problems []error
-	allowed := []string{"inproc", "http", "event", "disabled"}
+	allowed := []string{transportInproc, transportHTTP, transportEvent, transportDisabled}
 	if !slices.Contains(allowed, i.TransportFor("")) {
 		problems = append(problems, fmt.Errorf(
 			"interop.default_transport=%q inconnu (attendu: %s)", i.DefaultTransport, join(allowed)))

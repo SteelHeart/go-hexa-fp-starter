@@ -86,7 +86,7 @@ func (b *Bus) Mode(module string) Mode { return Mode(b.cfg.TransportFor(module))
 // `local` est l'implémentation en processus : elle n'est utilisée qu'en mode
 // inproc, mais elle est toujours passée, ce qui garantit que le module local
 // reste compilable et testable indépendamment du mode.
-func Resolve[I any, O any](
+func Resolve[I, O any](
 	bus *Bus,
 	module string,
 	route Route,
@@ -119,7 +119,7 @@ func Resolve[I any, O any](
 // Le corps d'erreur n'est PAS interprété : un module appelant n'a pas Ã
 // connaître la taxonomie d'erreurs interne d'un autre. Il obtient le statut et
 // le corps brut, et traduit lui-même.
-func httpCaller[I any, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {
+func httpCaller[I, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {
 	endpoint := strings.TrimSuffix(baseURL, "/") + route.Path
 	return func(ctx context.Context, in I) (O, error) {
 		var zero O
@@ -156,7 +156,7 @@ func httpCaller[I any, O any](client *http.Client, baseURL string, route Route) 
 // ⚠️ Mode ASYNCHRONE : il n'y a pas de réponse. Ne l'activer que pour une
 // capacité dont l'appelant ignore le résultat. Le choix est explicite dans la
 // configuration, donc auditable.
-func eventCaller[I any, O any](publisher messaging.Publisher, eventType string) Caller[I, O] {
+func eventCaller[I, O any](publisher messaging.Publisher, eventType string) Caller[I, O] {
 	return func(ctx context.Context, in I) (O, error) {
 		var zero O
 		payload, err := json.Marshal(in)

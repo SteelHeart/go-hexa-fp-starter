@@ -36,8 +36,8 @@ func TestInprocDriverRefusesOverlap(t *testing.T) {
 		t.Error("une tâche déjà en cours ne doit pas être relancée")
 	}
 
-	if err := mod.Release(ctx, name); err != nil {
-		t.Fatalf("libération: %v", err)
+	if releaseErr := mod.Release(ctx, name); releaseErr != nil {
+		t.Fatalf("libération: %v", releaseErr)
 	}
 	again, err := mod.Acquire(ctx, name)
 	if err != nil {

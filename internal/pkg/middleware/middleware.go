@@ -28,6 +28,12 @@ type Middleware = func(http.Handler) http.Handler
 // contextKey est un type privé : il rend toute collision de clé impossible.
 type contextKey struct{ name string }
 
+// requestIDKey est une globale assumée : le type `contextKey` est privé au paquet,
+// donc aucun autre paquet ne peut fabriquer une clé égale, même en copiant le
+// littéral. C'est l'idiome Go de la clé de contexte, et il n'a pas d'équivalent
+// local.
+//
+//nolint:gochecknoglobals // clé de contexte : le type privé au niveau paquet EST le remède aux collisions
 var requestIDKey = &contextKey{name: "request-id"}
 
 // RequestIDHeader est l'en-tête de corrélation, accepté en entrée et toujours
@@ -73,6 +79,13 @@ func RequestID() Middleware {
 func Recover(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Le contexte est capturé AVANT le defer, jamais lu dedans : un
+			// gestionnaire qui panique peut avoir remplacé `r`, et la panique serait
+			// alors journalisée avec un contexte qui n'est pas celui de la requête —
+			// donc sans son identifiant de corrélation, précisément quand il sert.
+			ctx := r.Context()
+			method, path := r.Method, r.URL.Path
+
 			defer func() {
 				recovered := recover()
 				if recovered == nil {
@@ -82,11 +95,11 @@ func Recover(logger *slog.Logger) Middleware {
 				if recovered == http.ErrAbortHandler { //nolint:errorlint // sentinelle levée par panic, pas enveloppée
 					panic(recovered)
 				}
-				logger.ErrorContext(r.Context(), "panique dans un gestionnaire HTTP",
+				logger.ErrorContext(ctx, "panique dans un gestionnaire HTTP",
 					slog.Any("recovered", recovered),
-					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
-					slog.String("request_id", RequestIDFrom(r.Context())),
+					slog.String("method", method),
+					slog.String("path", path),
+					slog.String("request_id", RequestIDFrom(ctx)),
 				)
 				http.Error(w, `{"title":"Internal Server Error","status":500}`, http.StatusInternalServerError)
 			}()
@@ -95,9 +108,36 @@ func Recover(logger *slog.Logger) Middleware {
 	}
 }
 
-// SecurityHeaders pose les en-têtes de durcissement sur toute réponse.
-// `secure` active les protections qui exigent HTTPS.
-func SecurityHeaders(secure bool) Middleware {
+// hstsOneYear exige HTTPS pendant un an, sous-domaines compris.
+//
+// Un an est la valeur qui rend un domaine éligible au préchargement des
+// navigateurs. La durée est volontairement longue : ce qu'elle protège, c'est la
+// PREMIÈRE requête d'une visite ultérieure — celle qu'un attaquant présent sur le
+// réseau détournerait avant tout échange chiffré.
+const hstsOneYear = "max-age=31536000; includeSubDomains"
+
+// SecurityHeaders pose les en-têtes de durcissement, HSTS compris.
+//
+// C'est le constructeur par DÉFAUT : obtenir la protection ne coûte rien, y
+// renoncer doit se nommer.
+func SecurityHeaders() Middleware {
+	return hardeningHeaders(hstsOneYear)
+}
+
+// SecurityHeadersWithoutHSTS pose les mêmes en-têtes SANS Strict-Transport-Security.
+//
+// Réservé au développement en clair : sur `http://localhost`, HSTS inscrirait dans
+// le navigateur une exigence de HTTPS que le poste ne peut pas satisfaire, et le
+// développeur perdrait l'accès à son propre serveur jusqu'à purger le cache.
+//
+// Le nom porte la renonciation. C'était autrefois `SecurityHeaders(false)`, où le
+// booléen ne disait ni ce qu'il désactivait, ni ce que ça coûtait.
+func SecurityHeadersWithoutHSTS() Middleware {
+	return hardeningHeaders("")
+}
+
+// hardeningHeaders reçoit la VALEUR de l'en-tête, pas un drapeau : vide = absent.
+func hardeningHeaders(hsts string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
@@ -108,8 +148,8 @@ func SecurityHeaders(secure bool) Middleware {
 			h.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
 			// API JSON : aucune ressource active n'est servie.
 			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
-			if secure {
-				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			if hsts != "" {
+				h.Set("Strict-Transport-Security", hsts)
 			}
 			next.ServeHTTP(w, r)
 		})

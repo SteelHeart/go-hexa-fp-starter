@@ -68,17 +68,6 @@ func (s *spy) markFailed() ports.MarkFailed {
 	}
 }
 
-// events rend la suite des événements rapportés.
-func (s *spy) events() []domain.Event {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]domain.Event, 0, len(s.outcomes))
-	for _, outcome := range s.outcomes {
-		out = append(out, outcome.Event)
-	}
-	return out
-}
-
 // lastOutcome rend le dernier compte rendu.
 func (s *spy) lastOutcome(t *testing.T) domain.Outcome {
 	t.Helper()

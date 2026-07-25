@@ -37,13 +37,13 @@ func okInt(n int) result.Result[int, erreur] { return result.Ok[int, erreur](n) 
 func errInt(e erreur) result.Result[int, erreur] { return result.Err[int, erreur](e) }
 
 // valeur extrait la valeur de succès, ou la valeur zéro de T.
-func valeur[T any, E any](r result.Result[T, E]) T {
+func valeur[T, E any](r result.Result[T, E]) T {
 	value, _, _ := r.Get()
 	return value
 }
 
 // cause extrait l'erreur, ou sa valeur zéro.
-func cause[T any, E any](r result.Result[T, E]) E {
+func cause[T, E any](r result.Result[T, E]) E {
 	_, err, _ := r.Get()
 	return err
 }

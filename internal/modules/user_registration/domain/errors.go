@@ -3,7 +3,7 @@
 //
 // Ce paquet n'importe NI transport, NI persistance, NI logger. Il ne lit pas
 // l'horloge et ne génère pas d'aléa : ces effets sont des ports, injectés.
-// Vérifié par .arch-go.yml et depguard.
+// Vérifié par arch-go.yml et depguard.
 package domain
 
 // ErrorCode énumère les issues d'erreur possibles de la feature.

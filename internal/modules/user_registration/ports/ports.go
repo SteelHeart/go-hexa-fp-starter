@@ -1,7 +1,7 @@
 // Package ports déclare les contrats de la feature.
 //
 // Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface (vérifié par .arch-go.yml). Un port est un type fonction —
+// ni interface (vérifié par arch-go.yml). Un port est un type fonction —
 // la plus petite interface possible, donc rien à ségréguer
 // (documentation/adr/003).
 //

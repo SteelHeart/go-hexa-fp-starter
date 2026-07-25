@@ -43,26 +43,45 @@ var (
 )
 
 // New construit le module selon la configuration.
+//
+// Un pilote inconnu refuse le démarrage : la validation de configuration l'a déjà
+// rejeté, et ce second refus garantit qu'aucun chemin ne contourne le premier.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
 	if !cfg.Enabled {
-		return Module{Record: func(context.Context, domain.Entry) error { return ErrDisabled }}, nil
+		return disabled(), nil
 	}
 
 	switch cfg.Driver {
 	case "log":
-		if deps.Logger == nil {
-			return Module{}, ErrLoggerRequired
-		}
-		return Module{Record: logdriver.New(deps.Logger, deps.Now)}, nil
+		return newLog(deps)
 	case "postgres":
-		if deps.Pool == nil {
-			return Module{}, ErrPoolRequired
-		}
-		return Module{Record: pgdriver.New(deps.Pool, deps.Now)}, nil
+		return newPostgres(deps)
 	default:
 		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)
 	}
+}
+
+// disabled rend un module qui refuse à l'appel.
+//
+// Un audit désactivé ne doit pas rendre `nil` en silence : une trace d'audit qu'on
+// croit écrite et qui ne l'est pas est pire que pas d'audit du tout.
+func disabled() Module {
+	return Module{Record: func(context.Context, domain.Entry) error { return ErrDisabled }}
+}
+
+func newLog(deps Deps) (Module, error) {
+	if deps.Logger == nil {
+		return Module{}, ErrLoggerRequired
+	}
+	return Module{Record: logdriver.New(deps.Logger, deps.Now)}, nil
+}
+
+func newPostgres(deps Deps) (Module, error) {
+	if deps.Pool == nil {
+		return Module{}, ErrPoolRequired
+	}
+	return Module{Record: pgdriver.New(deps.Pool, deps.Now)}, nil
 }

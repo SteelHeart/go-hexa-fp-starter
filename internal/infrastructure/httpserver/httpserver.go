@@ -45,7 +45,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Prob
 	mux.Use(
 		middleware.RequestID(),
 		middleware.Recover(logger),
-		middleware.SecurityHeaders(!cfg.App.Env.IsDevelopment()),
+		securityHeadersFor(cfg.App.Env),
 		middleware.CORS(cfg.HTTP.AllowedOrigins),
 		middleware.MaxBody(cfg.HTTP.MaxBodyBytes),
 		middleware.AccessLog(logger),
@@ -58,6 +58,18 @@ func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Prob
 	humaCfg.DocsPath = "/docs"
 	humaCfg.OpenAPIPath = "/openapi"
 	return &Router{Mux: mux, API: humachi.New(mux, humaCfg)}
+}
+
+// securityHeadersFor choisit le jeu d'en-têtes selon l'environnement.
+//
+// Deny par défaut : SEUL le développement obtient la version sans HSTS, et il doit
+// se nommer pour l'obtenir. Un environnement inconnu — donc mal configuré — reçoit
+// le durcissement complet.
+func securityHeadersFor(env config.Environment) middleware.Middleware {
+	if env.IsDevelopment() {
+		return middleware.SecurityHeadersWithoutHSTS()
+	}
+	return middleware.SecurityHeaders()
 }
 
 // mountProbes monte les sondes hors de l'API documentée : elles ne font pas
@@ -134,16 +146,20 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		return nil
 	case <-ctx.Done():
-		return s.shutdown()
+		return s.shutdown(ctx)
 	}
 }
 
-func (s *Server) shutdown() error {
-	// Contexte détaché : le contexte parent est déjà annulé, l'utiliser ici
-	// couperait les requêtes en cours au lieu de les laisser finir.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.grace)
+func (s *Server) shutdown(ctx context.Context) error {
+	// WithoutCancel plutôt que Background : le contexte parent est déjà annulé et
+	// l'utiliser tel quel couperait les requêtes en cours au lieu de les laisser
+	// finir — mais repartir de Background jetterait AUSSI les valeurs portées par
+	// le contexte, dont la trace. L'arrêt serait alors le seul moment du cycle de
+	// vie invisible dans l'observabilité, c'est-à-dire précisément celui qu'on
+	// cherche à comprendre après un incident.
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.grace)
 	defer cancel()
-	s.logger.Info("arrêt du serveur HTTP", slog.Duration("grace", s.grace))
+	s.logger.InfoContext(shutdownCtx, "arrêt du serveur HTTP", slog.Duration("grace", s.grace))
 	if err := s.http.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("arrêt du serveur HTTP: %w", err)
 	}
