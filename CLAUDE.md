@@ -134,7 +134,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 - `go build ./...` vert
 - `go vet ./...` vert
-- `go test -shuffle=on ./...` vert — **207 tests**, 367 avec les sous-tests, répartis ainsi :
+- `go test -shuffle=on ./...` vert — **217 tests**, répartis ainsi :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -151,6 +151,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `internal/pkg/pagination/tests` | 11 | Aller-retour du curseur, limite toujours bornée, la ligne témoin ne fuite jamais |
 | `…/user_registration/domain/tests` | 18 | Normalisation et refus d'une adresse, bornes du mot de passe, **aucune fuite en journal**, compte jamais né actif |
 | `…/user_registration/application/tests` | 13 | Ordre des étapes, court-circuit, **le clair n'atteint jamais le stockage**, pas d'événement fantôme |
+| `internal/infrastructure/security/tests` | 10 | Sel neuf à chaque hachage, nonce neuf à chaque chiffrement, **AES-128 refusé**, altération détectée |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
@@ -167,11 +168,11 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| `golangci-lint` | **Exécuté**. 239 signalements au départ, **55 restants** — campagne en cours |
+| `golangci-lint` | **Exécuté**. 239 signalements au départ, **30 restants** — campagne en cours |
 | Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
-| `messaging`, `modulebus`, `httpserver`, `telemetry`, `security`, `cache` | Compilent, **zéro test** |
+| `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** |
 
 ### Absent
 
@@ -249,11 +250,12 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **Finir la campagne `golangci-lint`** : 55 signalements restants, triés par linter dans la
+1. **Finir la campagne `golangci-lint`** : 30 signalements restants, triés par linter dans la
    sortie de `golangci-lint run ./...`. Les décisions de configuration sont prises et documentées
    (`misspell` retiré, `hugeParam`/`rangeValCopy` désactivés, `errcheck.check-blank` à false) ;
    restent des corrections de code — `gosec` G115 et G304, `errorlint` sur la pagination,
-   `cyclop` sur `validateCore`, `revive function-result-limit` dans `messaging`
+   `cyclop` sur `validateCore`, trois `function-result-limit` dans `messaging`, et les globales
+   de clé de contexte qui attendent une décision écrite
 2. **#2** : migrations, un schéma et un rôle SQL par module
 3. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
    premier worker qui dépile réellement
