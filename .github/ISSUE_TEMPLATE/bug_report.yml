@@ -1,0 +1,54 @@
+name: 🐛 Bug
+description: Un comportement observé qui diffère du comportement attendu
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Ce qui se passe
+      placeholder: Réponse 500 au lieu de 409 quand l'email existe déjà.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ce qui devrait se passer
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction minimale
+      description: Idéalement un test Go qui échoue, ou une commande curl.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Couche concernée
+      description: >-
+        Un bug dans domain/ ou application/ est reproductible sans aucune I/O.
+        Si tu as besoin de Docker pour le reproduire, il est probablement dans
+        un adaptateur.
+      options:
+        - domain (règles métier pures)
+        - application (pipeline / décorateurs)
+        - adapters/primary (HTTP, consumer)
+        - adapters/secondary (Postgres, outbox, mailer)
+        - infrastructure (pool, cache, telemetry, serveur)
+        - pkg (result, fp, middleware)
+        - outillage (CI, Taskfile, Docker)
+        - je ne sais pas
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / trace
+      description: Le `trace_id` suffit souvent (Jaeger → http://localhost:16686).
+      render: text

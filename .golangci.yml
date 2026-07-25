@@ -1,0 +1,239 @@
+# golangci-lint v2 — configuration volontairement stricte.
+# Le but n'est pas d'avoir « zéro warning » mais de rendre coûteux tout écart
+# aux principes du projet : pureté, immuabilité, petites fonctions, pas d'effet caché.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    # ── Correction ────────────────────────────────────────────────────────────
+    - errcheck # toute erreur doit être traitée
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    - nilerr # ne pas retourner nil quand err != nil
+    - nilnil
+    - errorlint # %w, errors.Is/As
+    - exhaustive # switch exhaustif sur les enums (nos ErrorCode, Status…)
+    - makezero
+    - durationcheck
+    - contextcheck
+    - noctx # pas de requête HTTP/SQL sans context
+    - copyloopvar
+    - protogetter
+
+    # ── Simplicité / pureté ───────────────────────────────────────────────────
+    - gocritic
+    - gocognit # complexité cognitive
+    - cyclop # complexité cyclomatique
+    - funlen # fonctions courtes = composables
+    - nestif
+    - dupl # DRY : détecte le copier-coller
+    - gochecknoglobals # pas d'état global mutable
+    - gochecknoinits # pas de func init() magique
+    - reassign # ne pas réassigner les variables de packages importés
+    - unconvert
+    - unparam
+    - wastedassign
+    - prealloc
+    - predeclared
+    - importas
+    - depguard
+
+    # ── Style / lisibilité ────────────────────────────────────────────────────
+    - revive
+    - misspell
+    - godot # les commentaires se terminent par un point
+    - goconst
+    - nakedret
+    - lll
+    - whitespace
+    - nolintlint # tout //nolint doit être expliqué
+    - testifylint
+    - thelper
+    - tparallel
+    - usestdlibvars
+    - wrapcheck # les erreurs traversant une frontière sont enveloppées
+
+    # ── Sécurité ──────────────────────────────────────────────────────────────
+    - gosec
+    - errchkjson
+
+  settings:
+    cyclop:
+      max-complexity: 10
+      package-average: 5.0
+
+    gocognit:
+      min-complexity: 15
+
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+
+    nestif:
+      min-complexity: 4
+
+    dupl:
+      threshold: 120
+
+    lll:
+      line-length: 120
+      tab: "    "
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      ignore-tests: true
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    gocritic:
+      enabled-tags: [diagnostic, style, performance, opinionated]
+      disabled-checks:
+        - whyNoLint
+      settings:
+        hugeParam:
+          sizeThreshold: 128
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # lisibilité > packing mémoire pour nos value objects
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    revive:
+      severity: error
+      rules:
+        - name: exported
+          arguments: ["checkPrivateReceivers", "disableStutteringCheck"]
+        - name: package-comments
+        - name: error-strings
+        - name: error-naming
+        - name: var-naming
+        - name: indent-error-flow
+        - name: early-return
+        - name: unexported-return
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: confusing-naming
+        - name: flag-parameter # un booléen de contrôle = deux fonctions
+        - name: function-result-limit
+          arguments: [3]
+        - name: argument-limit
+          arguments: [5]
+        - name: unnecessary-stmt
+        - name: modifies-value-receiver # protège l'immuabilité de nos value objects
+
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Join(
+        - .Wrap(
+        - .Wrapf(
+        - huma.Error
+        - huma.NewError
+
+    depguard:
+      rules:
+        # GORM est interdit PARTOUT : hooks, gorm.Model, soft-delete et
+        # réflexion fuient par conception jusque dans les entités.
+        # Voir documentation/adr/009-strategie-d-acces-aux-donnees.md.
+        no-gorm:
+          list-mode: lax
+          files: ["$all"]
+          deny:
+            - pkg: gorm.io/gorm
+              desc: "Interdit partout — fuit dans le domaine. Utiliser sqlc/pgx (ADR 009)."
+
+        # Ent et Bun sont autorisés, mais CONFINÉS aux adaptateurs secondaires.
+        # `$all` moins les fichiers autorisés : depguard applique la règle aux
+        # fichiers listés, on interdit donc dans tout le reste.
+        orm-confine:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/internal/features/*/adapters/secondary/**"
+            - "!**/internal/infrastructure/database/**"
+          deny:
+            - pkg: entgo.io/ent
+              desc: "Autorisé uniquement dans adapters/secondary/ (ADR 009)."
+            - pkg: github.com/uptrace/bun
+              desc: "Autorisé uniquement dans adapters/secondary/ (ADR 009)."
+            - pkg: github.com/Masterminds/squirrel
+              desc: "Autorisé uniquement dans adapters/secondary/ (ADR 009)."
+        # Le domaine et les ports restent purs : ni transport, ni driver, ni horloge.
+        pure-core:
+          list-mode: lax
+          files:
+            - "**/internal/features/*/domain/**"
+            - "**/internal/features/*/ports/**"
+          deny:
+            - pkg: net/http
+              desc: "Le cœur ne connaît pas le transport (adapters/primary uniquement)."
+            - pkg: database/sql
+              desc: "Le cœur ne connaît pas la persistance (adapters/secondary uniquement)."
+            - pkg: github.com/jackc/pgx
+              desc: "Le cœur ne connaît pas la persistance (adapters/secondary uniquement)."
+            - pkg: github.com/danielgtaylor/huma
+              desc: "Le cœur ne connaît pas le framework HTTP."
+            - pkg: github.com/redis/go-redis
+              desc: "Le cœur ne connaît pas le cache."
+            - pkg: log/slog
+              desc: "Le cœur ne journalise pas : il retourne des Result."
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      # Le wiring manuel est par nature long et référence tous les packages :
+      # c'est le seul endroit où la composition est autorisée à être verbeuse.
+      - path: 'cmd/[^/]+/main\.go'
+        linters: [funlen, gocognit, cyclop, gochecknoglobals]
+
+      # Les tests peuvent dupliquer, être longs et utiliser des fixtures globales.
+      - path: '_test\.go'
+        linters: [funlen, dupl, gocognit, cyclop, lll, gochecknoglobals, gosec, wrapcheck]
+
+      # Les constructeurs de la couche pkg exposent volontairement des génériques
+      # dont la signature dépasse la limite d'arguments.
+      - path: 'internal/pkg/'
+        linters: [ireturn]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/SteelHeart/go-hexa-fp-starter
+    gofumpt:
+      extra-rules: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false

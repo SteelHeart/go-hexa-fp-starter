@@ -1,0 +1,15 @@
+# Surcharges de développement local. Fusionnées par-dessus les groupes.
+app:
+  env: development
+
+database:
+  # En développement seulement, les deux rôles peuvent coïncider.
+  dsn: ${DB_DSN:-postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable}
+
+telemetry:
+  enabled: true
+  log_level: debug
+  log_format: text
+
+messaging:
+  driver: inproc

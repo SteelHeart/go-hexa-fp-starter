@@ -1,0 +1,66 @@
+# Transport d'événements et communication inter-modules.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# L'outbox n'est pas À LA PLACE du broker, elle est DEVANT lui
+# ─────────────────────────────────────────────────────────────────────────────
+# Une feature écrit toujours dans l'outbox Postgres, dans sa transaction
+# métier : c'est ce qui garantit qu'aucun événement n'est perdu ni fantôme.
+# Le worker dépile ensuite et remet l'enveloppe au RELAIS configuré ci-dessous.
+#
+#   feature ─► outbox (transactionnel) ─► worker ─► relais ─► Kafka / AMQP / inproc
+#
+# Changer de broker ne touche donc AUCUNE ligne de domain/, ports/ ou
+# application/. C'est ce fichier, et rien d'autre.
+messaging:
+  # inproc | kafka | rabbitmq | noop
+  #
+  # `inproc` n'est pas un bouchon : c'est le mode normal d'un monolithe
+  # modulaire. La durabilité est déjà assurée par l'outbox, le bus n'a donc pas
+  # à l'être. On ne paie un broker que le jour où les modules sont déployés
+  # séparément.
+  driver: inproc
+
+  # Isole plusieurs environnements sur un même broker partagé.
+  topic_prefix: hexa
+
+  # Permet à N répliques de se répartir la charge au lieu de la dupliquer.
+  consumer_group: hexa-worker
+
+  publish_timeout: 5s
+
+  kafka:
+    brokers:
+      - ${KAFKA_BROKERS:-localhost:9092}
+    # À passer à false en production : créer un topic à la volée masque une
+    # erreur de configuration.
+    allow_auto_topic_creation: true
+
+  rabbitmq:
+    url: ${AMQP_URL:-amqp://guest:guest@localhost:5672/}
+    exchange: hexa.events
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Communication inter-modules
+# ─────────────────────────────────────────────────────────────────────────────
+# Un module n'accède JAMAIS aux tables d'un autre (chaque module possède son
+# schéma Postgres exclusif). Il passe par le langage publié
+# (internal/contracts/) et par l'un de ces trois modes :
+#
+#   inproc    appel de fonction direct — même binaire (le moins coûteux)
+#   http      appel réseau — déploiements séparés
+#   event     dépôt d'un événement — asynchrone, SANS réponse
+#   disabled  refus explicite
+#
+# Passer de l'un à l'autre est une valeur de ce fichier, pas un changement de
+# code : c'est ce qui permet d'extraire un module en service sans réécriture.
+modules:
+  default_transport: inproc
+  call_timeout: 5s
+
+  # Surcharge par module. La clé est le nom du module.
+  transports: {}
+  #   user_registration: http
+
+  # Adresse d'un module appelé en HTTP.
+  base_urls: {}
+  #   user_registration: http://user-registration:8080

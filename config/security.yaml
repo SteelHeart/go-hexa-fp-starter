@@ -1,0 +1,20 @@
+# Cryptographie et courriel sortant.
+security:
+  # 32 octets exactement, encodés en base64 (AES-256-GCM).
+  # Générer : openssl rand -base64 32
+  # JAMAIS de valeur en clair ici — uniquement une référence à l'environnement.
+  encryption_key: ${SECURITY_ENCRYPTION_KEY}
+
+  # Argon2id. Augmenter la mémoire est ce qui protège réellement contre le
+  # calcul massivement parallèle : n'augmenter que les itérations coûte autant
+  # à l'attaquant sur GPU qu'au serveur.
+  argon2:
+    memory_kib: 65536
+    iterations: 3
+    threads: 4
+
+mail:
+  addr: ${SMTP_ADDR:-localhost:1025}
+  from: ${SMTP_FROM:-no-reply@localhost}
+  user: ${SMTP_USER:-}
+  password: ${SMTP_PASSWORD:-}

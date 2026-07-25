@@ -1,0 +1,72 @@
+# Observabilité — volontairement AGNOSTIQUE de l'outil.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Pourquoi rien ici ne nomme un fournisseur dans le code
+# ─────────────────────────────────────────────────────────────────────────────
+# Les trois signaux sortent par des formats standards, pas par des SDK
+# propriétaires :
+#
+#   journaux   → JSON sur stdout        lu par Filebeat/Fluent Bit (ELK), Loki,
+#                                       Datadog, CloudWatch… sans une ligne de
+#                                       code applicatif
+#   traces     → OTLP                   accepté par Tempo (Grafana), Jaeger,
+#                                       Datadog, Honeycomb, New Relic, Elastic APM
+#   métriques  → Prometheus / OTLP      Mimir, Prometheus, Datadog, Elastic
+#
+# Changer d'outil de supervision se fait donc dans l'infrastructure (collecteur
+# OpenTelemetry, agent de journaux), PAS dans l'application. C'est le seul choix
+# qui reste valide sur cinq ans.
+#
+# Le suivi d'erreurs est le seul signal qui exige un client dédié : il est isolé
+# derrière un port `errors.reporter`, pour que Sentry ne s'infiltre pas ailleurs.
+observability:
+  logs:
+    # stdout (défaut) | file
+    # stdout dans TOUS les cas conteneurisés : c'est l'agent qui collecte, pas
+    # l'application qui pousse. Une application qui écrit dans un fichier dans un
+    # conteneur crée un volume à gérer et un risque de saturation disque.
+    sink: stdout
+    file_path: ./tmp/logs/app.log
+
+  traces:
+    # otlp (défaut) | none
+    # Un seul exportateur suffit : le collecteur OpenTelemetry se charge de
+    # dupliquer vers plusieurs destinations. Multiplier les exportateurs dans
+    # l'application, c'est multiplier les points de panne.
+    exporter: otlp
+    # grpc | http
+    protocol: grpc
+    # Fraction de traces échantillonnées. 1.0 en développement, à réduire en
+    # production sous charge.
+    sample_ratio: 1.0
+
+  metrics:
+    # prometheus (défaut, en tirage) | otlp (en poussée) | none
+    exporter: prometheus
+
+  errors:
+    # none (défaut) | sentry
+    # Le SEUL signal qui exige un client propriétaire. Isolé derrière un port :
+    # aucun paquet du cœur n'importe le SDK.
+    reporter: none
+    sentry:
+      dsn: ${SENTRY_DSN:-}
+      # Fraction d'événements de performance. 0 = suivi d'erreurs seulement.
+      traces_sample_rate: 0.0
+      # ⚠️ Doit rester false : les données personnelles ne sortent pas du système
+      # (rules/securite.md §5).
+      send_default_pii: false
+
+# Internationalisation.
+#
+# Le domaine ne produit JAMAIS de texte traduit : il retourne un ErrorCode, et
+# chaque surface le traduit depuis son catalogue. C'est ce qui permet au mobile,
+# au web et à la CLI d'afficher des libellés différents pour la même erreur.
+i18n:
+  default_locale: fr
+  supported_locales:
+    - fr
+    - en
+  # Fait échouer la CI sur une clé absente d'un catalogue. Une traduction
+  # manquante affiche sa clé — visible, mais mieux vaut le voir en CI.
+  fail_on_missing_key: true

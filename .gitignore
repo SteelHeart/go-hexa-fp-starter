@@ -1,0 +1,32 @@
+# Binaires
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Tests & couverture
+*.test
+*.out
+/coverage.*
+
+# Outils locaux
+/.task/
+/tmp/
+
+# Environnement (jamais commité — voir .env.example)
+.env
+.env.*
+!.env.example
+
+# Éditeurs
+.idea/
+.vscode/*
+!.vscode/settings.json
+*.swp
+.DS_Store
+
+# Surcharges locales de configuration (jamais versionnees)
+config/local.yaml

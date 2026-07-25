@@ -1,0 +1,5 @@
+# Identité du service.
+app:
+  name: hexa-fp-starter
+  # Écrasée au build par -ldflags. Ne pas la maintenir à la main.
+  version: dev

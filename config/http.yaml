@@ -1,0 +1,30 @@
+# Serveur HTTP — surface web et mobile.
+http:
+  host: 0.0.0.0
+  port: 8080
+
+  # Délais bornés. read_header_timeout non nul est indispensable : sans lui, une
+  # connexion qui n'envoie jamais ses en-têtes immobilise une goroutine.
+  read_timeout: 5s
+  write_timeout: 10s
+  idle_timeout: 120s
+  shutdown_timeout: 15s
+
+  # Taille de corps bornée : 1 MiB. Sans borne, un client fait grossir la
+  # mémoire du serveur à volonté.
+  max_body_bytes: 1048576
+
+  # Liste blanche explicite. `*` est refusé hors développement, et une origine
+  # en http:// aussi (voir config.validate).
+  allowed_origins:
+    - http://localhost:3000
+
+# Limitation de débit.
+# ⚠️ En mémoire, donc PAR INSTANCE : derrière N répliques la limite effective
+# est multipliée par N. Voir SECURITY.md.
+limits:
+  rps: 20
+  burst: 40
+  # Plus stricte sur les routes d'authentification et d'inscription.
+  auth_rps: 3
+  auth_burst: 5

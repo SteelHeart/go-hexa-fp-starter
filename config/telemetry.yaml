@@ -1,0 +1,20 @@
+# Traces, métriques et journaux.
+#
+# Les trois signaux sont reliés par le trace_id : un journal sans trace_id est
+# un journal qu'on ne pourra pas recouper en incident.
+telemetry:
+  enabled: false
+  otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-localhost:4317}
+  service_name: hexa-fp-starter
+
+  # Port séparé et lié à 127.0.0.1 : les métriques révèlent la volumétrie et la
+  # structure interne du service.
+  metrics_port: 9090
+
+  # debug | info | warn | error
+  # Error = action humaine requise. Warn = anomalie absorbée. Info = fait
+  # métier. Un Error qui n'appelle aucune action est un Warn.
+  log_level: info
+
+  # text | json — json est imposé hors développement (voir NewLogger).
+  log_format: text

@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+.task
+bin
+dist
+tmp
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+coverage.*
+docker-compose.yml
+Dockerfile
+tests/perf

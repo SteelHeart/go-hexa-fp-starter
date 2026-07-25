@@ -1,0 +1,190 @@
+# https://taskfile.dev — remplace Makefile (cross-platform, Windows inclus).
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  MODULE:
+    sh: go list -m
+  BIN: bin
+  COVER_PROFILE: coverage.out
+  COVER_THRESHOLD: 80
+
+tasks:
+  default:
+    desc: Liste les tâches disponibles
+    cmds:
+      - task --list-all
+    silent: true
+
+  # ── Bootstrap ───────────────────────────────────────────────────────────────
+  init:
+    desc: Installe les outils de dev et prépare .env
+    cmds:
+      - cmd: cp .env.example .env
+        platforms: [linux, darwin]
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (-not (Test-Path .env)) { Copy-Item .env.example .env }"
+        platforms: [windows]
+      - task: tools
+
+  tools:
+    desc: Installe l'outillage (linter, arch guardrails, migrations, vuln scan)
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - go install github.com/fdaines/arch-go@latest
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  # ── Stack locale ────────────────────────────────────────────────────────────
+  up:
+    desc: Démarre Postgres, Redis, Jaeger, Mailpit puis applique les migrations
+    cmds:
+      - docker compose up -d --wait
+      - task: migrate:up
+
+  down:
+    desc: Arrête la stack locale
+    cmds:
+      - docker compose down
+
+  reset:
+    desc: Détruit et recrée la stack locale (volumes inclus)
+    cmds:
+      - docker compose down -v
+      - task: up
+
+  logs:
+    desc: Suit les logs de la stack locale
+    cmds:
+      - docker compose logs -f
+
+  # ── Base de données ─────────────────────────────────────────────────────────
+  migrate:up:
+    desc: Applique les migrations
+    cmds:
+      - goose -dir ./migrations postgres "$DB_DSN" up
+
+  migrate:down:
+    desc: Annule la dernière migration
+    cmds:
+      - goose -dir ./migrations postgres "$DB_DSN" down
+
+  migrate:status:
+    desc: Affiche l'état des migrations
+    cmds:
+      - goose -dir ./migrations postgres "$DB_DSN" status
+
+  migrate:new:
+    desc: 'Crée une migration : task migrate:new -- add_something'
+    cmds:
+      - goose -dir ./migrations create {{.CLI_ARGS}} sql
+
+  # ── Exécution ───────────────────────────────────────────────────────────────
+  run:
+    desc: Lance l'API HTTP
+    cmds:
+      - go run ./cmd/server
+
+  run:worker:
+    desc: Lance le worker (dépilement de l'outbox)
+    cmds:
+      - go run ./cmd/worker
+
+  build:
+    desc: Compile les deux binaires dans ./bin
+    cmds:
+      - go build -trimpath -ldflags="-s -w" -o {{.BIN}}/ ./cmd/...
+
+  # ── Qualité ─────────────────────────────────────────────────────────────────
+  check:
+    desc: Barrière qualité complète (identique à la CI)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: arch
+      - task: test
+      - task: vuln
+
+  fmt:
+    desc: Formate le code
+    cmds:
+      - go fmt ./...
+      - go mod tidy
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: golangci-lint (config ultra-stricte)
+    cmds:
+      - golangci-lint run ./...
+
+  arch:
+    desc: Vérifie les guardrails d'architecture (.arch-go.yml)
+    cmds:
+      - arch-go --verbose
+
+  vuln:
+    desc: Scan de vulnérabilités des dépendances
+    cmds:
+      - govulncheck ./...
+
+  # ── Tests ───────────────────────────────────────────────────────────────────
+  test:
+    desc: Tests unitaires + course aux données
+    cmds:
+      - go test -race -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=atomic ./...
+
+  test:cover:
+    desc: Rapport de couverture HTML
+    deps: [test]
+    cmds:
+      - go tool cover -html={{.COVER_PROFILE}} -o coverage.html
+      - go tool cover -func={{.COVER_PROFILE}} | tail -n 1
+
+  test:e2e:
+    desc: Tests end-to-end (nécessite `task up` puis `task run`)
+    cmds:
+      - go test -tags=e2e -count=1 -v ./tests/e2e/...
+
+  test:perf:
+    desc: Test de charge k6 (nécessite l'API démarrée)
+    cmds:
+      - k6 run tests/perf/registration.js
+
+  # ── Contrat d'API ───────────────────────────────────────────────────────────
+  openapi:
+    desc: Régénère api/openapi.yaml depuis le code (source de vérité = les structs Go)
+    cmds:
+      - go run ./cmd/server --openapi > api/openapi.yaml
+      - cmd: echo "api/openapi.yaml régénéré"
+
+  # ── Maintenance ─────────────────────────────────────────────────────────────
+  rename:
+    desc: 'Change le module path : task rename -- github.com/moi/mon-projet'
+    cmds:
+      - go mod edit -module {{.CLI_ARGS}}
+      - cmd: |
+          git ls-files '*.go' | xargs sed -i 's|{{.MODULE}}|{{.CLI_ARGS}}|g'
+        platforms: [linux, darwin]
+      - cmd: >-
+          powershell -NoProfile -Command "Get-ChildItem -Recurse -Filter *.go |
+          ForEach-Object { (Get-Content $_.FullName -Raw) -replace
+          [regex]::Escape('{{.MODULE}}'), '{{.CLI_ARGS}}' |
+          Set-Content $_.FullName -NoNewline -Encoding utf8 }"
+        platforms: [windows]
+      - go mod tidy
+      - go build ./...
+
+  clean:
+    desc: Supprime les artefacts de build
+    cmds:
+      - cmd: rm -rf {{.BIN}} {{.COVER_PROFILE}} coverage.html
+        platforms: [linux, darwin]
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue {{.BIN}}, {{.COVER_PROFILE}}, coverage.html"
+        platforms: [windows]

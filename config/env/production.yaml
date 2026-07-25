@@ -1,0 +1,26 @@
+app:
+  env: production
+
+http:
+  allowed_origins:
+    - ${PROD_WEB_ORIGIN}
+
+database:
+  # Obligatoirement distinct du DSN applicatif : la validation refuse le
+  # démarrage sinon.
+  migration_dsn: ${DB_MIGRATION_DSN}
+  max_conns: 25
+  min_conns: 5
+
+telemetry:
+  enabled: true
+  log_level: info
+  log_format: json
+
+messaging:
+  driver: ${MESSAGING_DRIVER:-inproc}
+  kafka:
+    allow_auto_topic_creation: false
+
+storage:
+  base_url: ${PROD_PUBLIC_URL}/files

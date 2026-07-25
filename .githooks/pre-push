@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Interdit le push direct sur le tronc.
+#   rules/workflow-git.md §1 · documentation/adr/007-tronc-unique-et-environnements.md
+#
+# ⚠️ Contournable avec --no-verify. Filet contre l'accident, PAS un contrôle.
+#    Le contrôle réel est le ruleset serveur.
+
+PROTECTED="main"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  branch="${remote_ref#refs/heads/}"
+  if [ "$branch" = "$PROTECTED" ]; then
+    printf '\n  ⛔ Push direct sur '\''%s'\'' refuse.\n\n' "$PROTECTED"
+    printf '     Le tronc ne se modifie que par pull request.\n\n'
+    printf '     git switch -c {type}/{issue}-{slug}\n'
+    printf '     git push -u origin HEAD\n'
+    printf '     gh pr create --fill\n\n'
+    exit 1
+  fi
+done
+
+exit 0

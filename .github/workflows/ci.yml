@@ -1,0 +1,506 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  merge_group:
+  workflow_dispatch:
+
+# Une nouvelle poussée sur une PR annule le run précédent : on ne paie pas
+# deux fois pour un état obsolète.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Principe du moindre privilège : chaque job élargit si besoin.
+permissions:
+  contents: read
+
+env:
+  # Les versions d'outils sont volontairement en `latest` au démarrage du
+  # projet. À figer (ex: @v2.6.0) dès la première release pour la
+  # reproductibilité des builds.
+  GOLANGCI_VERSION: latest
+  ARCHGO_VERSION: latest
+  GOOSE_VERSION: latest
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # 1. Convention de commit — le titre de PR devient le message du squash
+  #    commit, donc c'est LUI qui doit être conventionnel (pas chaque commit
+  #    de la branche).
+  # ───────────────────────────────────────────────────────────────────────────
+  pr-title:
+    name: Titre de PR conventionnel
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifie le format Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._-]+\))?!?: .{1,80}$'
+          if ! printf '%s' "$TITLE" | grep -Eq "$PATTERN"; then
+            echo "::error::Titre de PR non conforme : « $TITLE »"
+            echo ""
+            echo "Format attendu : <type>(<scope>)!: <description>"
+            echo "Types          : feat fix docs style refactor perf test build ci chore revert"
+            echo "Exemples       :"
+            echo "  feat(user_registration): ajoute la vérification d'unicité d'email"
+            echo "  fix(outbox): évite le double envoi en cas de crash du worker"
+            echo "  refactor(pkg/result)!: Map devient une fonction libre"
+            exit 1
+          fi
+          echo "OK : $TITLE"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 2. Qualité statique
+  # ───────────────────────────────────────────────────────────────────────────
+  quality:
+    name: Format, vet & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go mod tidy est-il à jour ?
+        run: |
+          go mod tidy
+          git diff --exit-code --name-only go.mod go.sum \
+            || { echo "::error::go.mod/go.sum non à jour — lance 'task fmt'"; exit 1; }
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Fichiers non formatés :"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}
+          golangci-lint run --timeout=5m ./...
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 3. Zones à haute inertie — remplace un fichier CODEOWNERS, qui coderait
+  #    des personnes plutôt que des règles. Toucher au règlement, aux
+  #    primitives ou aux migrations exige une trace écrite dans le même diff.
+  # ───────────────────────────────────────────────────────────────────────────
+  inertia:
+    name: Zones à haute inertie
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Un changement de règle exige un ADR dans la même PR
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          echo "$changed" | sed 's/^/  /'
+
+          inertia=$(echo "$changed" | grep -E '^(rules/|\.arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
+          [ -z "$inertia" ] && { echo "Aucune zone à haute inertie touchée."; exit 0; }
+
+          echo ""
+          echo "Zones à haute inertie modifiées :"
+          echo "$inertia" | sed 's/^/  · /'
+
+          adr=$(echo "$changed" | grep -E '^documentation/adr/[0-9]{3}-' || true)
+          if [ -n "$adr" ]; then
+            echo "ADR présent dans la PR :"; echo "$adr" | sed 's/^/  · /'; exit 0
+          fi
+
+          # Échappatoire explicite et tracée, pas un contournement silencieux.
+          if echo '${{ toJSON(github.event.pull_request.labels.*.name) }}' | grep -q 'inertia:justified'; then
+            echo "::warning::pas d'ADR, mais le label 'inertia:justified' est posé — la justification doit être dans le corps de la PR"
+            exit 0
+          fi
+
+          echo "::error::cette PR modifie le règlement, les primitives ou les migrations sans ADR."
+          echo "Ajouter documentation/adr/{NNN}-{slug}.md, ou poser le label 'inertia:justified' en expliquant pourquoi dans le corps de la PR."
+          exit 1
+
+      - name: Aucune mention d'outillage d'assistance dans le diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # rules/interdictions.md § Artefacts versionnés.
+          PATTERN='Co-Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)|Generated with|🤖|Co-authored-by:.*noreply@anthropic'
+          fail=0
+
+          if git log --format='%B' "$BASE..$HEAD" | grep -Eiq "$PATTERN"; then
+            echo "::error::un message de commit porte une mention d'outillage d'assistance"; fail=1
+          fi
+          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -Eiq "$PATTERN"; then
+            echo "::error::le titre ou le corps de la PR porte une mention d'outillage d'assistance"; fail=1
+          fi
+          if git diff "$BASE" "$HEAD" -- . | grep -E '^\+' | grep -Eiq "$PATTERN"; then
+            echo "::error::le diff introduit une mention d'outillage d'assistance"; fail=1
+          fi
+
+          [ "$fail" -eq 0 ] && echo "Aucune mention détectée."
+          exit "$fail"
+
+      - name: Aucune dette dissimulée
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # rules/interdictions.md § Dette : ce qui n'est pas fait s'annonce
+          # hors périmètre dans la PR, pas en marqueur dans le code.
+          added=$(git diff "$BASE" "$HEAD" -- '*.go' '*.sql' '*.yml' '*.yaml' | grep -E '^\+' || true)
+          if echo "$added" | grep -Enq '(TODO|FIXME|XXX|HACK)'; then
+            echo "$added" | grep -En '(TODO|FIXME|XXX|HACK)' | sed 's/^/  /'
+            echo "::error::marqueur de dette introduit — annoncer le hors périmètre dans le corps de la PR"
+            exit 1
+          fi
+          echo "Aucun marqueur de dette."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 4. Guardrails d'architecture — le job le plus important du pipeline.
+  #    Il échoue si quelqu'un importe l'infrastructure depuis le domaine.
+  # ───────────────────────────────────────────────────────────────────────────
+  architecture:
+    name: Guardrails d'architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: arch-go
+        run: |
+          go install github.com/fdaines/arch-go@${ARCHGO_VERSION}
+          arch-go --verbose
+
+      # ── Isolation des données par module (ADR 011) ──────────────────────────
+      # Un module ne doit JAMAIS toucher la zone exclusive d'un autre. Chaque
+      # module possède un schéma Postgres ; les migrations d'un module ne
+      # référencent que son schéma et le schéma partagé `platform`.
+      - name: Isolation des schémas Postgres
+        run: |
+          set -euo pipefail
+          fail=0
+          shared="platform|pg_catalog|information_schema|public"
+
+          for dir in migrations/*/; do
+            module=$(basename "$dir")
+            [ "$module" = "platform" ] && continue
+            # Tout identifiant qualifié `autre_schema.` est une violation.
+            offenders=$(grep -rhoE '\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*' "$dir" 2>/dev/null \
+              | cut -d. -f1 | sort -u \
+              | grep -Ev "^($module|$shared)$" || true)
+            if [ -n "$offenders" ]; then
+              echo "::error::migrations/$module référence un schéma étranger :"
+              echo "$offenders" | sed 's/^/    /'
+              fail=1
+            fi
+          done
+
+          # Aucun SQL applicatif ne doit qualifier le schéma d'un autre module :
+          # le search_path du rôle du module s'en charge.
+          for dir in internal/features/*/; do
+            module=$(basename "$dir")
+            others=$(find internal/features -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
+              | grep -v "^$module$" || true)
+            [ -z "$others" ] && continue
+            for other in $others; do
+              if grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' >/dev/null 2>&1; then
+                echo "::error::$module référence le schéma de $other dans du SQL"
+                grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' | sed 's/^/    /'
+                fail=1
+              fi
+            done
+          done
+
+          [ "$fail" -eq 0 ] && echo "Isolation des schémas respectée."
+          exit "$fail"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
+  # ───────────────────────────────────────────────────────────────────────────
+  test:
+    name: Tests unitaires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go test -race
+        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Seuil de couverture
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
+          echo "Couverture globale : ${total}%"
+          echo "### Couverture : ${total}%" >> "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" 'BEGIN { exit (t + 0 >= 70) ? 0 : 1 }' \
+            || { echo "::error::Couverture ${total}% < seuil 70%"; exit 1; }
+
+      - name: Couverture du cœur métier (domain + application ≥ 90%)
+        run: |
+          go tool cover -func=coverage.out \
+            | grep -E '/(domain|application)/' \
+            | awk '{ gsub(/%/, "", $3); sum += $3; n++ }
+                   END {
+                     if (n == 0) { print "::warning::aucun fichier de cœur mesuré"; exit 0 }
+                     avg = sum / n
+                     printf "Couverture du cœur : %.1f%% sur %d fonctions\n", avg, n
+                     if (avg < 90) { printf "::error::cœur à %.1f%% < 90%%\n", avg; exit 1 }
+                   }'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 5. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
+  # ───────────────────────────────────────────────────────────────────────────
+  e2e:
+    name: Tests end-to-end
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hexa
+          POSTGRES_PASSWORD: hexa
+          POSTGRES_DB: hexa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hexa -d hexa"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:latest
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "true"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+        ports: ["1025:1025", "8025:8025"]
+
+    env:
+      APP_ENV: test
+      DB_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      REDIS_ADDR: localhost:6379
+      SMTP_ADDR: localhost:1025
+      SMTP_FROM: no-reply@hexa.test
+      SECURITY_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      OTEL_ENABLED: "false"
+      HTTP_PORT: "8080"
+      E2E_BASE_URL: http://localhost:8080
+      MAILPIT_API_URL: http://localhost:8025
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Migrations
+        run: |
+          go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
+          goose -dir ./migrations postgres "$DB_DSN" up
+
+      - name: Démarre l'API et le worker
+        run: |
+          go build -o bin/server ./cmd/server
+          go build -o bin/worker ./cmd/worker
+          ./bin/server > server.log 2>&1 &
+          ./bin/worker > worker.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS "$E2E_BASE_URL/healthz" > /dev/null 2>&1; then
+              echo "API prête après ${i} tentative(s)"; exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::l'API n'a pas démarré"; cat server.log; exit 1
+
+      - name: go test -tags=e2e
+        run: go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/...
+
+      - name: Logs des services (en cas d'échec)
+        if: failure()
+        run: |
+          echo "── server.log ──"; cat server.log || true
+          echo "── worker.log ──"; cat worker.log || true
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 6. Compilation multi-plateforme
+  # ───────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -ldflags="-s -w" -o bin/ ./cmd/...
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 7. Sécurité des dépendances
+  # ───────────────────────────────────────────────────────────────────────────
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 8. Secrets — un secret poussé par erreur doit être ROTÉ, pas seulement
+  #    retiré du diff. Cette garde évite d'avoir à le découvrir plus tard.
+  # ───────────────────────────────────────────────────────────────────────────
+  secrets:
+    name: Fuite de secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historique complet : un secret retiré au commit suivant reste dans
+          # l'historique, donc reste compromis.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 9. Image conteneur — construite sur chaque PR, poussée sur main seulement.
+  # ───────────────────────────────────────────────────────────────────────────
+  docker:
+    name: Image ${{ matrix.cmd }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        cmd: [server, worker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Métadonnées
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.cmd }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CMD=${{ matrix.cmd }}
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.cmd }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cmd }}
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 10. Portail unique — c'est CE job qu'on met en « required status check »
+  #    dans le ruleset. Ajouter un job ci-dessus ne demande plus de toucher
+  #    aux réglages GitHub : il suffit de l'ajouter à `needs`.
+  # ───────────────────────────────────────────────────────────────────────────
+  gate:
+    name: CI
+    if: always()
+    needs: [pr-title, inertia, quality, architecture, test, e2e, build, vuln, secrets, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tous les jobs requis ont-ils réussi ?
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Résultats : $results"
+          for r in $results; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::un job requis a échoué ($r)"; exit 1 ;;
+            esac
+          done
+          echo "CI verte."

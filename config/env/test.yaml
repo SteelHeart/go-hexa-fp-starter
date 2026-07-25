@@ -1,0 +1,29 @@
+# Surcharges de test. AUCUN affaiblissement de sécurité ici : un réglage de test
+# qui dégrade une garde finit toujours par fuiter en production
+# (rules/interdictions.md).
+app:
+  env: test
+
+database:
+  dsn: ${TEST_DB_DSN:-postgres://hexa:hexa@localhost:5432/hexa_test?sslmode=disable}
+
+telemetry:
+  enabled: false
+  log_level: warn
+  log_format: text
+
+messaging:
+  # Les tests n'ont pas de broker : les consommateurs tournent en processus.
+  driver: inproc
+
+security:
+  # Coût réduit UNIQUEMENT pour la vitesse des tests. L'algorithme reste
+  # Argon2id — on ne change pas de mécanisme, on change de paramètre.
+  argon2:
+    memory_kib: 8192
+    iterations: 1
+    threads: 1
+
+dynconf:
+  # Pas de cache en test : un drapeau posé doit être visible immédiatement.
+  ttl: 0s

@@ -1,0 +1,46 @@
+# Persistance et cache.
+#
+# Les identifiants ne sont JAMAIS écrits ici : ils sont référencés par
+# ${VARIABLE}, résolue au démarrage depuis l'environnement d'exécution.
+# Un secret dans un fichier versionné est la faille la plus banale qui existe.
+database:
+  dsn: ${DB_DSN}
+
+  # Rôle distinct pour les migrations : le rôle applicatif ne possède pas le
+  # schéma, ce qui empêche une injection SQL réussie de le modifier ou de
+  # désactiver une politique RLS. Obligatoirement différent hors développement.
+  migration_dsn: ${DB_MIGRATION_DSN:-}
+
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 1h
+  connect_timeout: 5s
+
+cache:
+  addr: ${REDIS_ADDR:-localhost:6379}
+  password: ${REDIS_PASSWORD:-}
+  db: 0
+  default_ttl: 5m
+
+# Configuration dynamique : drapeaux de fonctionnalité et réglages métier.
+# Ce qui est ICI est le paramétrage du MÉCANISME ; les valeurs vivent en base,
+# parce qu'elles doivent changer sans redéploiement.
+dynconf:
+  ttl: 30s
+  # Préfixe de surcharge par environnement, indispensable en test :
+  #   DYNCONF_FLAG_NEW_ONBOARDING=true
+  env_prefix: DYNCONF_
+
+worker:
+  poll_interval: 2s
+  batch_size: 50
+  max_attempts: 5
+  base_backoff: 5s
+  # Durée de mémorisation d'une clé d'idempotence. Au-delà, un rejeu très tardif
+  # recrée la ressource.
+  idempotency_ttl: 24h
+
+storage:
+  kind: disk
+  disk_dir: ./tmp/storage
+  base_url: http://localhost:8080/files

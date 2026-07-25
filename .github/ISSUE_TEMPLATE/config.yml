@@ -1,0 +1,3 @@
+# Les issues libres sont désactivées : une issue sans structure ne se priorise
+# pas et ne se relit pas six mois plus tard.
+blank_issues_enabled: false

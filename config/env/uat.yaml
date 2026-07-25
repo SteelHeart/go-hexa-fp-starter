@@ -1,0 +1,17 @@
+app:
+  env: uat
+
+http:
+  allowed_origins:
+    - ${UAT_WEB_ORIGIN}
+
+telemetry:
+  enabled: true
+  log_level: info
+  log_format: json
+
+messaging:
+  driver: ${MESSAGING_DRIVER:-inproc}
+
+storage:
+  base_url: ${UAT_PUBLIC_URL}/files

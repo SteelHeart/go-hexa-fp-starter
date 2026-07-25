@@ -1,0 +1,53 @@
+name: ✨ Feature
+description: Un nouveau comportement métier ou technique
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Le besoin
+      description: Formulé côté utilisateur, pas côté solution.
+      placeholder: En tant que visiteur, je veux confirmer mon email pour activer mon compte.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Portée
+      options:
+        - Nouveau cas d'usage dans une feature existante
+        - Nouveau bounded context (nouveau dossier sous features/)
+        - Nouvel adaptateur pour un port existant
+        - Évolution du socle (infrastructure / pkg)
+    validations:
+      required: true
+
+  - type: textarea
+    id: ports
+    attributes:
+      label: Ports impactés
+      description: >-
+        Quels contrats (types fonction) faut-il ajouter ou modifier ? C'est la
+        question qui structure l'implémentation.
+      placeholder: |
+        type SendConfirmationEmail = func(ctx, domain.User, domain.Token) result.Result[struct{}, domain.Error]
+      render: go
+
+  - type: textarea
+    id: rules
+    attributes:
+      label: Règles métier pures à écrire
+      description: Ce qui sera testable sans aucune I/O — donc dans domain/.
+      placeholder: |
+        - un token expiré ne peut pas activer un compte
+        - un compte déjà actif ne peut pas être réactivé
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Contraintes à respecter
+      options:
+        - label: Ne crée pas de dépendance directe entre deux features (passer par un événement outbox)
+        - label: N'introduit pas d'interface là où un type fonction suffit
+        - label: N'ajoute pas de dépendance externe évitable
