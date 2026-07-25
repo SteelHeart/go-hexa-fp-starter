@@ -159,12 +159,15 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   marqué » — le seul cas qui produit un doublon chez le consommateur.
 - **`knownDrivers` ne liste plus que le construit.** Un module absent de la table refuse d'être
   activé : on n'active pas un module dont le code n'existe pas.
+- **`arch-go` : 100 % de conformité, 17 règles sur 17**, dont les 12 règles de dépendance —
+  l'hexagone tient. Il n'avait JAMAIS pu tourner : l'outil cherche `arch-go.yml` et le fichier
+  s'appelait `.arch-go.yml`, avec un point. Renommé.
 
 ### Écrit, NON prouvé
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| `golangci-lint` et `arch-go` | Installés, **jamais exécutés** sur l'état courant. Attendre des violations |
+| `golangci-lint` | **Exécuté**. 239 signalements au départ, **55 restants** — campagne en cours |
 | Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
@@ -246,7 +249,11 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
+1. **Finir la campagne `golangci-lint`** : 55 signalements restants, triés par linter dans la
+   sortie de `golangci-lint run ./...`. Les décisions de configuration sont prises et documentées
+   (`misspell` retiré, `hugeParam`/`rangeValCopy` désactivés, `errcheck.check-blank` à false) ;
+   restent des corrections de code — `gosec` G115 et G304, `errorlint` sur la pagination,
+   `cyclop` sur `validateCore`, `revive function-result-limit` dans `messaging`
 2. **#2** : migrations, un schéma et un rôle SQL par module
 3. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
    premier worker qui dépile réellement

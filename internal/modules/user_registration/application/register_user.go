@@ -127,7 +127,7 @@ func (d Deps) publish(ctx context.Context) step {
 		event := domain.NewUserRegistered(s.user)
 		return result.Map(
 			d.PublishEvent(ctx, domain.EventUserRegistered, s.user.ID.String(), event),
-			func(struct{}) state { return s },
+			func(domain.Ack) state { return s },
 		)
 	}
 }

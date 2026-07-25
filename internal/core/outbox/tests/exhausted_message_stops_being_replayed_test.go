@@ -35,8 +35,8 @@ func TestExhaustedMessageStopsBeingReplayed(t *testing.T) {
 	}
 
 	attempt := observed.lastAttempt(t)
-	if attempt.Attempts != policy.MaxAttempts {
-		t.Errorf("tentatives = %d, attendu %d", attempt.Attempts, policy.MaxAttempts)
+	if attempt.Attempts != policy.Retry.MaxAttempts {
+		t.Errorf("tentatives = %d, attendu %d", attempt.Attempts, policy.Retry.MaxAttempts)
 	}
 	if attempt.Status != domain.StatusFailed {
 		t.Errorf("statut = %q, attendu %q", attempt.Status, domain.StatusFailed)

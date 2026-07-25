@@ -29,7 +29,9 @@ func TestNextAttemptBackoffIsExponentialAndBounded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			got := domain.NextAttempt(
-				domain.Message{Attempts: tc.attempts}, 100, base, now, "raison",
+				domain.Message{Attempts: tc.attempts},
+				domain.RetryPolicy{MaxAttempts: 100, BaseBackoff: base},
+				now, "raison",
 			)
 			if delay := got.AvailableAt.Sub(now); delay != tc.want {
 				t.Errorf("recul = %v, attendu %v", delay, tc.want)

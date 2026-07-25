@@ -51,7 +51,17 @@ linters:
 
     # ── Style / lisibilité ────────────────────────────────────────────────────
     - revive
-    - misspell
+    # misspell est RETIRÉ tant que le code est commenté en français.
+    #
+    # Il ne connaît que l'anglais : sur l'état courant, il produit 143 signalements
+    # dont ZÉRO vraie faute. « marrage » (démarrage) devient « marriage »,
+    # « partiel » devient « particle », « pointeur » devient « pointer ». Ces faux
+    # positifs noieraient les 96 signalements réels des autres linters, et
+    # apprendraient à l'équipe à parcourir la sortie sans la lire — ce qui coûte
+    # plus cher que l'absence du linter.
+    #
+    # À réactiver dans la PR de traduction (issue #34), où il redeviendra utile.
+    # - misspell
     - godot # les commentaires se terminent par un point
     - goconst
     - nakedret
@@ -100,16 +110,46 @@ linters:
       default-signifies-exhaustive: true
 
     errcheck:
+      # Refuse `v := x.(T)`, qui PANIQUE si le type ne correspond pas. C'est la
+      # forme dangereuse, et elle n'a aucune raison d'exister dans ce dépôt.
       check-type-assertions: true
-      check-blank: true
+
+      # check-blank reste à FALSE, et c'est un arbitrage, pas un oubli.
+      #
+      # Combiné à check-type-assertions, il condamnait `v, _ := x.(T)` — c'est-à-dire
+      # la forme SÛRE de l'assertion, celle qui ne panique pas. Un linter qui
+      # interdit le remède en même temps que le mal ne laisse aucune issue : il
+      # pousse à écrire `//nolint` partout, et le jour où un vrai signalement
+      # apparaît, personne ne le distingue des quinze contournements.
+      #
+      # `_ = f()` reste donc autorisé comme marqueur explicite d'un abandon
+      # délibéré. Ce qui n'est pas outillé ici l'est en revue : un `_ =` sur une
+      # erreur doit porter un commentaire disant pourquoi.
+      check-blank: false
 
     gocritic:
       enabled-tags: [diagnostic, style, performance, opinionated]
       disabled-checks:
         - whyNoLint
-      settings:
-        hugeParam:
-          sizeThreshold: 128
+
+        # hugeParam et rangeValCopy contredisent une DÉCISION D'ARCHITECTURE, pas
+        # une négligence.
+        #
+        # Tout ce dépôt repose sur des valeurs immuables : un `domain.Message` ou un
+        # `domain.User` se passe par copie, précisément pour qu'un décorateur, un
+        # journal d'audit et le pipeline métier ne partagent jamais la même instance
+        # modifiable. `revive` refuse d'ailleurs les récepteurs pointeurs sur ces
+        # types, par la même logique.
+        #
+        # Les suivre reviendrait à échanger cette garantie contre l'économie d'une
+        # copie de 168 octets. À cinquante messages par lot, cela représente huit
+        # kilooctets — soit rien, comparé à un défaut d'aliasing qu'on diagnostique
+        # en trois jours.
+        #
+        # Le jour où un profilage montrera que ces copies coûtent, la décision se
+        # rediscutera sur des chiffres. Pas avant.
+        - hugeParam
+        - rangeValCopy
 
     govet:
       enable-all: true

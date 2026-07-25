@@ -21,7 +21,9 @@ func TestMarkFailedReschedulesInTheFuture(t *testing.T) {
 	}
 	claimed, _ := mod.Claim(ctx, 1)
 
-	attempt := domain.NextAttempt(claimed[0], 5, time.Second, fixedNow(), "réseau indisponible")
+	attempt := domain.NextAttempt(claimed[0],
+		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
+		fixedNow(), "réseau indisponible")
 	if err := mod.MarkFailed(ctx, attempt); err != nil {
 		t.Fatalf("MarkFailed: %v", err)
 	}

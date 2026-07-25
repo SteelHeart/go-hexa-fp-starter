@@ -87,10 +87,10 @@ func depsNominales(j *journal) application.Deps {
 		},
 		PublishEvent: func(
 			_ context.Context, eventType, aggregateID string, payload any,
-		) result.Result[struct{}, domain.Error] {
+		) result.Result[domain.Ack, domain.Error] {
 			j.note("PublishEvent")
 			j.typeEvent, j.agregat, j.evenement = eventType, aggregateID, payload
-			return result.Ok[struct{}, domain.Error](struct{}{})
+			return result.Ok[domain.Ack, domain.Error](domain.Ack{})
 		},
 		GenerateID: func() domain.UserID { j.note("GenerateID"); return identifiant },
 		Now:        func() time.Time { j.note("Now"); return instantFixe() },

@@ -28,9 +28,9 @@ func TestPublishFailureFailsTheWholeRegistration(t *testing.T) {
 	deps := depsNominales(observe)
 	deps.PublishEvent = func(
 		context.Context, string, string, any,
-	) result.Result[struct{}, domain.Error] {
+	) result.Result[domain.Ack, domain.Error] {
 		observe.note("PublishEvent")
-		return echoue[struct{}](domain.CodeUnavailable, "outbox injoignable")
+		return echoue[domain.Ack](domain.CodeUnavailable, "outbox injoignable")
 	}
 
 	if got := codeDe(t, inscrit(deps)); got != domain.CodeUnavailable {

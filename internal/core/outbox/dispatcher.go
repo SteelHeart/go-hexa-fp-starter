@@ -110,10 +110,12 @@ func policyFrom(cfg config.Module) (application.Policy, error) {
 	}
 
 	return application.Policy{
-		BatchSize:   batchSize,
-		MaxAttempts: maxAttempts,
-		BaseBackoff: baseBackoff,
-		Interval:    interval,
+		BatchSize: batchSize,
+		Interval:  interval,
+		Retry: domain.RetryPolicy{
+			MaxAttempts: maxAttempts,
+			BaseBackoff: baseBackoff,
+		},
 	}, nil
 }
 

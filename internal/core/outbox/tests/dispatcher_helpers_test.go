@@ -133,10 +133,9 @@ func pending(id string, attempts int) domain.Message {
 // testPolicy est une politique valide et lisible.
 func testPolicy() application.Policy {
 	return application.Policy{
-		BatchSize:   10,
-		MaxAttempts: 3,
-		BaseBackoff: time.Second,
-		Interval:    time.Millisecond,
+		BatchSize: 10,
+		Interval:  time.Millisecond,
+		Retry:     domain.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second},
 	}
 }
 

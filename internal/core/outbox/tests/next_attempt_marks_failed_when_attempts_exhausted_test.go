@@ -10,7 +10,9 @@ import (
 func TestNextAttemptMarksFailedWhenAttemptsExhausted(t *testing.T) {
 	t.Parallel()
 
-	got := domain.NextAttempt(domain.Message{Attempts: 4}, 5, time.Second, fixedNow(), "raison")
+	got := domain.NextAttempt(domain.Message{Attempts: 4},
+		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
+		fixedNow(), "raison")
 	if got.Status != domain.StatusFailed {
 		t.Errorf("statut = %q, attendu failed après épuisement des tentatives", got.Status)
 	}

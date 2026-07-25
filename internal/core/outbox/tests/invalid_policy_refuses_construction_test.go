@@ -25,15 +25,17 @@ func TestInvalidPolicyRefusesConstruction(t *testing.T) {
 	t.Parallel()
 
 	valid := application.Policy{
-		BatchSize: 10, MaxAttempts: 3, BaseBackoff: time.Second, Interval: time.Second,
+		BatchSize: 10,
+		Interval:  time.Second,
+		Retry:     domain.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second},
 	}
 
 	cases := map[string]func(application.Policy) application.Policy{
 		"lot nul":          func(p application.Policy) application.Policy { p.BatchSize = 0; return p },
 		"lot négatif":      func(p application.Policy) application.Policy { p.BatchSize = -1; return p },
-		"zéro tentative":   func(p application.Policy) application.Policy { p.MaxAttempts = 0; return p },
-		"recul nul":        func(p application.Policy) application.Policy { p.BaseBackoff = 0; return p },
-		"recul négatif":    func(p application.Policy) application.Policy { p.BaseBackoff = -time.Second; return p },
+		"zéro tentative":   func(p application.Policy) application.Policy { p.Retry.MaxAttempts = 0; return p },
+		"recul nul":        func(p application.Policy) application.Policy { p.Retry.BaseBackoff = 0; return p },
+		"recul négatif":    func(p application.Policy) application.Policy { p.Retry.BaseBackoff = -time.Second; return p },
 		"période nulle":    func(p application.Policy) application.Policy { p.Interval = 0; return p },
 		"période négative": func(p application.Policy) application.Policy { p.Interval = -time.Second; return p },
 	}

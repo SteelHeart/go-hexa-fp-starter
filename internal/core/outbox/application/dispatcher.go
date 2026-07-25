@@ -48,14 +48,12 @@ type Policy struct {
 	// BatchSize borne un lot. Trop grand, une réplique monopolise le travail et
 	// tient ses verrous longtemps ; trop petit, le débit s'effondre en aller-retours.
 	BatchSize int
-	// MaxAttempts borne l'acharnement. Au-delà, le message passe en `failed` et
-	// n'est plus rejoué : mieux vaut une trace exploitable qu'une boucle éternelle
-	// qui noie les journaux.
-	MaxAttempts int
-	// BaseBackoff est le pas du recul exponentiel, appliqué par domain.NextAttempt.
-	BaseBackoff time.Duration
 	// Interval est la période de scrutation quand le dépileur tourne seul.
 	Interval time.Duration
+	// Retry appartient au DOMAINE : c'est lui qui sait ce qu'est un recul
+	// exponentiel borné, et c'est lui qu'on teste pour le prouver. L'orchestration
+	// ne fait que la transporter.
+	Retry domain.RetryPolicy
 }
 
 // ErrMissingPort refuse un dépileur incomplet.
@@ -94,13 +92,13 @@ func validate(policy Policy) error {
 	switch {
 	case policy.BatchSize <= 0:
 		return fmt.Errorf("%w: lot de %d message(s)", ErrInvalidPolicy, policy.BatchSize)
-	case policy.MaxAttempts <= 0:
+	case policy.Retry.MaxAttempts <= 0:
 		// Zéro tentative signifierait « abandonner avant d'essayer » : tout message
 		// passerait en `failed` sans qu'aucune publication soit tentée.
-		return fmt.Errorf("%w: %d tentative(s) autorisée(s)", ErrInvalidPolicy, policy.MaxAttempts)
-	case policy.BaseBackoff <= 0:
+		return fmt.Errorf("%w: %d tentative(s) autorisée(s)", ErrInvalidPolicy, policy.Retry.MaxAttempts)
+	case policy.Retry.BaseBackoff <= 0:
 		// Un recul nul rejouerait un message en échec sans aucune pause, en boucle.
-		return fmt.Errorf("%w: recul de base de %v", ErrInvalidPolicy, policy.BaseBackoff)
+		return fmt.Errorf("%w: recul de base de %v", ErrInvalidPolicy, policy.Retry.BaseBackoff)
 	case policy.Interval <= 0:
 		return fmt.Errorf("%w: période de scrutation de %v", ErrInvalidPolicy, policy.Interval)
 	}
@@ -221,8 +219,7 @@ func (d *Dispatcher) publish(ctx context.Context, msg domain.Message) (err error
 // Ne décide rien lui-même : le calcul du recul et la décision d'abandon viennent
 // de domain.NextAttempt, qui est pur et testé séparément.
 func (d *Dispatcher) reschedule(ctx context.Context, msg domain.Message, elapsed time.Duration, cause error) {
-	attempt := domain.NextAttempt(
-		msg, d.policy.MaxAttempts, d.policy.BaseBackoff, d.ports.Now(), cause.Error())
+	attempt := domain.NextAttempt(msg, d.policy.Retry, d.ports.Now(), cause.Error())
 
 	event := domain.EventRetryScheduled
 	switch {

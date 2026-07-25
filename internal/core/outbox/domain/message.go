@@ -65,32 +65,45 @@ type FailedAttempt struct {
 	Reason      string
 }
 
+// RetryPolicy borne l'acharnement du dépileur.
+//
+// Regroupée en type plutôt qu'en paramètres séparés : les deux valeurs n'ont de
+// sens qu'ensemble — un nombre de tentatives sans recul, ou l'inverse, ne décrit
+// aucune politique. Le regroupement rend aussi impossible d'inverser deux
+// arguments que le compilateur ne distinguerait pas.
+type RetryPolicy struct {
+	// MaxAttempts est le nombre d'essais avant abandon définitif.
+	MaxAttempts int
+	// BaseBackoff est le pas du recul exponentiel.
+	BaseBackoff time.Duration
+}
+
+// maxShift borne l'exposant du recul.
+//
+// Sans borne, `1 << 40` produirait une durée NÉGATIVE après débordement, donc un
+// message immédiatement rejoué en boucle serrée — l'inverse exact de ce qu'un
+// recul exponentiel doit produire.
+const maxShift = 10
+
 // NextAttempt calcule l'état d'un message après un échec.
 //
 // Fonction PURE : ni horloge, ni aléa. L'instant courant est un paramètre, ce
 // qui rend la politique de réessai testable sans attendre.
-//
-// Le recul est exponentiel et borné : sans borne, `1 << 40` produirait une durée
-// négative après débordement, donc un message immédiatement rejoué en boucle.
-func NextAttempt(msg Message, maxAttempts int, base time.Duration, now time.Time, reason string) FailedAttempt {
+func NextAttempt(msg Message, policy RetryPolicy, now time.Time, reason string) FailedAttempt {
 	attempts := msg.Attempts + 1
 
 	status := StatusPending
-	if attempts >= maxAttempts {
+	if attempts >= policy.MaxAttempts {
 		status = StatusFailed
 	}
 
-	const maxShift = 10
-	shift := attempts
-	if shift > maxShift {
-		shift = maxShift
-	}
+	shift := min(attempts, maxShift)
 
 	return FailedAttempt{
 		ID:          msg.ID,
 		Attempts:    attempts,
 		Status:      status,
-		AvailableAt: now.Add(base * time.Duration(1<<shift)),
+		AvailableAt: now.Add(policy.BaseBackoff * time.Duration(1<<shift)),
 		Reason:      reason,
 	}
 }

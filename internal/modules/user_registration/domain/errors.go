@@ -37,6 +37,15 @@ type Error struct {
 	cause error
 }
 
+// Ack signale un effet accompli qui n'a aucune valeur à rendre.
+//
+// Existe pour que `ports/` ne contienne AUCUNE déclaration de structure, pas même
+// le `struct{}` anonyme de `Result[struct{}, Error]` — la règle d'architecture le
+// refuse, et elle a raison : un port doit se lire comme une signature, pas comme un
+// type. Le gain est aussi à l'appel, où `domain.Ack{}` se lit mieux que
+// `struct{}{}`.
+type Ack struct{}
+
 // NewError construit une erreur métier.
 func NewError(code ErrorCode, message string) Error {
 	return Error{Code: code, Message: message}

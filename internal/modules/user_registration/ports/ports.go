@@ -96,7 +96,7 @@ type PublishEvent = func(
 	eventType string,
 	aggregateID string,
 	payload any,
-) result.Result[struct{}, domain.Error]
+) result.Result[domain.Ack, domain.Error]
 
 // SendWelcomeEmail envoie le courriel de bienvenue.
 //
@@ -107,7 +107,7 @@ type PublishEvent = func(
 type SendWelcomeEmail = func(
 	ctx context.Context,
 	user domain.User,
-) result.Result[struct{}, domain.Error]
+) result.Result[domain.Ack, domain.Error]
 
 // ─── Ports d'effets purs : l'horloge et l'aléa ───────────────────────────────
 

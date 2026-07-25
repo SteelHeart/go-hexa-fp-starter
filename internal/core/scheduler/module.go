@@ -81,7 +81,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 		return Module{}, ErrLoggerRequired
 	}
 
-	acquire, release, err := elector(cfg, deps)
+	elected, err := elector(cfg, deps)
 	if err != nil {
 		return Module{}, err
 	}
@@ -91,31 +91,42 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 		now = time.Now
 	}
 	runner, err := application.NewRunner(application.Ports{
-		Acquire: acquire,
-		Release: release,
+		Acquire: elected.acquire,
+		Release: elected.release,
 		Report:  LogReport(deps.Logger),
 		Now:     now,
 	})
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s: %w", Name, err)
 	}
-	return Module{Run: runner.Run, Acquire: acquire, Release: release}, nil
+	return Module{Run: runner.Run, Acquire: elected.acquire, Release: elected.release}, nil
+}
+
+// election porte le couple indissociable acquisition / libération.
+//
+// Regroupé en type plutôt qu'en deux valeurs de retour : les deux fonctions n'ont
+// aucun sens séparées — acquérir sans pouvoir libérer gèle une tâche pour toujours.
+// Le regroupement rend aussi impossible d'inverser deux retours que le compilateur
+// ne distinguerait pas.
+type election struct {
+	acquire ports.Acquire
+	release ports.Release
 }
 
 // elector choisit le mécanisme d'élection.
-func elector(cfg config.Module, deps Deps) (ports.Acquire, ports.Release, error) {
+func elector(cfg config.Module, deps Deps) (election, error) {
 	switch cfg.Driver {
 	case "cron-inproc":
 		local := inproc.New()
-		return local.Acquire, local.Release, nil
+		return election{acquire: local.Acquire, release: local.Release}, nil
 	case "advisory-lock":
 		if deps.Pool == nil {
-			return nil, nil, ErrPoolRequired
+			return election{}, ErrPoolRequired
 		}
 		shared := postgres.New(deps.Pool)
-		return shared.Acquire, shared.Release, nil
+		return election{acquire: shared.Acquire, release: shared.Release}, nil
 	default:
-		return nil, nil, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)
+		return election{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)
 	}
 }
 

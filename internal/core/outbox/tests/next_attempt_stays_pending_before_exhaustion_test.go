@@ -10,7 +10,9 @@ import (
 func TestNextAttemptStaysPendingBeforeExhaustion(t *testing.T) {
 	t.Parallel()
 
-	got := domain.NextAttempt(domain.Message{Attempts: 1}, 5, time.Second, fixedNow(), "raison")
+	got := domain.NextAttempt(domain.Message{Attempts: 1},
+		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
+		fixedNow(), "raison")
 	if got.Status != domain.StatusPending {
 		t.Errorf("statut = %q, attendu pending", got.Status)
 	}
