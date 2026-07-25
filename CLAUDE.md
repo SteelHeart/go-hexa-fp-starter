@@ -121,7 +121,8 @@ tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 ```
 
 Six modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`.
-Un seul module métier, `user_registration`, qui est un **exemple de référence incomplet**.
+Un seul module métier, `user_registration` : son **cœur est couvert** (31 tests) mais il n'a
+encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 ## État réel du dépôt — vérifié le 2026-07-25
 
@@ -133,7 +134,7 @@ Un seul module métier, `user_registration`, qui est un **exemple de référence
 
 - `go build ./...` vert
 - `go vet ./...` vert
-- `go test -shuffle=on ./...` vert — **135 tests**, 252 avec les sous-tests, répartis ainsi :
+- `go test -shuffle=on ./...` vert — **207 tests**, 367 avec les sous-tests, répartis ainsi :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -145,6 +146,11 @@ Un seul module métier, `user_registration`, qui est un **exemple de référence
 | `internal/core/dynconf/tests` | 14 | Deny par défaut d'un drapeau, options non scalaires refusées, lecture seule |
 | `internal/core/storage/tests` | 13 | Traversée de répertoire refusée à l'écriture **et** à la lecture, clés réparties |
 | `internal/core/scheduler/tests` | 15 | Aucune exécution sans élection, libération même après échec, tâches homonymes refusées |
+| `internal/pkg/result/tests` | 16 | **Lois de foncteur et de monade** — c'est ce qui rend sûr de réorganiser un pipeline |
+| `internal/pkg/fp/tests` | 14 | Valeur zéro = `None`, `Some("")` ≠ `None`, aucune mutation de l'entrée, ordre préservé |
+| `internal/pkg/pagination/tests` | 11 | Aller-retour du curseur, limite toujours bornée, la ligne témoin ne fuite jamais |
+| `…/user_registration/domain/tests` | 18 | Normalisation et refus d'une adresse, bornes du mot de passe, **aucune fuite en journal**, compte jamais né actif |
+| `…/user_registration/application/tests` | 13 | Ordre des étapes, court-circuit, **le clair n'atteint jamais le stockage**, pas d'événement fantôme |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
@@ -163,7 +169,6 @@ Un seul module métier, `user_registration`, qui est un **exemple de référence
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `messaging`, `modulebus`, `httpserver`, `telemetry`, `security`, `cache` | Compilent, **zéro test** |
-| Cœur de `user_registration` | Compile, **zéro test** |
 
 ### Absent
 
@@ -241,12 +246,11 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 
 ### Prochaines actions, dans l'ordre
 
-1. **#6 / #7** : tests du cœur `user_registration` et des primitives (`result`, `fp`, `pagination`)
-2. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
-3. **#2** : migrations, un schéma et un rôle SQL par module
-4. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
+1. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
+2. **#2** : migrations, un schéma et un rôle SQL par module
+3. **#3 / #4 / #5 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
    premier worker qui dépile réellement
-5. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+4. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
 
 ### Arbitrages en attente côté produit
 

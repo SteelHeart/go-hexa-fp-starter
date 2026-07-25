@@ -139,7 +139,7 @@ si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécu
 | Aucun commit direct sur le tronc | crochet `pre-push` | **oui** |
 
 `golangci-lint` et `arch-go` sont installés et configurés strictement, mais **n'ont jamais été
-exécutés** sur l'état courant. Des violations sont donc à attendre. C'est l'action n° 3 de la liste
+exécutés** sur l'état courant. Des violations sont donc à attendre. C'est la PREMIÈRE action de la liste
 de `CLAUDE.md`, et le dire vaut mieux que de laisser croire à un vert qui n'existe pas.
 
 ## Stack
@@ -166,9 +166,10 @@ C'est une règle d'or, pas une intention. Trois niveaux, jamais confondus :
 Un document qui coche « ✅ testé » sans test est pire qu'aucun document. Le relevé complet, avec sa
 date, est dans [`CLAUDE.md`](CLAUDE.md).
 
-Deux conséquences à ne pas oublier : `user_registration` est un exemple de référence **incomplet**
-(le cœur compile, il n'a encore ni test ni adaptateur), et le dépôt **n'a aucune authentification ni
-autorisation** — il ne faut donc jamais parler de « zéro faille » à son sujet.
+Deux conséquences à ne pas oublier : `user_registration` est un exemple de référence **incomplet** —
+son cœur est couvert par 31 tests, mais il n'a encore aucun adaptateur, donc aucune surface ne
+l'appelle — et le dépôt **n'a aucune authentification ni autorisation**. Il ne faut donc jamais
+parler de « zéro faille » à son sujet.
 
 ## Documentation
 
