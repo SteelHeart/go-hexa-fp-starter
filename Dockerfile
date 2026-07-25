@@ -1,19 +1,19 @@
 ﻿# syntax=docker/dockerfile:1.7
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Build : cache des modules sÃ©parÃ© du cache de compilation pour que la
-# modification d'un .go ne rÃ©invalide pas le tÃ©lÃ©chargement des dÃ©pendances.
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─────────────────────────────────────────────────────────────────────────────
+# Build : cache des modules séparé du cache de compilation pour que la
+# modification d'un .go ne réinvalide pas le téléchargement des dépendances.
+# ─────────────────────────────────────────────────────────────────────────────
 FROM golang:1.25-alpine AS build
 
 # TARGETOS/TARGETARCH sont fournis par BuildKit (`docker buildx`).
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-# InjectÃ© par la CI pour tracer l'image jusqu'au commit.
+# Injecté par la CI pour tracer l'image jusqu'au commit.
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
-# Binaire Ã  produire : server (dÃ©faut) ou worker.
+# Binaire Ã  produire : server (défaut) ou worker.
 ARG CMD=server
 
 WORKDIR /src
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 
 # CGO_ENABLED=0 : binaire statique, indispensable pour une image `static`.
-# -trimpath : pas de chemin de build dans le binaire (reproductibilitÃ©).
+# -trimpath : pas de chemin de build dans le binaire (reproductibilité).
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
@@ -40,10 +40,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -X main.buildDate=${BUILD_DATE}" \
       -o /out/app ./cmd/${CMD}
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─────────────────────────────────────────────────────────────────────────────
 # Runtime : distroless static, non-root, read-only compatible.
-# Pas de shell, pas de package manager â†’ surface d'attaque quasi nulle.
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Pas de shell, pas de package manager → surface d'attaque quasi nulle.
+# ─────────────────────────────────────────────────────────────────────────────
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 
 ARG VERSION=dev

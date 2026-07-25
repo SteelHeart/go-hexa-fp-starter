@@ -41,7 +41,11 @@ tasks:
     desc: Démarre Postgres, Redis, Jaeger, Mailpit puis applique les migrations
     cmds:
       - docker compose up -d --wait
+      # Les rôles d'abord : une migration qui accorde un privilège à un rôle
+      # absent échoue, et c'est le comportement voulu.
+      - task: db:provision
       - task: migrate:up
+      - task: db:verify
 
   down:
     desc: Arrête la stack locale
@@ -60,25 +64,44 @@ tasks:
       - docker compose logs -f
 
   # ── Base de données ─────────────────────────────────────────────────────────
+  #
+  # Les migrations tournent sous DB_MIGRATION_DSN, JAMAIS sous DB_DSN.
+  #
+  # Le rôle applicatif n'a ni CREATE, ni ALTER, ni DROP (ADR 011 §4) : lui faire
+  # appliquer les migrations exigerait de lui donner ces droits, et toute la
+  # protection tomberait. Deux DSN, deux rôles, deux pouvoirs.
+  #
+  # Le dossier est ./migrations/postgres et non ./migrations : postgres est un
+  # pilote parmi d'autres, pas le moteur du socle (ADR 012).
+  db:provision:
+    desc: 'Crée les rôles SQL — UNE FOIS, avec un rôle administrateur'
+    cmds:
+      - psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
   migrate:up:
     desc: Applique les migrations
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" up
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
   migrate:down:
     desc: Annule la dernière migration
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" down
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" down
 
   migrate:status:
     desc: Affiche l'état des migrations
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" status
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" status
 
   migrate:new:
     desc: 'Crée une migration : task migrate:new -- add_something'
     cmds:
-      - goose -dir ./migrations create {{.CLI_ARGS}} sql
+      - goose -dir ./migrations/postgres create {{.CLI_ARGS}} sql
+
+  db:verify:
+    desc: Vérifie les invariants d'isolation de l'ADR 011
+    cmds:
+      - psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
 
   # ── Exécution ───────────────────────────────────────────────────────────────
   run:

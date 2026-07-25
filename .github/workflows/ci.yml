@@ -288,7 +288,96 @@ jobs:
           retention-days: 7
 
   # ───────────────────────────────────────────────────────────────────────────
-  # 5. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
+  # 5. Migrations : les appliquer, VÉRIFIER l'isolation, puis prouver le Down.
+  #
+  # C'est le seul endroit du projet où une base existe (friction F001). Sans ce
+  # job, `migrations/` serait du SQL écrit que personne n'a jamais exécuté.
+  # ───────────────────────────────────────────────────────────────────────────
+  migrations:
+    name: Migrations & isolation des données
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hexa
+          POSTGRES_PASSWORD: hexa
+          POSTGRES_DB: hexa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hexa -d hexa"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+
+    env:
+      # En CI, `hexa` est administrateur de sa base : il tient donc les deux rôles
+      # à la fois. En UAT et en production, DB_MIGRATION_DSN est un rôle
+      # `hexa_owner` distinct, et DB_DSN un rôle `hexa_app` sans aucun droit DDL
+      # (ADR 011 §4). La séparation est vérifiée par la configuration, qui refuse
+      # deux DSN identiques hors développement.
+      DB_SUPERUSER_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Installe goose et le client psql
+        run: |
+          go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Provisionne les rôles
+        run: psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
+      - name: Applique les migrations
+        run: goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
+
+      - name: Vérifie les invariants d'isolation (ADR 011)
+        run: psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+
+      # Un Down faux est PIRE que pas de Down : il donne une fausse assurance au
+      # moment précis où l'on en a besoin, c'est-à-dire pendant un incident. La
+      # seule façon de savoir qu'il fonctionne est de l'exécuter.
+      - name: Prouve le retour arrière, puis rejoue
+        run: |
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" down
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+
+      # Le rôle applicatif ne doit PAS pouvoir faire de DDL. On le prouve en
+      # essayant : la commande doit échouer. Un test qui vérifie qu'une chose est
+      # interdite doit constater le refus, pas l'absence de tentative.
+      - name: Le rôle applicatif ne peut pas créer de table
+        run: |
+          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+               -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
+            echo "::error::hexa_platform a pu créer une table — ADR 011 §4 est violée"
+            exit 1
+          fi
+          echo "refus confirmé : le rôle applicatif n'a pas le DDL"
+
+      # Même logique pour l'inaltérabilité du journal d'audit.
+      - name: Le journal d'audit refuse UPDATE et DELETE
+        run: |
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q -c \
+            "INSERT INTO platform.audit_log (actor, action, entity_type, entity_id, occurred_at)
+             VALUES ('ci', 'test.executed', 'ci_run', '1', now());"
+          for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" \
+                     "DELETE FROM platform.audit_log"; do
+            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+                 -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
+              echo "::error::le journal d'audit a accepté « $sql » — ADR 011 §5 est violée"
+              exit 1
+            fi
+          done
+          echo "refus confirmé : le journal d'audit est en ajout seul"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 6. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
   # ───────────────────────────────────────────────────────────────────────────
   e2e:
     name: Tests end-to-end
@@ -320,6 +409,10 @@ jobs:
     env:
       APP_ENV: test
       DB_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      # En CI les deux DSN coïncident : `hexa` est administrateur de sa base. La
+      # configuration l'autorise en local et en test, et le REFUSE en UAT comme
+      # en production (rules/donnees-et-migrations.md §6).
+      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
       REDIS_ADDR: localhost:6379
       SMTP_ADDR: localhost:1025
       SMTP_FROM: no-reply@hexa.test
@@ -340,7 +433,9 @@ jobs:
       - name: Migrations
         run: |
           go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
-          goose -dir ./migrations postgres "$DB_DSN" up
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
       - name: Démarre l'API et le worker
         run: |
@@ -490,7 +585,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [pr-title, inertia, quality, architecture, test, e2e, build, vuln, secrets, docker]
+    needs: [pr-title, inertia, quality, architecture, test, migrations, e2e, build, vuln, secrets, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Tous les jobs requis ont-ils réussi ?

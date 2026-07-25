@@ -21,12 +21,12 @@ refonte.
 | [008](008-chi-huma-plutot-qu-un-framework.md) | chi + huma plutôt qu'un framework Go | Accepté |
 | [009](009-strategie-d-acces-aux-donnees.md) | Stratégie d'accès aux données : pile en couches, pas d'ORM unique | Accepté |
 | 010 | Messagerie enfichable et communication inter-modules | **À écrire** |
-| 011 | Isolation des données : un schéma et un rôle SQL par module | **À écrire** |
+| [011](011-isolation-des-donnees-par-module.md) | Isolation des données : un schéma et un rôle SQL par module | Accepté |
 | [012](012-anatomie-d-un-module-et-pilotes.md) | Anatomie d'un module, pilotes, zéro prérequis d'infrastructure | Accepté |
 
-> ⚠️ **010 et 011 n'existent pas encore, et du code les référence déjà** — `internal/infrastructure/messaging`,
-> `internal/infrastructure/modulebus`, et la règle « un module n'accède jamais aux tables d'un autre ».
-> Les numéros sont réservés pour que rien d'autre ne les prenne. Suivi par l'issue #14.
+> ⚠️ **010 n'existe pas encore, et du code le référence déjà** — `internal/infrastructure/messaging`
+> et `internal/infrastructure/modulebus`. Le numéro est réservé pour que rien d'autre ne le prenne.
+> Suivi par l'issue #14.
 
 ## Note de vocabulaire — lire avant les ADR 001 à 009
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env sh
-# VÃ©rifie le message de commit.
-#   rules/workflow-git.md Â§3 Â· documentation/process/NOMENCLATURE.md
+# Vérifie le message de commit.
+#   rules/workflow-git.md §3 · documentation/process/NOMENCLATURE.md
 #
-# âš ï¸ Contournable avec --no-verify. Filet contre l'accident, PAS un contrÃ´le.
-#    Le contrÃ´le rÃ©el est la CI (jobs `pr-title` et `inertia`).
+# ⚠️ Contournable avec --no-verify. Filet contre l'accident, PAS un contrôle.
+#    Le contrôle réel est la CI (jobs `pr-title` et `inertia`).
 
 msg_file="$1"
 [ -f "$msg_file" ] || exit 0
 
-# Ignore les messages gÃ©nÃ©rÃ©s par git lui-mÃªme (merge, revert, fixup, squash).
+# Ignore les messages générés par git lui-même (merge, revert, fixup, squash).
 first_line=$(sed -n '1p' "$msg_file" | sed '1s/^\xEF\xBB\xBF//')
 case "$first_line" in
   "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"#"*) exit 0 ;;
@@ -16,11 +16,11 @@ esac
 
 fail=0
 
-# â”€â”€ 1. Conventional Commits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── 1. Conventional Commits ──────────────────────────────────────────────────
 pattern='^(feat|fix|sec|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .{1,80}$'
 if ! printf '%s' "$first_line" | grep -Eq "$pattern"; then
-  printf '\n  â›” Message de commit non conforme.\n\n'
-  printf '     ReÃ§u   : %s\n\n' "$first_line"
+  printf '\n  Message de commit non conforme.\n\n'
+  printf '     Recu   : %s\n\n' "$first_line"
   printf '     Attendu: {type}({scope}): {description} (#{issue})\n'
   printf '     Types  : feat fix sec docs style refactor perf test build ci chore revert\n'
   printf '     Exemple: feat(user_registration): refuser un email deja enregistre (#13)\n\n'
@@ -28,12 +28,23 @@ if ! printf '%s' "$first_line" | grep -Eq "$pattern"; then
   fail=1
 fi
 
-# â”€â”€ 2. Aucune mention d'outillage d'assistance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# rules/interdictions.md Â§ Artefacts versionnes.
+# ── 2. Aucune mention d'outillage d'assistance ───────────────────────────────
+# rules/interdictions.md § Artefacts versionnes.
 # Surcharge explicitement le comportement par defaut de l'outillage.
-ai_pattern='Co-Authored-By:|Co-authored-by:|Generated with|generated with|ðŸ¤–|noreply@anthropic|Claude|Copilot|ChatGPT'
+#
+# L'emoji est construit par printf a partir de ses OCTETS UTF-8 (F0 9F A4 96),
+# et non ecrit en clair dans ce fichier.
+#
+# Ce n'est pas de la coquetterie : la version precedente portait l'emoji
+# litteral, un outil Windows a re-encode le fichier, et le motif est devenu la
+# forme doublement encodee de l'emoji. Le garde a donc cesse de reconnaitre ce
+# qu'il devait refuser -- sans que rien ne le signale, puisqu'un garde qui ne
+# trouve rien ressemble a un garde satisfait.
+robot=$(printf '\360\237\244\226')
+ai_pattern="Co-Authored-By:|Co-authored-by:|Generated with|generated with|${robot}|noreply@anthropic|Claude|Copilot|ChatGPT"
+
 if grep -Eq "$ai_pattern" "$msg_file"; then
-  printf '\n  â›” Mention d'\''outillage d'\''assistance dans le message de commit.\n\n'
+  printf '\n  Mention d'\''outillage d'\''assistance dans le message de commit.\n\n'
   grep -En "$ai_pattern" "$msg_file" | sed 's/^/       /'
   printf '\n     Retirer la ligne. Le travail est signe par l'\''equipe :\n'
   printf '     l'\''historique documente CE QUI a change et POURQUOI,\n'

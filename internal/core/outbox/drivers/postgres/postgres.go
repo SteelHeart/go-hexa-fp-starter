@@ -45,14 +45,25 @@ func (s *Store) Enqueue(ctx context.Context, msg domain.NewMessage) (domain.Mess
 			(id, event_type, aggregate_id, payload, trace_parent, headers)
 		VALUES ($1, $2, $3, $4, $5, $6)`
 
-	id := uuid.NewString()
-	_, err := database.QuerierFrom(ctx, s.pool).Exec(ctx, query,
-		id, msg.Type, msg.AggregateID, msg.Payload, msg.TraceParent, msg.Headers,
-	)
+	// UUID v7 et non v4 : la clé primaire est ORDONNÉE DANS LE TEMPS.
+	//
+	// Ce n'est pas un détail sur cette table. Un v4 aléatoire disperse les
+	// insertions sur tout l'index, ce qui multiplie les pages sales et fragmente
+	// le B-tree ; l'outbox étant la table la plus écrite du socle, elle est
+	// exactement l'endroit où ça coûte le plus. Le v7 insère en queue d'index,
+	// et il rend en prime `ORDER BY id` équivalent à l'ordre de création.
+	// Imposé par rules/donnees-et-migrations.md §7.
+	id, err := uuid.NewV7()
 	if err != nil {
+		return "", fmt.Errorf("génération de l'identifiant du message (%s): %w", msg.Type, err)
+	}
+
+	if _, err := database.QuerierFrom(ctx, s.pool).Exec(ctx, query,
+		id.String(), msg.Type, msg.AggregateID, msg.Payload, msg.TraceParent, msg.Headers,
+	); err != nil {
 		return "", fmt.Errorf("insertion dans l'outbox (%s): %w", msg.Type, err)
 	}
-	return domain.MessageID(id), nil
+	return domain.MessageID(id.String()), nil
 }
 
 // claimQuery réserve un lot de messages dus.

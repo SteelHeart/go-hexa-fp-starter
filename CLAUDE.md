@@ -115,7 +115,8 @@ internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   ├── adapters/secondary/     postgres · mailer
   ├── tests/                  boîte noire, un fichier par test
   └── module.go               composition root local — le SEUL à connaître les pilotes
-migrations/                   SQL versionné, rétro-compatible N-1                 ⟨absent⟩
+migrations/{moteur}/          SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
+deploy/postgres/              provision.sql — les RÔLES, exécuté une fois, hors goose
 api/openapi.yaml              généré depuis le code — jamais édité                ⟨absent⟩
 tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 ```
@@ -171,7 +172,8 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| Pilotes `postgres` des six modules | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
+| Pilotes `postgres` des modules noyau | La migration existe désormais, mais **aucune base ici** : elle ne s'exécute qu'en CI (F001) |
+| `migrations/postgres/` + `deploy/postgres/provision.sql` | Écrits, **non exécutés en local**. Le job CI `migrations` les applique, vérifie l'isolation et prouve le `Down` |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** |
@@ -193,9 +195,12 @@ le genre de chose qu'on oublie :
 ### Absent
 
 - **Aucun binaire** : ni adaptateur primaire, ni secondaire, ni `module.go` métier, ni `cmd/`
-- **Aucune migration** — 6 tables référencées par du code écrit
+- **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire, donc pas
+  de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
+- **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
+  `tenant_id`. En écrire une serait décorer une décision non prise (ADR 011 § ce qui n'est pas tranché)
 - **Aucune authentification ni autorisation**. Ne jamais parler de « zéro faille » tant que c'est vrai
-- i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010 et 011,
+- i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010,
   `deploy/docker-compose.deploy.yml`
 - Les modules `auth`, `notification`, `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`,
   `search`, `document` : décrits dans `documentation/technique/modules-noyau.md`, **aucun code**
@@ -228,6 +233,7 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | Tronc unique, environnement ≠ branche | ADR 007 |
 | chi + huma plutôt qu'un framework | ADR 008 |
 | Accès aux données en pile, pas d'ORM unique | ADR 009 |
+| Isolation : un schéma et un rôle SQL par module, `NOINHERIT` + `SET LOCAL ROLE` | ADR 011 |
 | Anatomie de module, pilotes, zéro prérequis, vocabulaire | ADR 012 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #14, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
@@ -315,13 +321,31 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-1. **#2** : migrations, un schéma et un rôle SQL par module — c'est le préalable qui débloque les
-   six pilotes `postgres` écrits et jamais exécutés
-2. **#5 / #6 / #7 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
-   premier worker qui dépile réellement
+1. **#5 / #6 / #7 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
+   premier worker qui dépile réellement. C'est la ligne de faille du moment : beaucoup de solidité
+   vérifiée, zéro chose qui tourne
+2. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`
 3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
 
-> La campagne `golangci-lint` est **terminée** : 239 → 0. Voir § « Campagne de signalements ».
+> **Terminé** : la campagne `golangci-lint` (239 → 0) et **#2** (schéma `platform`, rôles,
+> ADR 011, garde `verify.sql`, job CI `migrations`).
+
+### Invariants d'isolation des données — ADR 011
+
+Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriétés de la **base**.
+`migrations/postgres/verify.sql` les interroge, la CI l'exécute après chaque migration.
+
+- Modules **noyau** → schéma `platform`, partagé. Modules **métier** → **un schéma chacun**.
+- **`hexa_app` est `NOINHERIT`** — c'est le cœur du dispositif. En `INHERIT`, il cumulerait les
+  privilèges de tous les modules et l'isolation ne serait plus qu'un rangement.
+- Un adaptateur secondaire fait `SET LOCAL ROLE hexa_m_{module}`. Oublié → `permission denied`,
+  bruyant, donc acceptable.
+- **RLS `ENABLE` ET `FORCE`** sur toute table portant une donnée de client. Sans `FORCE`, le
+  propriétaire contourne la politique — et c'est le rôle qu'on prend pendant un incident.
+- **Les rôles ne sont pas migrés**, ils sont provisionnés : `CREATE ROLE` exige des droits que le
+  rôle de migration ne doit pas avoir, sinon la garde se contourne elle-même.
+- Migrations sous **`DB_MIGRATION_DSN`**, jamais `DB_DSN`. Le `Taskfile` et la CI faisaient
+  l'inverse — corrigé.
 
 ### Arbitrages en attente côté produit
 
