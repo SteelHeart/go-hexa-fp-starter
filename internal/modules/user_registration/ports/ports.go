@@ -14,7 +14,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/features/user_registration/domain"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )

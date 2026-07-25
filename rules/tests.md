@@ -24,8 +24,8 @@ ni aléa.
 
 | Niveau | Emplacement | Dépendances | Quand |
 |---|---|---|---|
-| **Domaine** | `internal/features/{f}/domain/*_test.go` | aucune | chaque règle, chaque cas limite |
-| **Cas d'usage** | `internal/features/{f}/application/*_test.go` | closures | chaque chemin, nominal **et** d'erreur |
+| **Domaine** | `internal/modules/{f}/domain/*_test.go` | aucune | chaque règle, chaque cas limite |
+| **Cas d'usage** | `internal/modules/{f}/application/*_test.go` | closures | chaque chemin, nominal **et** d'erreur |
 | **Primitives** | `internal/pkg/*/…_test.go` | aucune | lois algébriques incluses |
 | **Adaptateur secondaire** | `…/secondary/{x}/*_test.go` (tag `integration`) | Postgres réel | traduction d'erreur, SQL |
 | **Conformité de port** | `…/ports/conformance_test.go` (tag `integration`) | toutes les implémentations | contrat d'erreur du port |

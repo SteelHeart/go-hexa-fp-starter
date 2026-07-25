@@ -43,7 +43,7 @@ Le chemin de module est la **seule** valeur nominative du dépôt. Aucun pseudo,
 `CODEOWNERS` : les contraintes portent sur des **règles**, vérifiées par la CI, pas sur des
 personnes. Le socle fonctionne à un contributeur comme à vingt.
 
-Ensuite : supprimer `internal/features/user_registration/` (rien d'autre n'en dépend) et créer sa
+Ensuite : supprimer `internal/modules/user_registration/` (rien d'autre n'en dépend) et créer sa
 propre feature sur le même patron.
 
 ## Structure
@@ -57,7 +57,7 @@ cmd/{server,worker,cli}    composition root — le seul code qui connaît tout
 config/                    environnement, immuable, validé au démarrage
 internal/pkg/              primitives sans dépendance : result · fp · middleware
 internal/infrastructure/   socle technique sans métier : db · cache · http · telemetry
-internal/features/{f}/
+internal/modules/{f}/
   ├── domain/              PUR — value objects, règles, erreurs, événements
   ├── ports/               types fonction UNIQUEMENT
   ├── application/         pipeline de cas d'usage + décorateurs

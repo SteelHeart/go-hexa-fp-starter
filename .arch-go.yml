@@ -12,7 +12,7 @@ dependenciesRules:
   # ── 1. Le domaine est absolument pur ────────────────────────────────────────
   # Aucune dépendance externe, aucune infrastructure. Il ne dépend que des
   # primitives fonctionnelles (Result, fp) qui sont elles-mêmes pures.
-  - package: "**.internal.features.*.domain"
+  - package: "**.internal.modules.*.domain"
     shouldOnlyDependsOn:
       internal:
         - "**.internal.pkg.result"
@@ -21,10 +21,10 @@ dependenciesRules:
 
   # ── 2. Les ports ne sont que des signatures ─────────────────────────────────
   # Ils peuvent nommer le domaine et les primitives, rien d'autre.
-  - package: "**.internal.features.*.ports"
+  - package: "**.internal.modules.*.ports"
     shouldOnlyDependsOn:
       internal:
-        - "**.internal.features.*.domain"
+        - "**.internal.modules.*.domain"
         - "**.internal.pkg.result"
         - "**.internal.pkg.fp"
       external: []
@@ -32,10 +32,10 @@ dependenciesRules:
   # ── 3. L'application orchestre, elle n'implémente pas ───────────────────────
   # Elle ne doit JAMAIS voir un adaptateur ni l'infrastructure : sinon
   # l'inversion de dépendance est rompue.
-  - package: "**.internal.features.*.application"
+  - package: "**.internal.modules.*.application"
     shouldNotDependsOn:
       internal:
-        - "**.internal.features.*.adapters.**"
+        - "**.internal.modules.*.adapters.**"
         - "**.internal.infrastructure.**"
 
   # ── 4. Étanchéité entre bounded contexts ────────────────────────────────────
@@ -43,10 +43,10 @@ dependenciesRules:
   # LANGAGE PUBLIÉ (internal/contracts) puis par un événement ou un appel de
   # module résolu par modulebus. Jamais par un import direct, jamais par la base
   # de l'autre module (ADR 011).
-  - package: "**.internal.features.user_registration.**"
+  - package: "**.internal.modules.user_registration.**"
     shouldNotDependsOn:
       internal:
-        - "**.internal.features.!(user_registration).**"
+        - "**.internal.modules.!(user_registration).**"
 
   # ── 4b. Le langage publié ne dépend de rien ─────────────────────────────────
   # internal/contracts ne contient que des types primitifs sérialisables. S'il
@@ -61,7 +61,7 @@ dependenciesRules:
   - package: "**.internal.infrastructure.**"
     shouldNotDependsOn:
       internal:
-        - "**.internal.features.**"
+        - "**.internal.modules.**"
 
   # ── 6. Les primitives sont sans dépendance ──────────────────────────────────
   - package: "**.internal.pkg.result"
@@ -83,18 +83,18 @@ dependenciesRules:
 contentsRules:
   # Le domaine ne contient pas d'interfaces : les contrats sont des types
   # fonction déclarés dans ports/.
-  - package: "**.internal.features.*.domain"
+  - package: "**.internal.modules.*.domain"
     shouldNotContainInterfaces: true
 
   # Les ports ne contiennent pas d'implémentation : ni struct, ni fonction.
-  - package: "**.internal.features.*.ports"
+  - package: "**.internal.modules.*.ports"
     shouldNotContainFunctions: true
     shouldNotContainStructs: true
 
 functionsRules:
   # Des fonctions courtes et peu paramétrées sont la condition de la
   # composabilité. Ces seuils sont volontairement serrés.
-  - package: "**.internal.features.**"
+  - package: "**.internal.modules.**"
     maxParameters: 4
     maxReturnValues: 2
     maxLines: 50

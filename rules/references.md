@@ -13,7 +13,7 @@
 | Les failles ouvertes | [`documentation/securite/registre-securite.md`](../documentation/securite/registre-securite.md) |
 | Qui a le droit d'appeler quoi | [`documentation/securite/matrice-acces.md`](../documentation/securite/matrice-acces.md) |
 | Ce qui manque au socle et fait perdre du temps | [`documentation/process/JOURNAL_FRICTION.md`](../documentation/process/JOURNAL_FRICTION.md) |
-| Un exemple complet de feature | `internal/features/user_registration/` |
+| Un exemple complet de feature | `internal/modules/user_registration/` |
 | Le contrat d'API | `api/openapi.yaml` — **généré**, jamais édité à la main |
 
 ## Hiérarchie des sources en cas de contradiction
@@ -45,7 +45,12 @@ nom :
 
 | On écrit | On n'écrit pas |
 |---|---|
-| **feature** | module, bounded context, domaine, service |
+| **module** | composant, brique, paquet |
+| **module noyau** | module framework, module systeme |
+| **module metier** | feature, bounded context, domaine |
+| **pilote** | driver, backend, implementation, provider |
+| **surface** | canal, frontend, delivery |
+| ~~**service**~~ | **PROSCRIT** \u2014 signifie deja microservice, couche service, unite systeme |
 | **port** | interface, contrat, repository, gateway |
 | **adaptateur primaire** | contrôleur, handler, delivery, entrypoint |
 | **adaptateur secondaire** | repository, infrastructure, DAO |

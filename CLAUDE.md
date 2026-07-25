@@ -98,7 +98,7 @@ cmd/{server,worker,cli}       composition root — le seul code qui connaît tou
 config/                       lecture d'environnement, immuable, validée au démarrage
 internal/pkg/                 primitives sans dépendance : result, fp, middleware
 internal/infrastructure/      socle technique sans métier : db, cache, http, telemetry, security
-internal/features/{f}/        un bounded context étanche
+internal/modules/{f}/        un bounded context étanche
   ├── domain/                 pur
   ├── ports/                  types fonction uniquement
   ├── application/            pipeline + décorateurs

@@ -3,8 +3,8 @@ package application
 import (
 	"context"
 
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/features/user_registration/domain"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/features/user_registration/ports"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/ports"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 

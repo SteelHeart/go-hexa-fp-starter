@@ -173,7 +173,7 @@ linters:
           list-mode: lax
           files:
             - "$all"
-            - "!**/internal/features/*/adapters/secondary/**"
+            - "!**/internal/modules/*/adapters/secondary/**"
             - "!**/internal/infrastructure/database/**"
           deny:
             - pkg: entgo.io/ent
@@ -186,8 +186,8 @@ linters:
         pure-core:
           list-mode: lax
           files:
-            - "**/internal/features/*/domain/**"
-            - "**/internal/features/*/ports/**"
+            - "**/internal/modules/*/domain/**"
+            - "**/internal/modules/*/ports/**"
           deny:
             - pkg: net/http
               desc: "Le cœur ne connaît pas le transport (adapters/primary uniquement)."

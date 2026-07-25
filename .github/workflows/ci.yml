@@ -226,9 +226,9 @@ jobs:
 
           # Aucun SQL applicatif ne doit qualifier le schéma d'un autre module :
           # le search_path du rôle du module s'en charge.
-          for dir in internal/features/*/; do
+          for dir in internal/modules/*/; do
             module=$(basename "$dir")
-            others=$(find internal/features -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
+            others=$(find internal/modules -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
               | grep -v "^$module$" || true)
             [ -z "$others" ] && continue
             for other in $others; do

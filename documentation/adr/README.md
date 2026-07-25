@@ -18,6 +18,8 @@ refonte.
 | [005](005-n-frontends-adaptateurs-primaires.md) | N frontends simultanés comme adaptateurs primaires | Accepté |
 | [006](006-outbox-transactionnel.md) | Outbox transactionnel comme seule sortie vers le monde | Accepté |
 | [007](007-tronc-unique-et-environnements.md) | Tronc unique ; un environnement n'est pas une branche | Accepté |
+| [009](009-strategie-d-acces-aux-donnees.md) | Strategie d'acces aux donnees : pile en couches, pas d'ORM unique | Accepte |
+| [012](012-anatomie-d-un-module-et-pilotes.md) | Anatomie d'un module, pilotes, zero prerequis d'infrastructure | Accepte |
 | [008](008-chi-huma-plutot-qu-un-framework.md) | chi + huma plutôt qu'un framework Go | Accepté |
 
 ## Règles

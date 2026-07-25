@@ -24,7 +24,7 @@ Deux propriétés sont non négociables, et tout le reste en découle :
 
 | Terme | Signification **dans ce dépôt** |
 |---|---|
-| **Feature** | Un *bounded context* : un dossier sous `internal/features/`, étanche aux autres |
+| **Feature** | Un *bounded context* : un dossier sous `internal/modules/`, étanche aux autres |
 | **Port** | Un **type fonction** déclaré dans `ports/`. Jamais une interface |
 | **Port primaire** | Un cas d'usage : ce que le monde extérieur peut demander au cœur |
 | **Port secondaire** | Un besoin du cœur envers le monde (persister, publier, envoyer) |

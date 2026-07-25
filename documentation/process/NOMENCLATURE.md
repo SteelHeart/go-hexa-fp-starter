@@ -92,11 +92,11 @@ features, en `snake_case`, qui reprennent le vocabulaire métier.
 
 | Niveau | Emplacement | Tag |
 |---|---|---|
-| Domaine (pur) | `internal/features/{f}/domain/{sujet}_test.go` | aucun |
-| Cas d'usage | `internal/features/{f}/application/{usecase}_test.go` | aucun |
+| Domaine (pur) | `internal/modules/{f}/domain/{sujet}_test.go` | aucun |
+| Cas d'usage | `internal/modules/{f}/application/{usecase}_test.go` | aucun |
 | Primitives | `internal/pkg/{paquet}/{sujet}_test.go` | aucun |
-| Adaptateur secondaire | `internal/features/{f}/adapters/secondary/{x}/{sujet}_test.go` | `integration` |
-| Conformité de port | `internal/features/{f}/ports/conformance_test.go` | `integration` |
+| Adaptateur secondaire | `internal/modules/{f}/adapters/secondary/{x}/{sujet}_test.go` | `integration` |
+| Conformité de port | `internal/modules/{f}/ports/conformance_test.go` | `integration` |
 | Bout en bout | `tests/e2e/{surface}_{parcours}_test.go` | `e2e` |
 | Charge | `tests/perf/{parcours}.js` | — |
 

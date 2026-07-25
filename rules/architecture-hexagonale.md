@@ -48,7 +48,7 @@ Deux cases méritent une explication :
 ## 3. Anatomie d'une feature
 
 ```
-internal/features/{feature}/
+internal/modules/{feature}/
 ├── module.go                 # composition root local — assemble et expose les ports primaires
 ├── domain/                   # PUR : value objects, règles, erreurs, événements
 ├── ports/                    # SIGNATURES SEULEMENT — types fonction
@@ -87,7 +87,7 @@ Trois niveaux, et un seul autorisé à connaître le monde entier :
 
 1. `cmd/{server,worker,cli}/main.go` — lit la config, ouvre les connexions, construit les modules,
    branche les adaptateurs primaires, gère l'arrêt propre.
-2. `internal/features/{feature}/module.go` — assemble **une** feature.
+2. `internal/modules/{feature}/module.go` — assemble **une** feature.
 3. Tout le reste — reçoit ses dépendances, n'en construit aucune.
 
 **Aucun conteneur d'injection.** La composition manuelle *est* de la programmation fonctionnelle
@@ -98,7 +98,7 @@ bas ([ADR 004](../documentation/adr/004-composition-manuelle-sans-conteneur-di.m
 
 Technique et **sans connaissance du métier** : pool Postgres, client Redis, serveur HTTP,
 télémétrie, chiffrement, dépileur d'outbox générique. `arch-go` refuse tout import de
-`internal/features/**` depuis ce dossier.
+`internal/modules/**` depuis ce dossier.
 
 Corollaire : il ne contient **aucune** règle métier, et il est réutilisable tel quel dans un autre
 projet.
