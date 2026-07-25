@@ -112,16 +112,108 @@ tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
 
 ## État réel du dépôt — vérifié le 2026-07-25
 
-**Prouvé localement** : le module compile, `go vet` est vert, les tests unitaires passent avec
-`-race -shuffle=on`, `arch-go` et `golangci-lint` sont verts.
+> Cette section est un **relevé**, pas une intention. Elle distingue rigoureusement
+> **prouvé** / **écrit non prouvé** / **absent**. La mettre à jour fait partie de toute PR qui
+> change l'état des faits (`rules/README.md` § règle d'or 2).
 
-**Écrit mais non prouvé sur cette machine** (Docker absent) : migrations, tests d'intégration,
-tests de bout en bout, images conteneur. Ces niveaux sont exécutés par la CI.
+### Prouvé sur la machine de référence
 
-**Écrit, jamais déployé** : les workflows `deploy-uat.yml` et `deploy-production.yml` n'ont jamais
-tourné. Ils exigent des secrets et un hôte qui n'existent pas encore. Ne pas les présenter comme
-fonctionnels.
+- `go build ./...` vert
+- `go vet ./...` vert
+- `go test -shuffle=on ./...` vert — **38 tests** dans `internal/config`, `internal/config/tests`
+  et `internal/core/outbox`
 
-`user_registration` est un **exemple de référence complet** (domaine, ports, cas d'usage,
-décorateurs, trois surfaces, outbox), pas un besoin métier. Il se supprime sans rien casser
-d'autre que ses propres tests.
+### Écrit, NON prouvé
+
+| Quoi | Pourquoi ce n'est pas prouvé |
+|---|---|
+| `golangci-lint` et `arch-go` | Installés, **jamais exécutés** sur l'état courant. Attendre des violations |
+| Pilote `postgres` de l'outbox et de l'audit | Aucune migration n'existe : les tables `platform.*` sont référencées et absentes |
+| Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
+| `messaging`, `modulebus`, `httpserver`, `telemetry`, `security`, `cache`, `scheduler`, `storage`, `dynconf`, `idempotency` | Compilent, **zéro test** |
+| Cœur de `user_registration` | Compile, **zéro test** |
+
+### Absent
+
+- **Aucun binaire** : ni adaptateur primaire, ni secondaire, ni `module.go`, ni `cmd/`
+- **Aucune migration** — 6 tables référencées par du code écrit
+- **Aucune authentification ni autorisation**. Ne jamais parler de « zéro faille » tant que c'est vrai
+- i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010 et 011,
+  `deploy/docker-compose.deploy.yml`
+- Le **dispatcher de l'outbox** : retiré avec la conversion en module, à réécrire dans `application/`
+
+### Jamais déployé
+
+`deploy-uat.yml` et `deploy-production.yml` n'ont **jamais tourné**. Ils exigent des secrets et un
+hôte qui n'existent pas.
+
+## Où en est le travail
+
+### Branche courante
+
+`refactor/21-modules-a-pilotes` — 3 commits, poussée. Base : `refactor/19-module-noyau-metier`
+(PR [#20](https://github.com/SteelHeart/go-hexa-fp-starter/pull/20), **non fusionnée**).
+
+⚠️ `main` ne contient donc **ni** le renommage `features` → `modules`, **ni** la configuration par
+fichiers. Fusionner #20 avant tout travail parti de `main`.
+
+### Décisions prises et gravées
+
+| Décision | Trace |
+|---|---|
+| Hexagonal modulaire + fonctionnel | ADR 001 |
+| `Result[T,E]`, limites du typage Go | ADR 002 |
+| Un port est un type fonction | ADR 003 |
+| Composition manuelle, sans conteneur DI | ADR 004 |
+| N frontends = adaptateurs primaires | ADR 005 |
+| Outbox transactionnel | ADR 006 |
+| Tronc unique, environnement ≠ branche | ADR 007 |
+| chi + huma plutôt qu'un framework | ADR 008 |
+| Accès aux données en pile, pas d'ORM unique | ADR 009 |
+| Anatomie de module, pilotes, zéro prérequis, vocabulaire | ADR 012 |
+| Monorepo multi-modules `core/` + `cli/` + `template/` | issue #14, **après** v0.1.0 |
+| Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
+
+### Invariants à ne pas réapprendre
+
+- **`internal/core/`** = modules noyau · **`internal/modules/`** = modules métier. Même anatomie,
+  deux provenances. Un module métier n'importe pas un autre module métier, mais consomme les ports
+  du noyau.
+- **`internal/core/**` retourne `error`** · **`internal/modules/**` retourne `Result[T, domain.Error]`**.
+  Un module noyau est technique, il n'a pas de taxonomie métier.
+- **Aucun moteur de base n'est imposé.** `postgres` est un pilote parmi d'autres. Voir issue #36 :
+  `database.Querier` reste pgx-spécifique, c'est un défaut connu.
+- **Chaque module a un pilote sans dépendance externe, choisi par défaut.** `hexa new` puis
+  `go run` doit démarrer sans base, sans Redis, sans Docker.
+- **Un pilote documente ses NON-garanties** en tête de paquet.
+- Tests : `{paquet}/tests/` en boîte noire · `{paquet}/internal_test.go` pour les internes.
+- Configuration : fichiers `config/*.yaml` groupés, secrets par `${VAR}` uniquement.
+
+### Frictions ouvertes (`documentation/process/JOURNAL_FRICTION.md`)
+
+| Réf | Effet concret |
+|---|---|
+| F001 | Docker absent : migrations, intégration et e2e ne tournent qu'en CI |
+| F002 | Aucune protection de branche serveur (plan gratuit) — le crochet est un filet, pas un contrôle |
+| F003 | Aucun test de mutation |
+| F004 | Outillage en `latest` : CI non reproductible |
+| F005 | `-race` exige CGO : `task test` sans `-race` en local, `task test:race` en CI |
+
+### Prochaines actions, dans l'ordre
+
+1. **Finir #21** : convertir `idempotency`, `dynconf`, `storage`, `scheduler` ; réécrire le
+   dispatcher de l'outbox dans `application/`
+2. **#6 / #7** : tests du cœur `user_registration` et des primitives (`result`, `fp`, `pagination`)
+3. **Lancer `golangci-lint` et `arch-go`** pour la première fois, et corriger
+4. **#2** : migrations, un schéma et un rôle SQL par module
+5. **#3 / #4 / #5 / #8** : adaptateurs puis binaires — le premier `curl` qui répond
+6. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+
+### Arbitrages en attente côté produit
+
+- **#9 `auth`** : session cookie / jeton porteur par surface ? fournisseur d'identité externe
+  (Keycloak, Zitadel, Auth0) ou magasin interne ? `rbac`, `permissions`, `abac`, ou ReBAC ?
+- **#18 F002** : dépôt public, GitHub Pro, ou assumer l'absence de protection ?
+- **#34** : langue du **code** — recommandation posée, anglais dès maintenant pour `godoc` et les
+  identifiants, français pour `rules/` jusqu'à la PR de traduction
+- **#36** : SQLite comme pilote SQL par défaut ?
