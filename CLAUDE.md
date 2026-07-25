@@ -99,7 +99,8 @@ rules/                        règlement d'ingénierie — fait foi
 documentation/adr/            décisions d'architecture — font foi
 documentation/process/        nomenclature, labels, templates
 documentation/securite/       registre de failles, matrice d'accès
-cmd/{server,worker,cli}       composition root — le seul code qui connaît tout   ⟨absent⟩
+cmd/server                    composition root — le seul code qui connaît tout
+cmd/{worker,cli}              ⟨absents⟩
 config/*.yaml                 configuration par groupes, secrets par ${VAR} uniquement
 internal/config/              lecture, fusion, validation — refuse le démarrage sur incohérence
 internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
@@ -135,10 +136,17 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 - `go build ./...` vert
 - `go vet ./...` vert
+- **`go run ./cmd/server` DÉMARRE et RÉPOND, sans base, sans Redis, sans Docker.** Exercé à la
+  main : `POST /v1/users` rend un **201** avec un identifiant **UUID v7**, l'adresse normalisée
+  (`Alice@Example.COM ` → `alice@example.com`) et le statut `pending` ; le doublon rend **409** en
+  nommant le champ, l'adresse invalide et le mot de passe court rendent **422** avec le message du
+  DOMAINE ; `/healthz`, `/readyz` et `GET /v1/users/availability` répondent.
+  **C'est la première fois que ce socle exécute quoi que ce soit de bout en bout.**
 - `golangci-lint run ./...` — **0 signalement**, ~50 analyseurs. Parti de 239.
-- `arch-go` — **100 %, 17 règles sur 17**, dont les 12 règles de dépendance
-- `go test -shuffle=on ./...` vert — **217 tests de premier niveau** (399 avec les sous-tests),
-  répartis ainsi :
+- `arch-go` — **100 %, 18 règles sur 18**, couverture 100 %
+- `go test -shuffle=on ./...` vert — **221 tests de premier niveau**, répartis ainsi
+  (la table couvre les 217 d'avant la tranche verticale ; les 4 nouveaux sont dans
+  `…/user_registration/tests`) :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -156,6 +164,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `…/user_registration/domain/tests` | 18 | Normalisation et refus d'une adresse, bornes du mot de passe, **aucune fuite en journal**, compte jamais né actif |
 | `…/user_registration/application/tests` | 13 | Ordre des étapes, court-circuit, **le clair n'atteint jamais le stockage**, pas d'événement fantôme |
 | `internal/infrastructure/security/tests` | 10 | Sel neuf à chaque hachage, nonce neuf à chaque chiffrement, **AES-128 refusé**, altération détectée |
+| `…/user_registration/tests` (boîte noire) | 4 | Le module inscrit **sans aucune infrastructure**, un pilote inconnu refuse le montage, 16 inscriptions concurrentes sur la même adresse n'en laissent passer qu'une, **chaque compte a son propre condensé** |
 
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
@@ -194,7 +203,7 @@ le genre de chose qu'on oublie :
 
 ### Absent
 
-- **Aucun binaire** : ni adaptateur primaire, ni secondaire, ni `module.go` métier, ni `cmd/`
+- **`cmd/worker`** : le dépileur de l'outbox est écrit et testé, mais aucun binaire ne le lance
 - **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire, donc pas
   de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
 - **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
@@ -321,11 +330,37 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-1. **#5 / #6 / #7 / #8 / #10** : adaptateurs puis binaires — le premier `curl` qui répond, et le
-   premier worker qui dépile réellement. C'est la ligne de faille du moment : beaucoup de solidité
-   vérifiée, zéro chose qui tourne
+1. **#10 `cmd/worker`** : le dépileur est écrit, testé, et personne ne le lance. Tant qu'il manque,
+   la chaîne asynchrone s'arrête à l'écriture dans l'outbox — l'événement est durable et jamais publié
 2. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`
 3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
+
+### Lecture PRODUIT — ce que voit un dev qui veut sortir un SaaS
+
+À garder en tête pour arbitrer les priorités, parce que la rigueur technique seule ne dit pas quoi
+faire ensuite :
+
+- **Le socle a construit ce dont ce dev ignore avoir besoin** — outbox, idempotence, audit,
+  ordonnanceur, isolation SQL. C'est l'infrastructure qu'on découvre au premier incident, six mois
+  trop tard.
+- **Il manque ce qu'il vient chercher** — `auth` (#9), `tenancy` (#23), `notification`, `payment`,
+  `ratelimit` : tous 🔴. Un évaluateur pose deux questions, obtient deux « non », et repart sans
+  jamais découvrir que l'outbox est excellente.
+- **Le délai avant premier succès était infini** jusqu'à cette tranche. Il ne l'est plus.
+- **`user_registration` est la TRANCHE DE RÉFÉRENCE, pas « l'application ».** Sa forme sera copiée
+  pour écrire `billing`. Tout dossier manquant serait reproduit comme « pas nécessaire » — d'où
+  l'exigence qu'elle soit canoniquement complète.
+
+### Point de conception OUVERT — déclaration des pilotes d'un module métier
+
+`config/modules.yaml` et `knownDrivers` ne valident que les modules **noyau**. Un module métier ne
+peut donc pas y déclarer ses pilotes : son `module.go` les valide lui-même, et `cmd/server` lit
+`cfg.Modules[Name].Driver` qui reste vide.
+
+Ça tient pour un module de référence livré AVEC le socle. Ça ne tiendra pas pour une application :
+faire modifier `internal/config/modules.go` — un fichier du framework — pour déclarer le pilote de
+son propre module `billing` est exactement la friction qu'un framework ne doit pas avoir.
+**Ouvert, pas oublié.** À trancher avant `hexa new`.
 
 > **Terminé** : la campagne `golangci-lint` (239 → 0) et **#2** (schéma `platform`, rôles,
 > ADR 011, garde `verify.sql`, job CI `migrations`).

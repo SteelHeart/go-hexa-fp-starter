@@ -136,3 +136,16 @@ functionsRules:
     maxParameters: 4
     maxReturnValues: 3
     maxLines: 40
+
+  # Le composition root a le droit de TOUT connaître — c'est sa raison d'être
+  # (ADR 004). La contrainte porte donc sur sa forme, pas sur ses dépendances.
+  #
+  # `maxPublicFunctionPerFile: 1` est la règle qui compte : un binaire n'exporte
+  # que `main`. Dès qu'il exporte autre chose, c'est qu'on a écrit de la logique
+  # dans le câblage — et cette logique-là échappe à l'hexagone, puisqu'elle vit
+  # hors de tout module et n'est vérifiée par aucune règle de dépendance.
+  - package: "**.cmd.**"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 60
+    maxPublicFunctionPerFile: 1
