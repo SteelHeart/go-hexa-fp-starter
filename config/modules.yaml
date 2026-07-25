@@ -60,32 +60,33 @@ modules:
     enabled: true
     driver: disk
 
-  # Messages sortants. Le pilote log n'envoie rien : il journalise.
-  notification:
-    enabled: false
-    driver: log
-
-  # Tâches périodiques. advisory-lock exige Postgres (élection entre répliques).
+  # Tâches périodiques, exécutées une seule fois quel que soit le nombre de
+  # répliques. Le vrai problème n'est pas la périodicité mais l'ÉLECTION.
+  # cron-inproc : aucune élection entre répliques, mais aucun recouvrement local
+  # advisory-lock : élection réelle, exige une base
   scheduler:
     enabled: false
-    driver: advisory-lock
-
-  # Limitation de débit. memory se multiplie par le nombre d'instances.
-  ratelimit:
-    enabled: true
-    driver: memory
+    driver: cron-inproc
 
   # ── Modules non encore implémentés ──────────────────────────────────────────
-  # Laissés désactivés et documentés pour que la configuration reflète la cible
-  # sans prétendre que le code existe. Voir documentation/technique/modules-noyau.md.
+  # Volontairement ABSENTS et non « désactivés » : un module absent de
+  # internal/config/modules.go REFUSE d'être activé, parce que son code n'existe
+  # pas. Les écrire ici en commentaire décrit la cible sans permettre de croire
+  # qu'il suffit de basculer `enabled` pour en disposer.
   #
-  # secrets:  { enabled: false, driver: env }
-  # i18n:     { enabled: false, driver: embedded }
-  # tenancy:  { enabled: false, driver: rls }
-  # workflow: { enabled: false, driver: builtin }
-  # search:   { enabled: false, driver: postgres-fts }
-  # document: { enabled: false, driver: html }
-  # payment:  { enabled: false, driver: log }
+  # Feuille de route : documentation/technique/modules-noyau.md
+  # Catalogue des pilotes envisagés : documentation/technique/pilotes.md
+  #
+  # notification  canaux × fournisseurs (log, smtp, mailjet, ses…)
+  # ratelimit     memory, redis, postgres, gateway
+  # secrets       env, file, sops, vault, aws-secrets-manager…
+  # i18n          embedded, file, postgres
+  # tenancy       rls, schema, database
+  # workflow      builtin, temporal
+  # search        postgres-fts, bleve, meilisearch, opensearch…
+  # document      html, gotenberg, weasyprint, chromedp
+  # payment       log, stripe, adyen, paypal, mollie
+  # media         disk, minio, s3, gcs, azure-blob
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Communication ENTRE modules

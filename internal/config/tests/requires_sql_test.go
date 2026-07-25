@@ -22,7 +22,7 @@ func TestRequiresSQL(t *testing.T) {
 				"audit":       {Enabled: true},
 				"dynconf":     {Enabled: true},
 				"storage":     {Enabled: true},
-				"ratelimit":   {Enabled: true},
+				"scheduler":   {Enabled: true},
 			},
 			want: false,
 		},

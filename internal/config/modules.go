@@ -29,47 +29,49 @@ type Module struct {
 
 // knownDrivers énumère les pilotes admis par module.
 //
+// # Cette table liste ce qui EXISTE, pas ce qui est prévu
+//
+// C'est une table de VALIDATION, pas un catalogue. Y faire figurer un pilote non
+// construit produirait le pire des messages : la configuration accepterait la
+// valeur, puis la fabrique du module refuserait au démarrage avec « pilote
+// inconnu » — pour un pilote que la configuration venait de déclarer connu. Deux
+// sources de vérité qui se contredisent valent moins qu'une seule qui refuse.
+//
+// Un module ABSENT de cette table ne peut pas être activé, et c'est voulu : on
+// n'active pas un module dont le code n'existe pas.
+//
+// Le catalogue des pilotes ENVISAGÉS — une centaine — vit dans
+// documentation/technique/pilotes.md. Un pilote y migre vers cette table le jour
+// où il est écrit, testé, et où il documente ses NON-garanties.
+//
 // Deny par défaut : ce qui n'est pas listé refuse le démarrage. Une faute de
 // frappe dans un nom de pilote ne doit jamais se résoudre en « le plus proche ».
 //
 //nolint:gochecknoglobals // table de référence immuable, lue en validation
 var knownDrivers = map[string][]string{
-	"outbox":       {"memory", "postgres"},
-	"idempotency":  {"memory", "postgres", "redis"},
-	"dynconf":      {"file", "postgres"},
-	"audit":        {"log", "postgres"},
-	"storage":      {"disk", "s3", "gcs", "azure-blob", "sftp"},
-	"notification": {"log", "smtp", "mailjet", "sendgrid", "ses", "postmark", "mailgun", "resend", "brevo"},
-	"search":       {"postgres-fts", "bleve", "meilisearch", "typesense", "opensearch", "elasticsearch", "algolia"},
-	"payment":      {"log", "stripe", "adyen", "paypal", "mollie"},
-	"secrets":      {"env", "file", "sops", "vault", "aws-secrets-manager", "gcp-secret-manager", "azure-key-vault"},
-	"tenancy":      {"rls", "schema", "database"},
-	"workflow":     {"builtin", "temporal"},
-	"document":     {"html", "gotenberg", "weasyprint", "chromedp"},
-	"i18n":         {"embedded", "file", "postgres"},
-	"scheduler":    {"advisory-lock", "cron-inproc", "external"},
-	"ratelimit":    {"memory", "redis", "postgres", "gateway"},
+	"outbox":      {"memory", "postgres"},
+	"idempotency": {"memory", "postgres", "redis"},
+	"dynconf":     {"file", "postgres"},
+	"audit":       {"log", "postgres"},
+	"storage":     {"disk"},
+	"scheduler":   {"cron-inproc", "advisory-lock"},
 }
 
 // defaultDrivers donne le pilote sans dépendance externe de chaque module.
 //
+// C'est la table qui rend vraie la promesse « hexa new puis go run démarre » : le
+// défaut n'est JAMAIS le pilote le plus complet, toujours celui qui n'exige rien.
+//
 //nolint:gochecknoglobals // table de référence immuable, lue en validation
 var defaultDrivers = map[string]string{
-	"outbox":       "memory",
-	"idempotency":  "memory",
-	"dynconf":      "file",
-	"audit":        "log",
-	"storage":      "disk",
-	"notification": "log",
-	"search":       "postgres-fts",
-	"payment":      "log",
-	"secrets":      "env",
-	"tenancy":      "rls",
-	"workflow":     "builtin",
-	"document":     "html",
-	"i18n":         "embedded",
-	"scheduler":    "advisory-lock",
-	"ratelimit":    "memory",
+	"outbox":      "memory",
+	"idempotency": "memory",
+	"dynconf":     "file",
+	"audit":       "log",
+	"storage":     "disk",
+	// `advisory-lock` exigerait une base pour SIMPLEMENT répéter une tâche, y
+	// compris dans un binaire mono-instance qui n'a personne avec qui s'accorder.
+	"scheduler": "cron-inproc",
 }
 
 // DurationOption lit une option de durée du pilote.
@@ -180,15 +182,13 @@ func (m Modules) DriverOf(name string) string { return m.Get(name).Driver }
 //
 //nolint:gochecknoglobals // table de référence immuable
 var sqlBackedDrivers = map[string]struct{}{
-	"postgres":     {},
-	"postgres-fts": {},
-	"mysql":        {},
-	"sqlite":       {},
-	"mssql":        {},
-	// Stratégies de multi-locataire : toutes reposent sur une base SQL.
-	"rls":      {},
-	"schema":   {},
-	"database": {},
+	"postgres": {},
+	// Ces trois-là n'ont pas encore de pilote. Ils figurent ici pour que la
+	// première implémentation n'ait RIEN à changer d'autre — et pour que le code
+	// dise, dès maintenant, qu'aucun moteur n'est imposé.
+	"mysql":  {},
+	"sqlite": {},
+	"mssql":  {},
 	// Élection entre répliques par verrou consultatif.
 	"advisory-lock": {},
 }

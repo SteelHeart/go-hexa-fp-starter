@@ -12,14 +12,12 @@ func TestMissingDriverFallsBackToZeroDependencyDefault(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"outbox":       "memory",
-		"idempotency":  "memory",
-		"dynconf":      "file",
-		"audit":        "log",
-		"storage":      "disk",
-		"notification": "log",
-		"payment":      "log",
-		"secrets":      "env",
+		"outbox":      "memory",
+		"idempotency": "memory",
+		"dynconf":     "file",
+		"audit":       "log",
+		"storage":     "disk",
+		"scheduler":   "cron-inproc",
 	}
 
 	for module, want := range cases {

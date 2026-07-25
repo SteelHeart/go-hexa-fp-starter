@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -16,6 +17,58 @@ import (
 //
 // Un test d'interne est un aveu de couplage à l'implémentation : il doit rester
 // minoritaire, et disparaître si la fonction devient exportée.
+
+// TestDriverTablesAgree : les deux tables de référence doivent se répondre.
+//
+// Un module connu sans pilote par défaut rendrait la chaîne vide comme pilote, et
+// la validation refuserait le démarrage d'un module pourtant correctement déclaré.
+// Un défaut absent de la liste des pilotes admis produirait le même refus. Dans les
+// deux cas, le message accuserait l'utilisateur d'une faute qui est la nôtre.
+func TestDriverTablesAgree(t *testing.T) {
+	t.Parallel()
+
+	for module, allowed := range knownDrivers {
+		fallback, found := defaultDrivers[module]
+		if !found {
+			t.Errorf("module %q sans pilote par défaut", module)
+			continue
+		}
+		if !slices.Contains(allowed, fallback) {
+			t.Errorf("pilote par défaut de %q = %q, absent de %v", module, fallback, allowed)
+		}
+	}
+	for module := range defaultDrivers {
+		if _, found := knownDrivers[module]; !found {
+			t.Errorf("module %q a un pilote par défaut mais n'est pas déclaré connu", module)
+		}
+	}
+}
+
+// TestEveryDefaultDriverNeedsNoInfrastructure est le test qui tient la promesse
+// centrale de l'ADR 012.
+//
+// Tous les modules activés d'un coup, tous sur leur pilote par défaut : le résultat
+// doit n'exiger NI base, NI cache. Le jour où quelqu'un fait de `postgres` le défaut
+// d'un module — par commodité, parce que c'est le pilote le plus complet — ce test
+// échoue, et c'est le seul endroit qui s'en apercevra avant les utilisateurs.
+func TestEveryDefaultDriverNeedsNoInfrastructure(t *testing.T) {
+	t.Parallel()
+
+	all := Modules{}
+	for module := range knownDrivers {
+		all[module] = Module{Enabled: true}
+	}
+
+	if all.RequiresSQL() {
+		t.Error("les pilotes par défaut ne doivent exiger aucune base SQL")
+	}
+	if all.RequiresCache() {
+		t.Error("les pilotes par défaut ne doivent exiger aucun cache")
+	}
+	if problems := all.validate(); len(problems) > 0 {
+		t.Errorf("les pilotes par défaut doivent tous être admis: %v", problems)
+	}
+}
 
 // TestExpandFailsOnMissingRequiredSecret : un secret manquant qui se résoudrait
 // en chaîne vide produirait une connexion anonyme ou un chiffrement avec une
