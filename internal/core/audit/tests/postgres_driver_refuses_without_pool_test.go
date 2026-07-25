@@ -1,0 +1,20 @@
+package tests
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit"
+)
+
+// TestPostgresDriverRefusesWithoutPool : le refus est au démarrage, jamais à la
+// première écriture.
+func TestPostgresDriverRefusesWithoutPool(t *testing.T) {
+	t.Parallel()
+
+	_, err := audit.New(config.Module{Enabled: true, Driver: "postgres"}, audit.Deps{})
+	if !errors.Is(err, audit.ErrPoolRequired) {
+		t.Errorf("erreur = %v, attendu ErrPoolRequired", err)
+	}
+}

@@ -109,6 +109,23 @@ func (m Module) DurationOption(key string, fallback time.Duration) (time.Duratio
 	return parsed, nil
 }
 
+// MapOption lit un groupe d'options imbriqué.
+//
+// Un groupe absent rend une table vide et non une erreur : ne rien déclarer est
+// une configuration valide. C'est une valeur du MAUVAIS type qui est refusée,
+// parce qu'elle trahit une faute de frappe.
+func (m Module) MapOption(key string) (map[string]any, error) {
+	raw, found := m.Options[key]
+	if !found || raw == nil {
+		return map[string]any{}, nil
+	}
+	nested, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("options.%s doit être une table de valeurs, reçu %T", key, raw)
+	}
+	return nested, nil
+}
+
 // StringOption lit une option textuelle du pilote.
 //
 // Une valeur présente mais vide est refusée : elle trahit une variable

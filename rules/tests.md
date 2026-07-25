@@ -35,6 +35,32 @@ ni aléa.
 `go test ./...` **sans tag** ne doit exiger aucun service. C'est ce qui permet de travailler sans
 Docker sur la machine ([`toolchain.md`](toolchain.md)).
 
+### Boîte noire, boîte blanche, et un fichier par test
+
+| Ce qu'on teste | Où | Paquet |
+|---|---|---|
+| L'API **publique** d'un paquet | `{paquet}/tests/` | `tests` |
+| Les identifiants **non exportés** | `{paquet}/internal_test.go` | celui du paquet |
+
+Tester par l'API publique est le défaut, et ce n'est pas une préférence de style : un test qui
+n'atteint que ce qu'un appelant atteint interdit de figer un détail d'implémentation. Le jour où un
+pilote change, ces tests ne bougent pas — c'est précisément ce qui prouve la substituabilité.
+
+**Un test par fichier**, nommé d'après le test en `snake_case` :
+
+```
+internal/core/dynconf/tests/
+├── helpers_test.go                      aides partagées, et rien d'autre
+├── unknown_flag_is_denied_test.go
+├── unreadable_flag_is_denied_test.go
+└── settings_are_read_as_text_test.go
+```
+
+Pourquoi : le nom du fichier dit ce qui est vérifié **sans l'ouvrir**. `git log` sur un fichier
+raconte l'histoire d'une seule garantie ; un conflit de fusion porte sur un seul test ; et une
+garantie supprimée se voit comme une suppression de fichier, pas comme trente lignes en moins dans
+un fichier de six cents.
+
 ## 3. Obligations
 
 - **Un bug corrigé porte son test de non-régression**, écrit avant le correctif et échouant sans lui.

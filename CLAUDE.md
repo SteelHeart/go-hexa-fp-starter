@@ -186,7 +186,9 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 - **Chaque module a un pilote sans dépendance externe, choisi par défaut.** `hexa new` puis
   `go run` doit démarrer sans base, sans Redis, sans Docker.
 - **Un pilote documente ses NON-garanties** en tête de paquet.
-- Tests : `{paquet}/tests/` en boîte noire · `{paquet}/internal_test.go` pour les internes.
+- Tests : `{paquet}/tests/` en boîte noire · `{paquet}/internal_test.go` pour les internes ·
+  **un fichier par test**, nommé d'après lui en `snake_case`, aides partagées dans
+  `helpers_test.go`.
 - Configuration : fichiers `config/*.yaml` groupés, secrets par `${VAR}` uniquement.
 
 ### Frictions ouvertes (`documentation/process/JOURNAL_FRICTION.md`)
