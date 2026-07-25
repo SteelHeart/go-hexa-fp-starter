@@ -37,6 +37,10 @@ var placeholder = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?
 // Refuser le démarrage est délibéré : un secret manquant qui se résoudrait en
 // chaîne vide produit une connexion anonyme ou un chiffrement avec une clé
 // vide — un échec silencieux, donc le pire.
+//
+// « Non résolue » couvre la variable ABSENTE et la variable DÉFINIE MAIS VIDE :
+// la seconde est le symptôme habituel d'un secret oublié dans une chaîne de
+// déploiement, et elle doit refuser aussi fort que la première.
 type ErrMissingSecret struct{ Variables []string }
 
 func (e ErrMissingSecret) Error() string {
@@ -168,12 +172,23 @@ func expand(raw string) (string, error) {
 	out := placeholder.ReplaceAllStringFunc(raw, func(match string) string {
 		groups := placeholder.FindStringSubmatch(match)
 		name, fallback := groups[1], groups[2]
-		if value, found := os.LookupEnv(name); found {
+		optional := strings.Contains(match, ":-")
+
+		// Une variable DÉFINIE MAIS VIDE vaut « absente ». C'est le cas le plus
+		// courant en vrai : un secret déclaré dans la CI ou dans un orchestrateur
+		// mais jamais injecté arrive comme chaîne vide, pas comme variable absente.
+		// Le laisser passer produirait une connexion anonyme ou un chiffrement avec
+		// une clé vide — l'échec silencieux que ErrMissingSecret existe pour
+		// empêcher.
+		//
+		// C'est aussi la sémantique de `${VAR:-défaut}` dans un shell POSIX : le
+		// `:` fait porter le repli sur le vide autant que sur l'absence.
+		if value, found := os.LookupEnv(name); found && value != "" {
 			return value
 		}
-		// Un défaut vide explicite (`${VAR:-}`) est légitime : il signale un
+		// Un défaut explicite, même vide (`${VAR:-}`), est légitime : il signale un
 		// réglage optionnel. Une référence SANS défaut est obligatoire.
-		if strings.Contains(match, ":-") {
+		if optional {
 			return fallback
 		}
 		seen[name] = struct{}{}

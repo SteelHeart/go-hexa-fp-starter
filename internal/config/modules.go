@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"time"
 )
 
 // Modules porte l'activation et le choix de pilote de chaque module noyau.
@@ -69,6 +70,62 @@ var defaultDrivers = map[string]string{
 	"i18n":         "embedded",
 	"scheduler":    "advisory-lock",
 	"ratelimit":    "memory",
+}
+
+// DurationOption lit une option de durée du pilote.
+//
+// Les options ne sont pas typées à la lecture du fichier — le catalogue des
+// pilotes évolue plus vite que le socle. Cet accesseur est donc le seul endroit
+// où une durée d'option est interprétée, pour que tous les pilotes acceptent
+// exactement la même écriture : `"24h"` ou un entier de secondes, comme le type
+// Duration des champs typés.
+//
+// Une valeur présente mais illisible refuse le démarrage : se rabattre
+// silencieusement sur la valeur par défaut donnerait un TTL surprise.
+func (m Module) DurationOption(key string, fallback time.Duration) (time.Duration, error) {
+	raw, found := m.Options[key]
+	if !found || raw == nil {
+		return fallback, nil
+	}
+
+	var parsed time.Duration
+	switch value := raw.(type) {
+	case string:
+		var err error
+		if parsed, err = time.ParseDuration(value); err != nil {
+			return 0, fmt.Errorf("options.%s=%q n'est pas une durée (ex: \"24h\"): %w", key, value, err)
+		}
+	case int:
+		parsed = time.Duration(value) * time.Second
+	case int64:
+		parsed = time.Duration(value) * time.Second
+	default:
+		return 0, fmt.Errorf("options.%s doit être une durée ou un entier de secondes, reçu %T", key, raw)
+	}
+
+	if parsed <= 0 {
+		return 0, fmt.Errorf("options.%s doit être strictement positive, reçu %v", key, parsed)
+	}
+	return parsed, nil
+}
+
+// StringOption lit une option textuelle du pilote.
+//
+// Une valeur présente mais vide est refusée : elle trahit une variable
+// d'environnement non substituée, pas une intention.
+func (m Module) StringOption(key, fallback string) (string, error) {
+	raw, found := m.Options[key]
+	if !found || raw == nil {
+		return fallback, nil
+	}
+	text, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("options.%s doit être une chaîne, reçu %T", key, raw)
+	}
+	if text == "" {
+		return "", fmt.Errorf("options.%s est présente mais vide", key)
+	}
+	return text, nil
 }
 
 // Get retourne la configuration d'un module, pilote par défaut compris.

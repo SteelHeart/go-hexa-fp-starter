@@ -6,7 +6,11 @@
 # Les pilotes ci-dessous n'ont AUCUNE dépendance externe. Avec cette
 # configuration, `go run ./cmd/server` démarre : ni Postgres, ni Redis, ni
 # Docker. C'est la promesse de l'ADR 012, et elle est vérifiée par un test
-# (Modules.RequiresDatabase).
+# (Modules.RequiresSQL).
+#
+# `options` porte le paramétrage propre au pilote. Il n'est pas typé ici : chaque
+# pilote valide ses options à sa construction, et une option illisible REFUSE le
+# démarrage plutôt que de se rabattre sur une valeur par défaut surprise.
 #
 # Un module ABSENT de ce fichier est DÉSACTIVÉ. On n'active jamais une capacité
 # que personne n'a demandée — deny par défaut jusque dans la configuration.
@@ -26,10 +30,16 @@ modules:
     driver: memory
 
   # Écritures rejouables sans effet de bord. Obligatoire dès qu'il y a du mobile.
-  # memory : par instance, donc inefficace derrière plusieurs répliques
+  # memory : par instance, donc SANS garantie derrière plusieurs répliques
+  # postgres : exclusivité entre répliques · redis : idem, expiration passive
   idempotency:
     enabled: true
     driver: memory
+    options:
+      # Fenêtre pendant laquelle un rejeu est reconnu. Au-delà, il recrée la
+      # ressource : c'est un arbitrage assumé, pas un oubli. 24 h couvre le cas
+      # qui motive le module — un mobile hors réseau qui reprend le lendemain.
+      ttl: 24h
 
   # Drapeaux de fonctionnalité et réglages métier modifiables à chaud.
   # file : lu depuis config/, donc PAS modifiable à chaud — c'est le compromis

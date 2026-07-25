@@ -183,11 +183,16 @@ linters:
             - pkg: github.com/Masterminds/squirrel
               desc: "Autorisé uniquement dans adapters/secondary/ (ADR 009)."
         # Le domaine et les ports restent purs : ni transport, ni driver, ni horloge.
+        # Une seule anatomie (ADR 012) : la même exigence vaut pour un module
+        # noyau et pour un module métier. Les pilotes, eux, sont libres — c'est
+        # tout leur rôle.
         pure-core:
           list-mode: lax
           files:
             - "**/internal/modules/*/domain/**"
             - "**/internal/modules/*/ports/**"
+            - "**/internal/core/*/domain/**"
+            - "**/internal/core/*/ports/**"
           deny:
             - pkg: net/http
               desc: "Le cœur ne connaît pas le transport (adapters/primary uniquement)."
@@ -200,7 +205,7 @@ linters:
             - pkg: github.com/redis/go-redis
               desc: "Le cœur ne connaît pas le cache."
             - pkg: log/slog
-              desc: "Le cœur ne journalise pas : il retourne des Result."
+              desc: "Le cœur ne journalise pas : il retourne. Journaliser est le rôle d'un pilote."
 
   exclusions:
     generated: lax

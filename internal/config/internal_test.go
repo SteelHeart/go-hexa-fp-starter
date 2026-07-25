@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -50,6 +51,40 @@ func TestExpandAcceptsEmptyExplicitDefault(t *testing.T) {
 
 	if _, err := expand("password: ${HEXA_TEST_ABSENT_VAR:-}"); err != nil {
 		t.Errorf("un défaut vide explicite doit être accepté: %v", err)
+	}
+}
+
+// TestExpandFailsOnDefinedButEmptySecret : le secret déclaré dans une chaîne de
+// déploiement mais jamais injecté arrive comme chaîne VIDE, pas comme variable
+// absente. C'est la forme la plus fréquente du secret manquant, et celle qui
+// passerait le plus facilement inaperçue.
+//
+// Ce test ne peut pas être parallèle : il manipule l'environnement du processus.
+func TestExpandFailsOnDefinedButEmptySecret(t *testing.T) {
+	t.Setenv("HEXA_TEST_EMPTY_VAR", "")
+
+	_, err := expand("key: ${HEXA_TEST_EMPTY_VAR}")
+	if err == nil {
+		t.Fatal("une variable définie mais vide doit refuser le chargement")
+	}
+	var missing ErrMissingSecret
+	if !errors.As(err, &missing) {
+		t.Fatalf("attendu ErrMissingSecret, reçu %v", err)
+	}
+}
+
+// TestExpandPrefersDefaultOverEmptyValue : sémantique POSIX de `${VAR:-défaut}`.
+// Le `:` fait porter le repli sur le vide autant que sur l'absence — sinon une
+// variable vidée par accident écraserait un défaut pourtant valide.
+func TestExpandPrefersDefaultOverEmptyValue(t *testing.T) {
+	t.Setenv("HEXA_TEST_EMPTY_VAR", "")
+
+	out, err := expand("addr: ${HEXA_TEST_EMPTY_VAR:-localhost:6379}")
+	if err != nil {
+		t.Fatalf("un défaut explicite doit s'appliquer: %v", err)
+	}
+	if !strings.Contains(out, "localhost:6379") {
+		t.Errorf("défaut non appliqué face à une variable vide: %q", out)
 	}
 }
 
