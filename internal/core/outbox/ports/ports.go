@@ -16,6 +16,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
@@ -57,3 +58,19 @@ type PendingCount = func(ctx context.Context) (int64, error)
 // Il DOIT être idempotent : le dépilage est « au moins une fois », donc tout
 // message sera rejoué au moins une fois dans la vie du système.
 type Handler = func(ctx context.Context, msg domain.Message) error
+
+// Report rend compte du traitement d'un message.
+//
+// L'orchestration ne journalise pas : elle rend compte. C'est ce qui la garde
+// pure — `rules/README.md` interdit tout logger dans `application/` — et ce qui
+// permet à un test de vérifier une politique de dépilage en lisant des valeurs.
+//
+// Ne retourne rien : un compte rendu qui échouerait ne doit jamais faire échouer
+// le dépilage dont il rend compte.
+type Report = func(ctx context.Context, outcome domain.Outcome)
+
+// Now rend l'instant courant.
+//
+// L'orchestration ne lit pas l'horloge du système : elle reçoit ce port. Sans
+// cela, la politique de recul serait intestable sans attendre réellement.
+type Now = func() time.Time

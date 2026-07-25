@@ -111,6 +111,33 @@ func (m Module) DurationOption(key string, fallback time.Duration) (time.Duratio
 	return parsed, nil
 }
 
+// IntOption lit une option entière du pilote.
+//
+// Refuse zéro et les valeurs négatives : aucune option entière du socle n'a de
+// sens à zéro — un lot de zéro message ou zéro tentative autorisée décrivent un
+// composant qui ne fait rien, silencieusement.
+func (m Module) IntOption(key string, fallback int) (int, error) {
+	raw, found := m.Options[key]
+	if !found || raw == nil {
+		return fallback, nil
+	}
+
+	var value int
+	switch typed := raw.(type) {
+	case int:
+		value = typed
+	case int64:
+		value = int(typed)
+	default:
+		return 0, fmt.Errorf("options.%s doit être un entier, reçu %T", key, raw)
+	}
+
+	if value <= 0 {
+		return 0, fmt.Errorf("options.%s doit être strictement positif, reçu %d", key, value)
+	}
+	return value, nil
+}
+
 // MapOption lit un groupe d'options imbriqué.
 //
 // Un groupe absent rend une table vide et non une erreur : ne rien déclarer est

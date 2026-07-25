@@ -28,6 +28,17 @@ modules:
   outbox:
     enabled: true
     driver: memory
+    options:
+      # Taille d'un lot. Trop grand, une réplique monopolise le travail et tient
+      # ses verrous longtemps ; trop petit, le débit s'effondre en aller-retours.
+      batch_size: 50
+      # Au-delà, le message passe en `failed` et n'est plus rejoué. Il n'est PAS
+      # supprimé : c'est la seule trace de ce qui n'a pas été publié.
+      max_attempts: 8
+      # Pas du recul exponentiel, borné à 2^10 fois cette valeur.
+      base_backoff: 1s
+      # Période de scrutation du dépileur.
+      interval: 2s
 
   # Écritures rejouables sans effet de bord. Obligatoire dès qu'il y a du mobile.
   # memory : par instance, donc SANS garantie derrière plusieurs répliques
