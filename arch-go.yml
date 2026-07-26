@@ -103,6 +103,20 @@ dependenciesRules:
       internal:
         - "**.internal.**"
 
+  # ── 8. L'outillage de build est ISOLÉ du produit ─────────────────────────────
+  # `tools/` contient les gardes de la CI, pas du code livré. Il ne doit dépendre
+  # de RIEN du dépôt : sinon un garde deviendrait solidaire du code qu'il
+  # surveille, et refactorer le produit casserait le garde — jusqu'à ce que
+  # quelqu'un le désactive « le temps de finir ».
+  #
+  # La réciproque compte tout autant : aucun paquet du produit ne doit importer
+  # `tools/`, sinon un binaire livré embarquerait de l'outillage de build. Elle
+  # est couverte par la règle qui suit.
+  - package: "**.tools.**"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
 contentsRules:
   # Le domaine ne contient pas d'interfaces : les contrats sont des types
   # fonction déclarés dans ports/.
@@ -149,3 +163,17 @@ functionsRules:
     maxReturnValues: 2
     maxLines: 60
     maxPublicFunctionPerFile: 1
+
+  # L'outillage de build tient aux mêmes limites de forme que le reste. Un garde
+  # illisible est un garde qu'on finit par contourner au lieu de le corriger.
+  #
+  # Cette règle a AUSSI une raison mécanique : le seuil `coverage` d'arch-go
+  # mesure la part des paquets couverts par au moins une règle. Un paquet neuf
+  # non couvert le fait tomber sous 100 %, et `task check` échoue à l'étape
+  # `arch`. C'est arrivé en ajoutant `tools/covergate` : le garde de couverture
+  # a lui-même fait échouer un autre garde, ce qui est exactement le
+  # comportement voulu.
+  - package: "**.tools.**"
+    maxParameters: 4
+    maxReturnValues: 3
+    maxLines: 60

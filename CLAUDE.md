@@ -146,7 +146,12 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   DOMAINE ; `/healthz`, `/readyz` et `GET /v1/users/availability` répondent.
   **C'est la première fois que ce socle exécute quoi que ce soit de bout en bout.**
 - `golangci-lint run ./...` — **0 signalement**, ~50 analyseurs. Parti de 239.
-- `arch-go` — **100 %, 18 règles sur 18**, couverture 100 %
+- `arch-go` — **100 %, 20 règles sur 20**, couverture 100 %. Deux règles ajoutées pour `tools/**` :
+  l'outillage de build ne dépend de **rien** du dépôt, et tient aux mêmes limites de forme.
+  Motif mécanique autant qu'architectural : le seuil `coverage` d'arch-go mesure la part des paquets
+  couverts par au moins une règle, donc **ajouter `tools/covergate` a fait tomber `task check`** à
+  l'étape `arch` (98 % < 100 %). Le garde de couverture a fait échouer un autre garde — comportement
+  exactement voulu, découvert parce que le code de retour a été vérifié, pas la sortie.
 - **`go run ./cmd/worker` REFUSE de démarrer sur le pilote `memory`**, avec un code de retour non
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
@@ -214,9 +219,17 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `fmt` `vet` `lint` `arch` `vuln` | **verts**, dans l'enchaînement réel |
 | `test` | **échoue** — et pas à cause du code |
 
-> ✅ **VÉRIFIÉ le 2026-07-26 : `task check` est VERT de bout en bout, code de retour 0**, depuis un
-> clone du dépôt placé hors du dossier protégé (`C:\Users\MAC\hexa-check`). Les six étapes passent.
-> Le blocage ci-dessous est donc **entièrement environnemental** — rien dans le dépôt ne s'y oppose.
+> ✅ **VÉRIFIÉ le 2026-07-27 : `task check` est VERT de bout en bout, code de retour 0**, depuis un
+> clone du dépôt placé hors du dossier protégé (`C:\Users\MAC\hexa-check`), **cliquets de couverture
+> compris**. Les six étapes s'exécutent réellement — vérifié en listant les commandes lancées, pas
+> en lisant « pas d'erreur » :
+>
+> ```
+> fmt · vet · lint · arch · test (+ covergate) · vuln     →  exit 0
+> ```
+>
+> `govulncheck` : **0 vulnérabilité** appelée par ce code. Le blocage ci-dessous est donc
+> **entièrement environnemental** — rien dans le dépôt ne s'y oppose.
 
 **🔴 F008 — un programme Go ne peut créer AUCUN fichier sous `C:\xampp\htdocs\`.**
 
