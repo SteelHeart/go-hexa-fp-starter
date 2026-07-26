@@ -121,6 +121,8 @@ deploy/postgres/              provision.sql — les RÔLES, exécuté une fois, 
 api/openapi.yaml              ⟨absent⟩ — le contrat est SERVI sur /openapi.{json,yaml},
                               pas encore versionné : un fichier généré à la main dériverait
 tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
+tools/covergate/              cliquets de couverture — LA source unique des seuils,
+                              lancée à l'identique par `task test` et par la CI
 ```
 
 Six modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`.
@@ -149,10 +151,9 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **227 tests de premier niveau**, répartis ainsi
-  (la table couvre les 217 d'avant les binaires ; les 10 nouveaux sont dans
-  `…/user_registration/tests`, `…/adapters/primary/http/tests`, `…/outbox/tests` et
-  `…/relay/tests`) :
+- `go test -shuffle=on ./...` vert — **262 tests de premier niveau**. La table ci-dessous en détaille
+  227 ; les 35 suivants sont dans `internal/pkg/middleware/tests` (12),
+  `internal/infrastructure/messaging/tests` (13) et `internal/infrastructure/modulebus/tests` (10) :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -193,7 +194,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `migrations/postgres/` + `deploy/postgres/provision.sql` | Écrits, **non exécutés en local**. Le job CI `migrations` les applique, vérifie l'isolation et prouve le `Down` |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
-| `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** |
+| `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** — `messaging` (13) et `modulebus` (10) sont désormais couverts |
 
 ### `task check` — cinq étapes sur six, la sixième bloquée par la MACHINE
 
@@ -232,30 +233,43 @@ propre au répertoire web de XAMPP (antivirus ou accès contrôlé aux dossiers)
 > Aucune installation système — la correction vit dans le dépôt et vaut pour tout le monde, CI
 > comprise. `govulncheck` rend **0 vulnérabilité**.
 
-### 🔴 La couverture réelle est de 52 %, pas 70 % — le cliquet ne tenait pas
+### Couverture — trois cliquets, un seul programme
 
-Mesuré le 2026-07-26, `task check` vert à l'appui :
+`tools/covergate` applique les cliquets ; `task test` et la CI lancent la **même** commande, donc
+ils ne peuvent plus diverger. Mesuré le 2026-07-26 :
 
-| Mesure | Valeur |
-|---|---|
-| `go test -coverprofile` **sans** `-coverpkg` | **3,6 %** |
-| `go test -coverprofile -coverpkg=./...` | **52,4 %** |
-| Seuil annoncé par la CI | **70 % global · 90 % sur le cœur** |
+| Cliquet | Valeur | Seuil | État |
+|---|---|---|---|
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **70,3 %** | 70 % | ✅ |
+| **Cœur** `domain/` + `application/`, pondéré par instruction | **95,2 %** | 90 % | ✅ |
+| **Code produit** — tout, pilotes compris | **56,9 %** | cliquet 56 % | ✅ |
 
-Deux faits distincts, et il ne faut pas les confondre :
+**Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
+tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
+**inatteignable**, et un seuil inatteignable finit toujours par être abaissé. Il s'applique désormais
+au périmètre que ce lot peut atteindre. Trois choses empêchent que ce soit un contournement — liste
+d'exclusions énumérée et motivée, affichée à chaque exécution, et un cliquet distinct qui garde le
+total du code produit. Détail dans `rules/tests.md` § 5.
 
-1. **La mesure était fausse.** Les tests sont en **boîte noire**, dans `{paquet}/tests/`, donc dans
-   un paquet différent du code qu'ils exercent. Sans `-coverpkg=./...`, le profil n'attribue la
-   couverture qu'au paquet de test : 3,6 %. Corrigé dans `Taskfile.yml` et dans la CI.
-   Un chiffre faux **dans ce sens** est le pire : il fait échouer le cliquet pour une raison
-   inexistante, et quelqu'un finit par baisser le seuil « pour débloquer la CI ».
-2. **Même corrigée, la couverture reste sous le seuil.** 52,4 % < 70 %. Le cliquet n'a jamais pu
-   s'exécuter (le job `test` de la CI n'a pas de base pour tourner), donc personne ne l'avait vu.
-   Ce qui manque est identifiable : `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache`
-   compilent et n'ont **zéro test**, et les pilotes `postgres` ne sont exercés nulle part.
+> 🔴 **La dette est nommée, pas cochée : issue #37.** Huit paquets de pilotes ont **zéro test, à
+> aucun niveau** — le tag `integration` n'est porté par **aucun fichier** du dépôt, et la CI n'a pas
+> de job `integration`. Le pilote `memory` d'`idempotency` a 24 tests prouvant l'exclusivité ; le
+> pilote `postgres`, celui qui tournera en production, en a **zéro**.
 
-**Ne pas baisser le seuil.** Soit on couvre, soit on retire du code non couvert du périmètre mesuré
-en le disant — jamais on n'ajuste la barre pour qu'elle passe.
+Un **garde anti-pourriture** fait échouer la CI si une exclusion ne correspond plus à aucun code —
+donc le jour où un pilote est couvert, la CI **exige** qu'on retire son exclusion.
+
+**Deux façons de mesurer faux, les deux rencontrées, les deux dans le sens « trop bas »** — le pire
+sens, celui qui fait échouer un cliquet pour une raison inexistante :
+
+| Faute | Effet | Remède |
+|---|---|---|
+| `-coverpkg=./...` oublié | Tests en boîte noire = autre paquet que le code exercé → **3,6 %** au lieu de 52 % | Drapeau ajouté au `Taskfile` et à la CI |
+| Plages non **fusionnées** | Avec `-coverpkg`, chaque binaire de test émet un profil pour **tous** les paquets : une plage apparaît ~20 fois, presque toujours à zéro → **3,4 %** au lieu de 56,9 % | Fusion par plage, « couverte » = **OU** sur les occurrences |
+
+**Toujours recouper un chiffre de couverture avec `go tool cover -func`** avant d'en tirer une
+conclusion. Et ne jamais ajuster la barre pour qu'elle passe : soit on couvre, soit on retire du
+périmètre **en le disant**.
 
 ### Absent
 
@@ -399,11 +413,20 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-1. **F007** : monter la chaîne d'outils Go ≥ 1.25.12 — 20 vulnérabilités stdlib bloquent `v0.1.0`.
-   **C'est le seul obstacle purement mécanique qui reste avant le tag**
-2. **F006** : installer `task` et `govulncheck` pour que `task check` tourne réellement en local
-3. **#1** : `task check` vert de bout en bout → tag `v0.1.0`
-4. **Fusionner PR #20**, puis cette branche : `main` est très en retard
+F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont plus des actions.
+
+1. **Couvrir `httpserver`, `telemetry`, `cache`** — les trois derniers paquets à **zéro test** qui
+   n'exigent pas de service. C'est ce qui relèvera le cliquet de code produit au-dessus de 56,9 %
+2. **#2** : `task check` vert de bout en bout → tag `v0.1.0`. Vert depuis un clone **hors** de
+   `htdocs` ; les trois cliquets de couverture passent aussi. Reste F008 côté machine
+3. **Fusionner PR #20**, puis cette branche : `main` est très en retard.
+   ⚠️ Quatre messages de commit poussés portent de **mauvais numéros d'issue** (`Closes #2` et
+   `Closes #10` fermeraient des issues non terminées). Une table de traçabilité est publiée en
+   commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
+4. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
+   par F001 (Docker), donc CI ou WSL
+5. **Trancher la déclaration des pilotes d'un module métier** (voir « point de conception OUVERT »)
+   avant d'écrire `hexa new`
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
@@ -438,8 +461,9 @@ faire modifier `internal/config/modules.go` — un fichier du framework — pour
 son propre module `billing` est exactement la friction qu'un framework ne doit pas avoir.
 **Ouvert, pas oublié.** À trancher avant `hexa new`.
 
-> **Terminé** : la campagne `golangci-lint` (239 → 0) et **#2** (schéma `platform`, rôles,
-> ADR 011, garde `verify.sql`, job CI `migrations`).
+> **Terminé** : la campagne `golangci-lint` (239 → 0) et **#5** (schéma `platform`, rôles,
+> ADR 011, garde `verify.sql`, job CI `migrations`). Ce paragraphe créditait **#2** par erreur —
+> #2 est la porte de sortie de phase 0, et elle est **ouverte**.
 
 ### Invariants d'isolation des données — ADR 011
 

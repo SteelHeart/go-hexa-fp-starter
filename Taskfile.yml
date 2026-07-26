@@ -8,7 +8,10 @@ vars:
     sh: go list -m
   BIN: bin
   COVER_PROFILE: coverage.out
-  COVER_THRESHOLD: 80
+  # Aucun seuil ici, volontairement. Il y en avait un — `COVER_THRESHOLD: 80` —
+  # que AUCUNE tâche ne lisait, pendant que la CI en appliquait 70 et 90. Trois
+  # valeurs, trois endroits, dont un mort : la seule source de vérité est
+  # désormais `tools/covergate`.
 
 tasks:
   default:
@@ -171,6 +174,10 @@ tasks:
       # couverture, puis quelqu'un baisserait le seuil pour « débloquer la CI » —
       # et le garde ne garderait plus rien.
       - go test -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=count -coverpkg=./... ./...
+      # Les cliquets sont appliqués par un PROGRAMME, pas par du shell dupliqué :
+      # la CI lance exactement cette commande. Les seuils vivent à un seul
+      # endroit, dans tools/covergate, et ils sont compilés.
+      - go run ./tools/covergate {{.COVER_PROFILE}}
 
   test:race:
     desc: 'Tests + detecteur de courses (exige CGO : CI Linux)'

@@ -265,25 +265,39 @@ jobs:
       - name: go test -race
         run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out -coverpkg=./... ./...
 
-      - name: Seuil de couverture
+      # Les trois cliquets sont appliqués par `tools/covergate`, le MÊME
+      # programme que `task test` lance en local. Ce qui était ici en shell
+      # dupliquait la logique et, surtout, mesurait mal :
+      #
+      #  - le seuil global de 70 % portait sur un profil produit SANS TAG, donc
+      #    incapable par construction d'exécuter une ligne de pilote Postgres ou
+      #    Redis. Il était inatteignable, et un seuil inatteignable finit
+      #    toujours par être abaissé « pour débloquer la CI » ;
+      #  - la couverture du cœur moyennait les pourcentages PAR FONCTION : une
+      #    fonction d'une instruction pesait autant qu'une fonction de
+      #    cinquante. Elle est désormais pondérée par instruction.
+      #
+      # Le seuil de 70 % n'a PAS été abaissé : il s'applique au périmètre que ce
+      # lot peut atteindre. Ce qui en sort est énuméré, motivé, affiché à chaque
+      # exécution, et un cliquet distinct garde le total du code produit — donc
+      # ajouter du code non couvert échoue toujours. Voir #37.
+      - name: Cliquets de couverture
+        shell: bash
         run: |
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
-          echo "Couverture globale : ${total}%"
-          echo "### Couverture : ${total}%" >> "$GITHUB_STEP_SUMMARY"
-          awk -v t="$total" 'BEGIN { exit (t + 0 >= 70) ? 0 : 1 }' \
-            || { echo "::error::Couverture ${total}% < seuil 70%"; exit 1; }
-
-      - name: Couverture du cœur métier (domain + application ≥ 90%)
-        run: |
-          go tool cover -func=coverage.out \
-            | grep -E '/(domain|application)/' \
-            | awk '{ gsub(/%/, "", $3); sum += $3; n++ }
-                   END {
-                     if (n == 0) { print "::warning::aucun fichier de cœur mesuré"; exit 0 }
-                     avg = sum / n
-                     printf "Couverture du cœur : %.1f%% sur %d fonctions\n", avg, n
-                     if (avg < 90) { printf "::error::cœur à %.1f%% < 90%%\n", avg; exit 1 }
-                   }'
+          # `set -o pipefail` est OBLIGATOIRE ici : le shell par défaut des
+          # étapes `run` est `bash -e`, SANS pipefail. Sans cette ligne, le code
+          # de retour du cliquet serait celui de `tee` — toujours 0 — et la CI
+          # serait verte sur une couverture insuffisante. C'est précisément le
+          # faux vert que cette étape est censée empêcher.
+          set -o pipefail
+          {
+            echo '### Couverture'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          go run ./tools/covergate coverage.out | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - uses: actions/upload-artifact@v4
         if: always()

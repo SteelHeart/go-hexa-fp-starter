@@ -139,16 +139,61 @@ Ajouter une implémentation sans l'inscrire dans cette table est un défaut de r
 
 ## 5. Cliquets de couverture
 
-| Portée | Seuil | Garde |
+Trois cliquets, appliqués par **un seul programme** : [`tools/covergate`](../tools/covergate/main.go).
+`task test` et la CI lancent la **même** commande, donc ils ne peuvent pas diverger.
+
+| Portée | Seuil | Nature |
 |---|---|---|
-| Global | **70 %** | CI, job `test` |
-| `domain/` + `application/` | **90 %** | CI, job `test` |
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **70 %** | seuil |
+| `domain/` + `application/` — les règles métier | **90 %** | plancher |
+| **Code produit** — tout, pilotes Postgres et Redis compris | valeur mesurée | **cliquet** |
 
 Les seuils **montent, ne descendent jamais**. Les abaisser exige un ADR — et c'est le genre de
 décision qu'on n'écrit pas volontiers, ce qui est exactement l'effet recherché.
 
 La couverture mesure ce qui est **exécuté**, pas ce qui est **vérifié** : 90 % sur le cœur est un
 plancher, pas un objectif atteint.
+
+### Pourquoi le seuil s'applique à un périmètre, et pourquoi ce n'est pas un contournement
+
+Le cliquet global exigeait 70 % d'un profil produit par `go test ./...` **sans tag**. Or ce lot ne
+peut, par construction, exécuter aucune ligne d'un pilote Postgres ou Redis : [`toolchain.md`](toolchain.md)
+garantit qu'un test sans tag n'exige **aucun service**. Le seuil portait donc sur du code que la
+mesure ne pouvait pas atteindre — il était **inatteignable**.
+
+Un seuil inatteignable ne protège rien. Il devient rouge en permanence, on l'ignore, puis quelqu'un
+l'abaisse « pour débloquer la CI ». C'est le scénario que ce document interdit ; le laisser en place
+le rendait *inévitable*.
+
+Trois choses, ensemble, font que réduire le périmètre n'est pas dissimuler :
+
+1. **La liste des exclusions est énumérée et motivée**, dans le code du cliquet. Chaque entrée dit
+   par quel autre niveau de test le code est censé être couvert — **ou avoue qu'aucun ne le couvre**.
+2. **Elle s'affiche à chaque exécution**, en local comme en CI, avec la couverture réelle de chaque
+   chemin exclu. Un périmètre réduit qu'on n'affiche pas se lit « on couvre tout ».
+3. **Le cliquet de code produit garde le total**, exclusions comprises. Il ne descend jamais. Ajouter
+   du code non couvert le fait baisser, donc échouer — l'exclusion ne crée aucune zone franche.
+
+Un **garde anti-pourriture** complète le dispositif : une exclusion qui ne correspond plus à aucun
+code mesuré **fait échouer la CI**. Sans lui, un paquet renommé laisserait son entrée en place et le
+périmètre changerait sans que personne l'ait décidé. Corollaire utile : le jour où un pilote est
+enfin couvert, la CI **exige** qu'on retire son exclusion.
+
+> **La dette reste nommée** : huit paquets de pilotes n'ont **aucun test, à aucun niveau** — le tag
+> `integration` n'est porté par aucun fichier du dépôt. C'est l'issue **#37**, pas une case cochée.
+
+### Deux façons de mesurer faux, toutes deux rencontrées
+
+La mesure de couverture s'est déjà trompée **deux fois dans le même sens** — trop bas, ce qui est le
+pire sens : le cliquet échoue pour une raison inexistante, et on finit par baisser la barre.
+
+| Faute | Effet | Remède |
+|---|---|---|
+| `-coverpkg=./...` oublié | Les tests sont en boîte noire, dans un **autre paquet** que le code exercé. Sans ce drapeau, le profil n'attribue la couverture qu'au paquet de test : **3,6 %** au lieu de 52 % | Drapeau ajouté dans le `Taskfile` et la CI |
+| Plages non **fusionnées** | Avec `-coverpkg=./...`, chaque binaire de test émet un profil pour **tous** les paquets. Une même plage apparaît une vingtaine de fois, presque toujours à zéro. Les additionner donne **3,4 %** au lieu de 56,9 % | Le cliquet fusionne par plage, « couverte » étant un **OU** sur les occurrences |
+
+**Toujours recouper un chiffre de couverture avec `go tool cover -func`** avant de s'en servir pour
+décider quoi que ce soit.
 
 ## 6. Le piège du faux vert
 
