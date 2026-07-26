@@ -61,6 +61,32 @@ raconte l'histoire d'une seule garantie ; un conflit de fusion porte sur un seul
 garantie supprimée se voit comme une suppression de fichier, pas comme trente lignes en moins dans
 un fichier de six cents.
 
+### La même règle s'applique au CODE, pas seulement aux tests
+
+**Un fichier long se découpe en un fichier par fonction publique**, nommé d'après elle en
+`snake_case`. Le paquet reste le même — c'est le découpage physique qui change, pas l'API.
+
+```
+internal/pkg/middleware/
+├── middleware.go        le type Middleware, Chain, et rien d'autre
+├── request_id.go        RequestID et RequestIDFrom
+├── recover.go           Recover
+├── security_headers.go  SecurityHeaders, SecurityHeadersWithoutHSTS
+├── cors.go              CORS
+├── max_body.go          MaxBody
+├── rate_limiter.go      RateLimiter
+└── access_log.go        AccessLog
+```
+
+Les raisons sont les mêmes que pour les tests, et une de plus : **un fichier de six cents lignes
+cache ses défauts**. Le limiteur de débit de ce dépôt n'a jamais limité quoi que ce soit — l'ordre
+de deux instructions supprimait le visiteur à l'instant où il était créé. Personne ne l'a vu en
+relisant, parce que personne ne relit une fonction perdue au milieu d'un fichier qu'on ouvre pour
+autre chose.
+
+Le seuil n'est pas un nombre de lignes fixe : dès qu'un fichier porte **plusieurs responsabilités
+publiques indépendantes**, il se découpe.
+
 ## 3. Obligations
 
 - **Un bug corrigé porte son test de non-régression**, écrit avant le correctif et échouant sans lui.

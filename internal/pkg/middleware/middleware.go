@@ -240,9 +240,19 @@ func (l *RateLimiter) allow(key string) bool {
 	now := time.Now()
 	v, found := l.visitors[key]
 	if !found {
-		v = &visitor{limiter: rate.NewLimiter(l.rps, l.burst)}
-		l.visitors[key] = v
+		// La purge a lieu AVANT l'insertion, et le nouveau visiteur naît
+		// horodaté. L'ordre inverse — insérer, puis purger — supprimait le
+		// visiteur qu'on venait de créer : son `seen` valait encore la date
+		// zéro, et `now.Sub(zéro)` dépasse n'importe quel TTL.
+		//
+		// Conséquence, restée invisible jusqu'à ce qu'un test la cherche : la
+		// table restait vide, chaque requête repartait avec un limiteur neuf,
+		// et la limitation de débit ne limitait RIEN. Aucun symptôme — un
+		// limiteur qui laisse tout passer se comporte exactement comme un
+		// service peu sollicité.
 		l.evictLocked(now)
+		v = &visitor{limiter: rate.NewLimiter(l.rps, l.burst), seen: now}
+		l.visitors[key] = v
 	}
 	v.seen = now
 	return v.limiter.Allow()
