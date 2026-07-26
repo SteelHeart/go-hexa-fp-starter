@@ -192,21 +192,22 @@ si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécu
 | Couverture ≥ 70 % global, ≥ 90 % sur le cœur | CI, cliquets | CI seulement |
 | Toucher au règlement exige un ADR | CI, job `inertia` | CI seulement |
 | Aucune dette dissimulée en `TODO` | CI, job `inertia` | CI seulement |
-| Aucune vulnérabilité connue | `govulncheck` · CodeQL | **NON — échoue, voir ci-dessous** |
+| Aucune vulnérabilité connue | `govulncheck` · CodeQL | **oui** |
 
-**`golangci-lint` rend 0 signalement** (~50 analyseurs, parti de 239) et **`arch-go` 18 règles sur
-18, couverture 100 %**. Les deux ont réellement tourné sur la machine de référence, et le code de
-retour a été vérifié — pas seulement la sortie.
+**`golangci-lint` rend 0 signalement** (~50 analyseurs, parti de 239), **`arch-go` 18 règles sur 18
+avec 100 % de couverture**, et **`govulncheck` 0 vulnérabilité**. Tous ont réellement tourné, dans
+l'enchaînement `task check`, et le code de retour a été vérifié — pas seulement la sortie.
 
-⚠️ **`govulncheck` échoue**, et c'est écrit ici plutôt que passé sous silence : la chaîne d'outils
-Go de la machine de référence porte **20 vulnérabilités de la bibliothèque standard** atteignables
-depuis le code (`crypto/tls`, `crypto/x509`, `net/url`, `net/mail`, `html/template`, `os`). Aucune
-ne vient d'une dépendance du dépôt : toutes sont corrigées par une chaîne d'outils Go ≥ 1.25.12.
-**Cela bloque la première version taguée** (friction F007).
+Le dépôt épingle **`go 1.25.12`** dans `go.mod`. Avec `GOTOOLCHAIN=auto` — le défaut — Go télécharge
+la chaîne demandée : aucune installation système n'est nécessaire, et la correction vaut pour tout
+le monde, CI comprise. C'est ce qui a fermé les 20 vulnérabilités de la bibliothèque standard que
+portait la chaîne précédente.
 
-⚠️ **`task check` n'a jamais été exécuté tel quel** : `task` n'est pas installé sur la machine de
-référence, seules ses étapes ont tourné une par une (friction F006). La barrière qu'on croit
-franchir n'est pas exactement celle qui tourne.
+> ⚠️ **`task check` ne peut pas être vert depuis `C:\xampp\htdocs\`.** Sur cette machine, aucun
+> binaire Go n'y a le droit de créer un fichier — le shell si. `go test -coverprofile` échoue donc,
+> et l'étape `test` avec lui. Ce n'est pas un défaut du dépôt : `go test ./...` sans couverture est
+> vert, et les cinq autres étapes passent. Sortir le dépôt du répertoire web de XAMPP, ou travailler
+> sous WSL. Voir friction **F008**.
 
 ## Stack
 

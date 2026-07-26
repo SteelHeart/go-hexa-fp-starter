@@ -195,19 +195,28 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** |
 
-### Vert, mais NON exécuté comme la CI
+### `task check` — cinq étapes sur six, la sixième bloquée par la MACHINE
 
-`task check` enchaîne `fmt · vet · lint · arch · test · vuln`. Les cinq premières étapes ont été
-lancées **une par une** et sont vertes. Les deux réserves, écrites parce qu'elles sont exactement
-le genre de chose qu'on oublie :
+`task check` enchaîne `fmt · vet · lint · arch · test · vuln`. Il a enfin été exécuté tel quel.
 
-- **`task` n'est pas installé** sur la machine de référence : l'enchaînement lui-même n'a jamais
-  tourné, seulement ses étapes (friction F006).
-- **`vuln` échoue** : `govulncheck` trouve **20 vulnérabilités de la bibliothèque standard**
-  atteignables depuis le code (`crypto/tls`, `crypto/x509`, `net/url`, `net/mail`,
-  `html/template`, `os`). Aucune ne vient d'une dépendance du dépôt : **toutes** sont corrigées
-  par une chaîne d'outils Go ≥ 1.25.12, la machine est en 1.25.4. **Cela bloque le tag `v0.1.0`**
-  (friction F007).
+| Étape | État |
+|---|---|
+| `fmt` `vet` `lint` `arch` `vuln` | **verts**, dans l'enchaînement réel |
+| `test` | **échoue** — et pas à cause du code |
+
+**🔴 F008 — un programme Go ne peut créer AUCUN fichier sous `C:\xampp\htdocs\`.**
+`go test -coverprofile=coverage.out` échoue sur « Le fichier spécifié est introuvable », et `go get`
+ne peut pas réécrire `go.mod` pour la même raison. Diagnostiqué par un programme témoin de dix
+lignes : création **refusée** dans le dépôt, **acceptée** dans `%TEMP%` et sous `C:\Users\MAC\`. Le
+shell, lui, écrit sans problème dans le dépôt — c'est donc une protection visant les binaires,
+propre au répertoire web de XAMPP (antivirus ou accès contrôlé aux dossiers).
+
+**Ce n'est pas un défaut du dépôt.** Deux issues : sortir le dépôt de `htdocs`, ou travailler sous
+**WSL** — prévu. Les tests passent tous par ailleurs (`go test ./...` sans couverture est vert).
+
+> **F007 est résolue** : `go 1.25.12` dans `go.mod`, et `GOTOOLCHAIN=auto` télécharge la chaîne.
+> Aucune installation système — la correction vit dans le dépôt et vaut pour tout le monde, CI
+> comprise. `govulncheck` rend **0 vulnérabilité**.
 
 ### Absent
 
@@ -326,6 +335,8 @@ est écrite à côté :
 | `arch-go` a changé de chemin de module | `go install github.com/fdaines/arch-go` échoue | C'est `github.com/arch-go/arch-go`. Corrigé dans `Taskfile.yml` et la CI |
 | Écriture PowerShell mal encodée | 408 séquences d'accents doublement encodées dans 8 fichiers | Réparé. Toujours écrire en UTF-8 sans BOM |
 | Fichier verrouillé par l'éditeur | `golangci-lint fmt` échoue sur « Accès refusé » | Fermer l'éditeur, relancer |
+| **Un binaire Go ne peut pas écrire sous `htdocs`** | `go test -coverprofile` et `go get` échouent sur « fichier introuvable » — sur une CRÉATION, ce qui n'a aucun sens et envoie chercher ailleurs | Programme témoin de 10 lignes pour trancher : si `os.Create` échoue dans le dépôt et réussit ailleurs, c'est la MACHINE. Sortir de `htdocs` ou passer sous WSL (F008) |
+| PowerShell tronque `-flag=nom.ext` | `-coverprofile=coverage.out` arrive à Go en `-coverprofile=coverage`. L'erreur nomme un fichier qu'on n'a jamais demandé | Passer par le shell POSIX pour les commandes à arguments `=`, ou quoter |
 
 ### Frictions ouvertes (`documentation/process/JOURNAL_FRICTION.md`)
 
@@ -336,8 +347,9 @@ est écrite à côté :
 | F003 | Aucun test de mutation |
 | F004 | Outillage en `latest` : CI non reproductible |
 | F005 | `-race` exige CGO : `task test` sans `-race` en local, `task test:race` en CI |
-| F006 | `task` et `govulncheck` absents de la machine : **`task check` n'a jamais tourné tel quel** |
-| F007 | Go 1.25.4 : **20 vulnérabilités stdlib atteignables**, corrigées en 1.25.12. Bloque `v0.1.0` |
+| **F008** | **Aucun binaire Go ne peut écrire sous `C:\xampp\htdocs\`** → `task check` ne peut pas être vert ici. Sortir le dépôt de `htdocs`, ou passer sous WSL |
+| ~~F006~~ | **Résolue** — `task` et `govulncheck` installés par `go install` |
+| ~~F007~~ | **Résolue** — `go 1.25.12` dans `go.mod`, `GOTOOLCHAIN=auto` fait le reste |
 
 ### Prochaines actions, dans l'ordre
 
