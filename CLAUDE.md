@@ -30,6 +30,10 @@ chemin de module est la seule valeur nominative, isolée derrière `task rename`
 
 ## À lire en premier (dans l'ordre)
 
+0. **[`documentation/process/REPRISE.md`](documentation/process/REPRISE.md)** — **poste neuf, ou
+   reprise après une interruption** : amorçage vérifié, état du travail en cours, ordre de fusion,
+   et ce qui attend un arbitrage. Le lire d'abord fait gagner les heures que coûtent F008 et les
+   quatre commits mal numérotés.
 1. **[`rules/README.md`](rules/README.md)** — base normative, découpée par thème. **Fait foi.**
    Relire le fichier du domaine concerné *avant* de coder.
 2. **[`rules/interdictions.md`](rules/interdictions.md)** — la liste à relire avant d'ouvrir un

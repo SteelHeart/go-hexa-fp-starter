@@ -6,6 +6,7 @@ applique dix fois par jour sans vouloir y repenser.
 
 | Document | Ce qu'il tranche |
 |---|---|
+| [`REPRISE.md`](REPRISE.md) | **Poste neuf ou reprise** : amorçage vérifié, travail en cours, ordre de fusion, arbitrages en attente |
 | [`NOMENCLATURE.md`](NOMENCLATURE.md) | Nommer une branche, un commit, une PR, un fichier, un test |
 | [`LABELS.md`](LABELS.md) | Le jeu de labels GitHub, et ce que chacun engage |
 | [`JOURNAL_FRICTION.md`](JOURNAL_FRICTION.md) | Ce qui freine, **assumé et daté**, plutôt que subi en silence |
