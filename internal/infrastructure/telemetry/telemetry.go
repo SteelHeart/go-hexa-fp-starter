@@ -8,7 +8,9 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -35,14 +37,24 @@ type Shutdown = func(context.Context) error
 // JSON hors développement : c'est ce que les collecteurs savent lire. Texte en
 // local, parce qu'un humain lit mieux du texte.
 func NewLogger(cfg config.Config) *slog.Logger {
+	return newLoggerTo(cfg, os.Stdout)
+}
+
+// newLoggerTo porte toute la logique, la destination étant un paramètre.
+//
+// La destination est extraite pour UNE raison : `os.Stdout` en dur rendait
+// invérifiable la seule règle intéressante de cette fonction — hors
+// développement, le format est JSON même si la configuration demande du texte.
+// Une règle qu'aucun test ne peut observer n'est pas une règle.
+func newLoggerTo(cfg config.Config, out io.Writer) *slog.Logger {
 	level := parseLevel(cfg.Telemetry.LogLevel)
 	opts := &slog.HandlerOptions{Level: level, AddSource: level == slog.LevelDebug}
 
 	var base slog.Handler
 	if cfg.Telemetry.LogFormat == "json" || !cfg.App.Env.IsDevelopment() {
-		base = slog.NewJSONHandler(os.Stdout, opts)
+		base = slog.NewJSONHandler(out, opts)
 	} else {
-		base = slog.NewTextHandler(os.Stdout, opts)
+		base = slog.NewTextHandler(out, opts)
 	}
 
 	handler := &traceHandler{inner: base}
@@ -137,17 +149,29 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 	otel.SetMeterProvider(meterProvider)
 
 	return func(shutdownCtx context.Context) error {
-		return fmt.Errorf("arrêt de la télémétrie: %w",
-			errJoin(tracerProvider.Shutdown(shutdownCtx), meterProvider.Shutdown(shutdownCtx)))
-	}, nil
-}
-
-// errJoin évite d'importer errors pour un seul appel et garde la lisibilité.
-func errJoin(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
+		// Les DEUX arrêts sont tentés, puis leurs erreurs sont jointes.
+		//
+		// Deux défauts vivaient ici, tous deux invisibles sans test :
+		//
+		//  1. Le `fmt.Errorf(... %w ...)` était INCONDITIONNEL. Avec un `%w` sur
+		//     un nil, il ne rend pas nil : il rend une erreur portant
+		//     « %!w(<nil>) ». Un arrêt PARFAITEMENT RÉUSSI remontait donc une
+		//     erreur, et l'appelant aurait compté chaque déploiement normal comme
+		//     un échec.
+		//  2. L'aide s'appelait `errJoin` et ne joignait rien : elle rendait la
+		//     PREMIÈRE erreur non nulle et jetait la seconde. Si l'exportateur de
+		//     métriques échouait à se vider après celui des traces, son erreur
+		//     disparaissait — et un exportateur qui ne se vide pas perd les
+		//     mesures de l'incident qu'on cherche justement à comprendre.
+		//
+		// `errors.Join` fait exactement ce qu'annonçait le nom, et rend nil quand
+		// tout va bien. L'aide maison n'avait aucune raison d'exister.
+		if err := errors.Join(
+			tracerProvider.Shutdown(shutdownCtx),
+			meterProvider.Shutdown(shutdownCtx),
+		); err != nil {
+			return fmt.Errorf("arrêt de la télémétrie: %w", err)
 		}
-	}
-	return nil
+		return nil
+	}, nil
 }

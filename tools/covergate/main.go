@@ -63,9 +63,17 @@ const (
 	// dissimulation : le chiffre incluant tout reste gardé. Ajouter du code non
 	// couvert le fait baisser, donc échouer.
 	//
-	// Mesuré à 56,9 % le 2026-07-26. Posé à 56 pour absorber l'écart de mesure
-	// entre `-covermode=count` (local) et `atomic` (CI, avec -race).
-	productFloor = 56.0
+	// Historique — le cliquet ne redescend jamais :
+	//
+	//	2026-07-26  mesuré 56,9 %  →  plancher 56
+	//	2026-07-27  mesuré 60,2 %  →  plancher 59   (tests httpserver + telemetry)
+	//
+	// Le plancher est posé environ un point sous la mesure, pour absorber l'écart
+	// entre `-covermode=count` (local) et `atomic` (CI, avec -race). Le resserrer
+	// davantage est une décision à part : un plancher collé à la mesure fait
+	// échouer la CI sur un test légitimement retiré, et c'est ainsi qu'on finit
+	// par désactiver le garde plutôt que par le respecter.
+	productFloor = 59.0
 )
 
 // buildTooling est le SEUL chemin hors du cliquet de code produit.

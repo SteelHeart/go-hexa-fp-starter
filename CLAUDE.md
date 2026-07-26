@@ -151,9 +151,11 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **262 tests de premier niveau**. La table ci-dessous en détaille
-  227 ; les 35 suivants sont dans `internal/pkg/middleware/tests` (12),
-  `internal/infrastructure/messaging/tests` (13) et `internal/infrastructure/modulebus/tests` (10) :
+- `go test -shuffle=on ./...` vert — **285 tests de premier niveau**. La table ci-dessous en détaille
+  227 ; les 58 suivants sont dans `internal/pkg/middleware/tests` (12),
+  `internal/infrastructure/messaging/tests` (13), `internal/infrastructure/modulebus/tests` (10),
+  `internal/infrastructure/httpserver` (3 internes) + `…/httpserver/tests` (11), et
+  `internal/infrastructure/telemetry/internal_test.go` (9) :
 
 | Paquet | Tests | Ce que ça prouve |
 |---|---|---|
@@ -175,6 +177,13 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `internal/infrastructure/relay/tests` | 2 | Le mappage message → enveloppe ne perd aucun champ, et un échec de publication **remonte intact** au dépileur au lieu d'être avalé |
 | `…/adapters/primary/http/tests` (en processus) | 3 | 201 et **aucune fuite du condensé dans le corps brut**, 409 ≠ 422 sur adresse prise, chaque erreur de domaine sur son statut avec le message du domaine |
 
+- **Deux défauts LATENTS trouvés en écrivant les tests de `telemetry`**, tous deux dans la fonction
+  d'arrêt : (1) `fmt.Errorf("…: %w", nil)` **ne rend pas nil** — il rend une erreur portant
+  `%!w(<nil>)`, donc un arrêt réussi remontait une erreur et chaque déploiement aurait été compté en
+  échec ; (2) l'aide s'appelait `errJoin` et **ne joignait rien** — elle rendait la première erreur
+  et jetait la seconde. Latents parce que `telemetry.Setup` n'est appelée **nulle part** (#13) ;
+  ils se seraient déclenchés le jour du branchement. Remplacés par `errors.Join`, avec un retour nil
+  explicite. Mutation vérifiée.
 - **Six modules noyau convertis** à l'anatomie de l'ADR 012 : `outbox`, `idempotency`, `dynconf`,
   `audit`, `storage`, `scheduler`. Chacun a un pilote sans dépendance, choisi par défaut.
 - **Le dépileur de l'outbox est réécrit** dans `application/` : recul exponentiel, abandon après N
@@ -194,7 +203,7 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `migrations/postgres/` + `deploy/postgres/provision.sql` | Écrits, **non exécutés en local**. Le job CI `migrations` les applique, vérifie l'isolation et prouve le `Down` |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
-| `httpserver`, `telemetry`, `cache` | Compilent, **zéro test** — `messaging` (13) et `modulebus` (10) sont désormais couverts |
+| `cache` | Compile, **zéro test** : `New` fait un `Ping` Redis et `JSON` exige un client — donc niveau intégration (#37), pas ici. `messaging` (13), `modulebus` (10), `httpserver` (14) et `telemetry` (9) sont désormais couverts |
 
 ### `task check` — cinq étapes sur six, la sixième bloquée par la MACHINE
 
@@ -240,9 +249,9 @@ ils ne peuvent plus diverger. Mesuré le 2026-07-26 :
 
 | Cliquet | Valeur | Seuil | État |
 |---|---|---|---|
-| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **70,3 %** | 70 % | ✅ |
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **74,3 %** | 70 % | ✅ |
 | **Cœur** `domain/` + `application/`, pondéré par instruction | **95,2 %** | 90 % | ✅ |
-| **Code produit** — tout, pilotes compris | **56,9 %** | cliquet 56 % | ✅ |
+| **Code produit** — tout, pilotes compris | **60,2 %** | cliquet 59 % | ✅ |
 
 **Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
 tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
@@ -415,17 +424,15 @@ est écrite à côté :
 
 F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont plus des actions.
 
-1. **Couvrir `httpserver`, `telemetry`, `cache`** — les trois derniers paquets à **zéro test** qui
-   n'exigent pas de service. C'est ce qui relèvera le cliquet de code produit au-dessus de 56,9 %
-2. **#2** : `task check` vert de bout en bout → tag `v0.1.0`. Vert depuis un clone **hors** de
+1. **#2** : `task check` vert de bout en bout → tag `v0.1.0`. Vert depuis un clone **hors** de
    `htdocs` ; les trois cliquets de couverture passent aussi. Reste F008 côté machine
-3. **Fusionner PR #20**, puis cette branche : `main` est très en retard.
+2. **Fusionner PR #20**, puis cette branche : `main` est très en retard.
    ⚠️ Quatre messages de commit poussés portent de **mauvais numéros d'issue** (`Closes #2` et
    `Closes #10` fermeraient des issues non terminées). Une table de traçabilité est publiée en
    commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
-4. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
-   par F001 (Docker), donc CI ou WSL
-5. **Trancher la déclaration des pilotes d'un module métier** (voir « point de conception OUVERT »)
+3. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
+   par F001 (Docker), donc CI ou WSL. `cache` en fait partie : `New` fait un `Ping`
+4. **Trancher la déclaration des pilotes d'un module métier** (voir « point de conception OUVERT »)
    avant d'écrire `hexa new`
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
