@@ -2,33 +2,44 @@
 //
 // # L'outbox n'est pas à la place du broker, elle est devant lui
 //
-// Une feature écrit TOUJOURS dans l'outbox, dans sa transaction métier : c'est
+// Un module écrit TOUJOURS dans l'outbox, dans sa transaction métier : c'est
 // ce qui garantit qu'aucun événement n'est perdu ni fantôme (ADR 006). Le
 // worker dépile ensuite et remet l'enveloppe à un RELAIS — c'est le relais qui
 // connaît Kafka, RabbitMQ, ou rien du tout.
 //
 // Conséquence : changer de broker ne touche aucune ligne de `domain/`, `ports/`
-// ou `application/`. C'est une variable d'environnement.
+// ou `application/`. C'est une ligne de configuration.
 //
-//	feature ──► outbox (Postgres, transactionnel)  ──► worker ──► relais ──► Kafka / AMQP / inproc
+//	module ──► outbox (transactionnel) ──► worker ──► relais ──► Kafka / AMQP / inproc
 //
 // # Choisir le relais
 //
-//	MESSAGING_DRIVER=inproc     tout dans le même processus (défaut)
-//	MESSAGING_DRIVER=kafka      MESSAGING_BROKERS=host:9092
-//	MESSAGING_DRIVER=rabbitmq   MESSAGING_AMQP_URL=amqp://…
-//	MESSAGING_DRIVER=noop       aucune publication (tests, migrations)
+//	messaging.driver: inproc     tout dans le même processus (défaut)
+//	messaging.driver: kafka      messaging.kafka.brokers: [host:9092]
+//	messaging.driver: rabbitmq   messaging.rabbitmq.url: amqp://…
+//	messaging.driver: noop       aucune publication (tests, migrations)
+//
+// # Un fichier par relais
+//
+// Ce fichier ne porte que le LANGAGE — l'enveloppe et les types fonction. Chaque
+// relais vit dans le sien (rules/tests.md §2) :
+//
+//	broker.go      Broker et New : le seul point qui choisit un transport
+//	inproc.go      bus en mémoire — le mode normal d'un monolithe modulaire
+//	noop.go        aucune publication
+//	kafka.go       relais Kafka        ⚠️ écrit, jamais exécuté contre un broker réel
+//	rabbitmq.go    relais AMQP         ⚠️ écrit, jamais exécuté contre un broker réel
+//	with_retry.go  décorateur de réessai, commun aux deux relais réseau
+//
+// Les deux relais réseau sont NON PROUVÉS. Les séparer physiquement rend cette
+// frontière visible : un fichier entier est marqué non prouvé, plutôt qu'un
+// paragraphe perdu au milieu de code qui, lui, tourne.
 package messaging
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log/slog"
-	"sync"
 	"time"
-
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
 // Driver nomme un relais.
@@ -41,6 +52,12 @@ const (
 	DriverRabbitMQ Driver = "rabbitmq"
 	DriverNoop     Driver = "noop"
 )
+
+// ErrUnknownDriver signale un relais non reconnu.
+//
+// Deny par défaut : un pilote inconnu refuse le démarrage plutôt que de se
+// rabattre silencieusement sur « aucune publication ».
+var ErrUnknownDriver = errors.New("relais de messagerie inconnu")
 
 // Envelope est le format de transport d'un événement.
 //
@@ -74,147 +91,5 @@ type Consumer interface {
 	Run(ctx context.Context) error
 }
 
-// ErrUnknownDriver signale un MESSAGING_DRIVER non reconnu.
-//
-// Deny par défaut : un pilote inconnu refuse le démarrage plutôt que de se
-// rabattre silencieusement sur « aucune publication ».
-var ErrUnknownDriver = errors.New("relais de messagerie inconnu")
-
 // Closer libère les ressources du transport.
 type Closer = func() error
-
-// Broker est un relais monté : ses trois faces vont ensemble.
-//
-// Les rendre séparément avait fait quatre valeurs de retour, et surtout laissait
-// l'appelant libre d'en oublier une — typiquement Close, dont l'oubli ne se voit
-// qu'au moment où les connexions au broker fuient en production.
-type Broker struct {
-	// Publish remet une enveloppe au transport.
-	Publish Publisher
-	// Consume s'abonne et boucle jusqu'à annulation.
-	Consume Consumer
-	// Close libère les ressources. Jamais nil, même pour un relais qui n'en
-	// détient aucune : l'appelant ne doit pas avoir à tester.
-	Close Closer
-}
-
-// noClose est le libérateur d'un relais sans ressource externe.
-func noClose() error { return nil }
-
-// New construit le relais correspondant à la configuration.
-//
-// C'est le SEUL point du dépôt qui choisit un broker. Ajouter un transport se
-// fait ici et nulle part ailleurs.
-func New(cfg config.Messaging, logger *slog.Logger) (Broker, error) {
-	switch Driver(cfg.Driver) {
-	case DriverInproc:
-		bus := NewInproc(logger)
-		return Broker{Publish: bus.Publish, Consume: bus, Close: noClose}, nil
-	case DriverNoop:
-		return Broker{Publish: noopPublisher(logger), Consume: noopConsumer{}, Close: noClose}, nil
-	case DriverKafka:
-		return newKafka(cfg, logger)
-	case DriverRabbitMQ:
-		return newRabbitMQ(cfg, logger)
-	default:
-		return Broker{}, fmt.Errorf("%w: %q", ErrUnknownDriver, cfg.Driver)
-	}
-}
-
-// Inproc est un bus en mémoire : les consommateurs tournent dans le même
-// processus que le producteur.
-//
-// Ce n'est pas un bouchon. C'est le mode NORMAL d'un monolithe modulaire : la
-// durabilité est déjà assurée par l'outbox, le bus n'a donc pas à l'être. On ne
-// paie un broker que le jour où les modules sont déployés séparément.
-type Inproc struct {
-	mu       sync.RWMutex
-	handlers map[string][]Handler
-	logger   *slog.Logger
-}
-
-// NewInproc construit le bus en mémoire.
-func NewInproc(logger *slog.Logger) *Inproc {
-	return &Inproc{handlers: make(map[string][]Handler), logger: logger}
-}
-
-// Subscribe enregistre un consommateur.
-func (b *Inproc) Subscribe(eventType string, handler Handler) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.handlers[eventType] = append(b.handlers[eventType], handler)
-}
-
-// Publish remet l'enveloppe aux consommateurs, de façon synchrone.
-//
-// Synchrone volontairement : l'appelant est le worker, qui ne marquera le
-// message traité qu'après succès. Publier en asynchrone ici perdrait la
-// garantie de livraison que l'outbox vient d'apporter.
-func (b *Inproc) Publish(ctx context.Context, env Envelope) error {
-	b.mu.RLock()
-	handlers := append([]Handler(nil), b.handlers[env.Type]...)
-	b.mu.RUnlock()
-
-	if len(handlers) == 0 {
-		b.logger.WarnContext(ctx, "événement sans consommateur",
-			slog.String("event_type", env.Type))
-		return nil
-	}
-	var failures []error
-	for _, handler := range handlers {
-		if err := handler(ctx, env); err != nil {
-			failures = append(failures, err)
-		}
-	}
-	if len(failures) > 0 {
-		return fmt.Errorf("consommation de %s: %w", env.Type, errors.Join(failures...))
-	}
-	return nil
-}
-
-// Run ne fait rien : les consommateurs sont appelés par Publish.
-func (b *Inproc) Run(ctx context.Context) error {
-	<-ctx.Done()
-	return nil
-}
-
-func noopPublisher(logger *slog.Logger) Publisher {
-	return func(ctx context.Context, env Envelope) error {
-		logger.DebugContext(ctx, "publication ignorée (relais noop)",
-			slog.String("event_type", env.Type))
-		return nil
-	}
-}
-
-type noopConsumer struct{}
-
-func (noopConsumer) Subscribe(string, Handler) {}
-
-func (noopConsumer) Run(ctx context.Context) error {
-	<-ctx.Done()
-	return nil
-}
-
-// WithRetry enveloppe un publieur d'un réessai borné.
-//
-// Utile pour les transports réseau : une coupure d'une seconde ne doit pas
-// consommer une tentative de l'outbox, dont le recul est bien plus long.
-func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher {
-	return func(ctx context.Context, env Envelope) error {
-		var last error
-		for i := range attempts {
-			if i > 0 {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(wait * time.Duration(1<<(i-1))):
-				}
-			}
-			last = publisher(ctx, env)
-			if last == nil {
-				return nil
-			}
-		}
-		return fmt.Errorf("publication échouée après %d tentatives: %w", attempts, last)
-	}
-}

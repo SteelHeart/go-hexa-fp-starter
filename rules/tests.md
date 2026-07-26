@@ -64,7 +64,8 @@ un fichier de six cents.
 ### La même règle s'applique au CODE, pas seulement aux tests
 
 **Un fichier long se découpe en un fichier par fonction publique**, nommé d'après elle en
-`snake_case`. Le paquet reste le même — c'est le découpage physique qui change, pas l'API.
+`snake_case`. Le paquet reste le même — c'est le découpage physique qui change, **pas l'API** :
+aucun appelant ne bouge, aucun import ne change.
 
 ```
 internal/pkg/middleware/
@@ -86,6 +87,25 @@ autre chose.
 
 Le seuil n'est pas un nombre de lignes fixe : dès qu'un fichier porte **plusieurs responsabilités
 publiques indépendantes**, il se découpe.
+
+#### Quatre paquets découpés, et ce que chacun a fait apparaître
+
+| Paquet | Découpage | Ce que le découpage a rendu visible |
+|---|---|---|
+| `internal/pkg/middleware` | 1 → 8 fichiers | Chaque garde traversée par toute requête est désormais nommée dans l'arborescence |
+| `internal/infrastructure/security` | 1 → 4 fichiers | `hasher.go` et `cipher.go` portent chacun une **constante qui EST une garantie** (bornes du condensé, `aesKeyLen`). Noyées dans 235 lignes, elles se relâchaient sans qu'on mesure quoi |
+| `internal/config` | 1 → 9 fichiers | La séparation `validation.go` / `hardening.go` empêche d'ajouter par accident une exigence de production dans un vérificateur qui tourne aussi en local. Et un `contains` maison, doublon de `slices.Contains`, est mort au passage |
+| `internal/infrastructure/messaging` | 2 → 7 fichiers | `kafka.go` et `rabbitmq.go` sont **des fichiers entiers marqués NON PROUVÉS**, au lieu d'un paragraphe d'avertissement au milieu de code qui, lui, tourne |
+
+Le point commun : dans chaque cas, le découpage n'a pas seulement rangé — il a **déplacé une
+frontière au niveau du fichier**, là où elle se voit sans lire.
+
+#### Comment nommer le fichier résiduel
+
+Le fichier qui garde le nom du paquet ne devient pas un dépotoir : il porte le **langage** du
+paquet — les types, les constantes, ce que tout le reste utilise — et la documentation de paquet,
+dont une **carte des fichiers**. `middleware.go` garde `Middleware` et `Chain` ; `messaging.go`
+garde l'enveloppe et les types fonction ; `security.go` ne garde que la carte, et c'est correct.
 
 ## 3. Obligations
 

@@ -326,9 +326,11 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
   `helpers_test.go`.
 - **Un fichier par fonction publique**, la même règle que pour les tests, appliquée au CODE. Un
   fichier long se découpe dès qu'il porte plusieurs responsabilités publiques indépendantes ; le
-  paquet ne change pas. Motif concret : le limiteur de débit était cassé depuis toujours au milieu
-  d'un fichier de 350 lignes, et personne ne relit une fonction qu'on n'est pas venu chercher.
-  **`internal/pkg/middleware/middleware.go` reste à découper** — c'est la prochaine action.
+  paquet ne change pas, aucun appelant ne bouge. Motif concret : le limiteur de débit était cassé
+  depuis toujours au milieu d'un fichier de 350 lignes, et personne ne relit une fonction qu'on
+  n'est pas venu chercher. **Quatre paquets sont découpés** : `middleware` (1→8), `security` (1→4),
+  `config` (1→9), `messaging` (2→7). Le fichier qui garde le nom du paquet porte le **langage** du
+  paquet et une **carte des fichiers** en tête.
 - Configuration : fichiers `config/*.yaml` groupés, secrets par `${VAR}` uniquement.
 
 ### Campagne de signalements — TERMINÉE, 239 → 0
