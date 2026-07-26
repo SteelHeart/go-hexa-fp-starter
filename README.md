@@ -189,7 +189,7 @@ si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécu
 | Le journal d'audit refuse `UPDATE` et `DELETE` | job CI `migrations` | CI seulement |
 | Le retour arrière d'une migration fonctionne | job CI `migrations` (il le **rejoue**) | CI seulement |
 | Aucun secret dans l'historique | `gitleaks` | CI seulement |
-| Couverture ≥ 70 % global, ≥ 90 % sur le cœur | CI, cliquets | CI seulement |
+| Couverture ≥ 70 % global, ≥ 90 % sur le cœur | CI, cliquets | **NON — 52,4 % mesurés** |
 | Toucher au règlement exige un ADR | CI, job `inertia` | CI seulement |
 | Aucune dette dissimulée en `TODO` | CI, job `inertia` | CI seulement |
 | Aucune vulnérabilité connue | `govulncheck` · CodeQL | **oui** |
@@ -202,6 +202,12 @@ Le dépôt épingle **`go 1.25.12`** dans `go.mod`. Avec `GOTOOLCHAIN=auto` — 
 la chaîne demandée : aucune installation système n'est nécessaire, et la correction vaut pour tout
 le monde, CI comprise. C'est ce qui a fermé les 20 vulnérabilités de la bibliothèque standard que
 portait la chaîne précédente.
+
+⚠️ **La couverture réelle est de 52,4 %, sous le seuil de 70 % que ce tableau annonce.** Elle était
+mesurée à **3,6 %** jusqu'au 2026-07-26 : les tests étant en boîte noire dans `{paquet}/tests/`, le
+profil n'attribuait la couverture qu'au paquet de test. `-coverpkg=./...` corrige la mesure — pas le
+manque. `messaging`, `modulebus`, `httpserver`, `telemetry` et `cache` compilent sans aucun test.
+Le seuil reste à 70 % : on couvre, on ne baisse pas la barre.
 
 > ⚠️ **`task check` ne peut pas être vert depuis `C:\xampp\htdocs\`.** Sur cette machine, aucun
 > binaire Go n'y a le droit de créer un fichier — le shell si. `go test -coverprofile` échoue donc,

@@ -160,7 +160,17 @@ tasks:
   test:
     desc: 'Tests unitaires (sans -race : CGO absent sur Windows sans compilateur C)'
     cmds:
-      - go test -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=count ./...
+      # -coverpkg=./... est INDISPENSABLE ici, pas une option de confort.
+      #
+      # Les tests de ce dépôt sont en BOÎTE NOIRE : ils vivent dans `{paquet}/tests/`,
+      # donc dans un paquet DIFFÉRENT du code qu'ils exercent. Sans -coverpkg, le
+      # profil n'attribue la couverture qu'au paquet de test lui-même, et le total
+      # tombe à 3,6 % alors que la couverture réelle est de 52 %.
+      #
+      # Un chiffre faux dans ce sens est le pire : il ferait échouer un cliquet de
+      # couverture, puis quelqu'un baisserait le seuil pour « débloquer la CI » —
+      # et le garde ne garderait plus rien.
+      - go test -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=count -coverpkg=./... ./...
 
   test:race:
     desc: 'Tests + detecteur de courses (exige CGO : CI Linux)'

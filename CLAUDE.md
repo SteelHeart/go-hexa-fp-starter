@@ -204,7 +204,21 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 | `fmt` `vet` `lint` `arch` `vuln` | **verts**, dans l'enchaînement réel |
 | `test` | **échoue** — et pas à cause du code |
 
+> ✅ **VÉRIFIÉ le 2026-07-26 : `task check` est VERT de bout en bout, code de retour 0**, depuis un
+> clone du dépôt placé hors du dossier protégé (`C:\Users\MAC\hexa-check`). Les six étapes passent.
+> Le blocage ci-dessous est donc **entièrement environnemental** — rien dans le dépôt ne s'y oppose.
+
 **🔴 F008 — un programme Go ne peut créer AUCUN fichier sous `C:\xampp\htdocs\`.**
+
+**Cause identifiée avec certitude** : l'**accès contrôlé aux dossiers** de Windows Defender est
+actif (`EnableControlledFolderAccess = 1`) et `C:\xampp\htdocs\dev` figure dans sa liste de dossiers
+protégés. Il bloque l'écriture par les applications non reconnues — dont tout binaire Go fraîchement
+compilé, et la chaîne d'outils téléchargée. Le shell, lui, est reconnu, d'où l'asymétrie.
+
+**Ne pas désactiver cette protection** : c'est une garde anti-rançongiciel posée délibérément.
+Les remèdes sont de déplacer le dépôt, de travailler sous WSL, ou d'ajouter `go.exe` aux
+applications autorisées — ce dernier point relève de l'utilisateur, pas de l'outillage.
+
 `go test -coverprofile=coverage.out` échoue sur « Le fichier spécifié est introuvable », et `go get`
 ne peut pas réécrire `go.mod` pour la même raison. Diagnostiqué par un programme témoin de dix
 lignes : création **refusée** dans le dépôt, **acceptée** dans `%TEMP%` et sous `C:\Users\MAC\`. Le
@@ -217,6 +231,31 @@ propre au répertoire web de XAMPP (antivirus ou accès contrôlé aux dossiers)
 > **F007 est résolue** : `go 1.25.12` dans `go.mod`, et `GOTOOLCHAIN=auto` télécharge la chaîne.
 > Aucune installation système — la correction vit dans le dépôt et vaut pour tout le monde, CI
 > comprise. `govulncheck` rend **0 vulnérabilité**.
+
+### 🔴 La couverture réelle est de 52 %, pas 70 % — le cliquet ne tenait pas
+
+Mesuré le 2026-07-26, `task check` vert à l'appui :
+
+| Mesure | Valeur |
+|---|---|
+| `go test -coverprofile` **sans** `-coverpkg` | **3,6 %** |
+| `go test -coverprofile -coverpkg=./...` | **52,4 %** |
+| Seuil annoncé par la CI | **70 % global · 90 % sur le cœur** |
+
+Deux faits distincts, et il ne faut pas les confondre :
+
+1. **La mesure était fausse.** Les tests sont en **boîte noire**, dans `{paquet}/tests/`, donc dans
+   un paquet différent du code qu'ils exercent. Sans `-coverpkg=./...`, le profil n'attribue la
+   couverture qu'au paquet de test : 3,6 %. Corrigé dans `Taskfile.yml` et dans la CI.
+   Un chiffre faux **dans ce sens** est le pire : il fait échouer le cliquet pour une raison
+   inexistante, et quelqu'un finit par baisser le seuil « pour débloquer la CI ».
+2. **Même corrigée, la couverture reste sous le seuil.** 52,4 % < 70 %. Le cliquet n'a jamais pu
+   s'exécuter (le job `test` de la CI n'a pas de base pour tourner), donc personne ne l'avait vu.
+   Ce qui manque est identifiable : `messaging`, `modulebus`, `httpserver`, `telemetry`, `cache`
+   compilent et n'ont **zéro test**, et les pilotes `postgres` ne sont exercés nulle part.
+
+**Ne pas baisser le seuil.** Soit on couvre, soit on retire du code non couvert du périmètre mesuré
+en le disant — jamais on n'ajuste la barre pour qu'elle passe.
 
 ### Absent
 

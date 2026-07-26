@@ -257,8 +257,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # -coverpkg=./... est INDISPENSABLE : les tests sont en BOÎTE NOIRE, dans
+      # `{paquet}/tests/`, donc dans un paquet different du code qu'ils exercent.
+      # Sans lui, le profil n'attribue la couverture qu'au paquet de test et le
+      # total tombe a 3,6 % au lieu de 52 %. Le cliquet ci-dessous echouerait
+      # alors pour une raison fausse, et quelqu'un finirait par baisser le seuil.
       - name: go test -race
-        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out -coverpkg=./... ./...
 
       - name: Seuil de couverture
         run: |
