@@ -155,6 +155,7 @@ tasks:
     cmds:
       - task: check
       - task: ci:schemas
+      - task: ci:hygiene
       - task: ci:build
       - task: ci:secrets
       - task: ci:migrations
@@ -264,6 +265,30 @@ tasks:
             echo "  FAUX VERT : aucun test e2e exécuté" >&2; exit 1
           fi
           exit $code
+
+  ci:hygiene:
+    desc: "Version de Go cohérente et encodage sain — et les cas qui font échouer"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : les scripts.
+      - cmd: |
+          set -e
+          temoin=tools/testdata/version-de-go-divergente
+          echo "  version de Go — sens succès :"
+          ./tools/verifie-version-de-go.sh
+          # ADR 013 : un garde est livré avec le cas qui le fait échouer.
+          echo "  version de Go — sens échec :"
+          if ./tools/verifie-version-de-go.sh \
+               "$temoin/go.mod.temoin" "$temoin/Dockerfile.temoin" \
+               "$temoin/Containerfile.temoin" >/dev/null 2>&1; then
+            echo "  LE GARDE NE GARDE PLUS : le témoin de divergence est passé" >&2
+            exit 1
+          fi
+          echo "    refus confirmé sur $temoin"
+          echo "  encodage — sens succès :"
+          ./tools/verifie-encodage.sh
+          echo "  encodage — sens échec :"
+          ./tools/verifie-encodage.sh --temoin
 
   ci:images:
     desc: "Construit les deux images livrées — le job docker"

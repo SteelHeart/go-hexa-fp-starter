@@ -116,7 +116,7 @@ func Resolve[I, O any](
 
 // httpCaller appelle le module distant.
 //
-// Le corps d'erreur n'est PAS interprété : un module appelant n'a pas Ã
+// Le corps d'erreur n'est PAS interprété : un module appelant n'a pas à
 // connaître la taxonomie d'erreurs interne d'un autre. Il obtient le statut et
 // le corps brut, et traduit lui-même.
 func httpCaller[I, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {
