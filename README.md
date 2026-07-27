@@ -185,7 +185,7 @@ si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécu
 | Le code compile, `go vet` passe, les tests passent | `go build` · `go vet` · `go test` | **oui** |
 | La configuration livrée charge et n'exige aucun service | tests de `internal/config/tests/` | **oui** |
 | Aucun commit direct sur le tronc | crochet `pre-push` | **oui** |
-| Un module n'atteint pas le schéma SQL d'un autre | `migrations/postgres/verify.sql` | CI seulement |
+| Un module n'atteint pas le schéma SQL d'un autre | `deploy/postgres/verify.sql` | CI seulement |
 | Le journal d'audit refuse `UPDATE` et `DELETE` | job CI `migrations` | CI seulement |
 | Le retour arrière d'une migration fonctionne | job CI `migrations` (il le **rejoue**) | CI seulement |
 | Aucun secret dans l'historique | `gitleaks` | CI seulement |

@@ -25,7 +25,10 @@
 -- bas ne s'appliquerait à rien, et la propriété des tables varierait d'un
 -- environnement à l'autre.
 --
--- SET LOCAL : borné à la transaction de goose, donc aucun état résiduel.
+-- SET LOCAL : borné à la transaction de goose, donc aucun état résiduel APRÈS
+-- elle. Mais goose écrit sa propre ligne de version DANS cette transaction :
+-- il faut donc relâcher le rôle avant la fin du bloc — voir le RESET ROLE final.
+--
 -- Prérequis : le rôle de DB_MIGRATION_DSN est membre de hexa_owner.
 SET LOCAL ROLE hexa_owner;
 
@@ -226,7 +229,26 @@ ALTER DEFAULT PRIVILEGES FOR ROLE hexa_owner IN SCHEMA platform
 -- décor que ce dépôt refuse.
 --
 -- Le jour où une table porte un tenant, la forme est fixée par l'ADR 011 §3, et
--- migrations/postgres/verify.sql refuse toute table de schéma métier sans RLS.
+-- deploy/postgres/verify.sql refuse toute table de schéma métier sans RLS.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Relâchement du rôle — OBLIGATOIRE en dernière instruction
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Sans cette ligne, la migration échoue APRÈS avoir tout créé :
+--
+--   failed to insert new goose version:
+--   ERROR: permission denied for table goose_db_version
+--
+-- Parce que goose enregistre la version dans la MÊME transaction que la
+-- migration. `SET LOCAL` est borné à la transaction, pas à la migration : la
+-- table de versions appartient au rôle de connexion, et hexa_owner n'y a aucun
+-- droit. La transaction est alors annulée en entier — donc rien n'est appliqué,
+-- et le message accuse une table qui n'a rien à voir avec le schéma migré.
+--
+-- Toute migration future qui prend un rôle doit le relâcher ici, pour la même
+-- raison. C'est la contrepartie du SET LOCAL ROLE en tête, pas une précaution.
+RESET ROLE;
 
 -- +goose StatementEnd
 
@@ -244,5 +266,9 @@ SET LOCAL ROLE hexa_owner;
 -- Il n'existe que pour le cycle de vie d'une base de test. En production, un
 -- retour arrière se fait par une migration AVANT, jamais par ce Down.
 DROP SCHEMA IF EXISTS platform CASCADE;
+
+-- Même raison que dans le Up : goose met à jour sa table de versions dans cette
+-- transaction, sous le rôle courant.
+RESET ROLE;
 
 -- +goose StatementEnd

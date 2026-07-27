@@ -51,6 +51,22 @@ BEGIN
 END
 $$;
 
+-- « Propriétaire des schémas » ne suffit pas à en CRÉER un : `CREATE SCHEMA`
+-- exige le privilège CREATE sur la BASE, qui n'appartient à personne d'autre que
+-- son propriétaire. Sans la ligne ci-dessous, la toute première migration échoue
+-- sur un message qui ne nomme aucun schéma :
+--
+--   ERROR: permission denied for database hexa
+--
+-- Le privilège porte sur la base à laquelle CE script est connecté. C'est la
+-- raison pour laquelle DB_SUPERUSER_DSN désigne la base APPLICATIVE et non
+-- `postgres` : les rôles sont des objets de cluster, mais ce droit-ci ne l'est pas.
+DO $$
+BEGIN
+    EXECUTE format('GRANT CREATE, CONNECT ON DATABASE %I TO hexa_owner', current_database());
+END
+$$;
+
 -- ── hexa_platform : accès aux tables des modules NOYAU ───────────────────────
 --
 -- Accordé à tous les modules métier : l'outbox, l'idempotence et l'audit sont des

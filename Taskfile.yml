@@ -104,7 +104,7 @@ tasks:
   db:verify:
     desc: Vérifie les invariants d'isolation de l'ADR 011
     cmds:
-      - psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+      - psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
 
   # ── Exécution ───────────────────────────────────────────────────────────────
   run:
