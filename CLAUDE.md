@@ -208,8 +208,9 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
 - **Le dépileur de l'outbox est réécrit** dans `application/` : recul exponentiel, abandon après N
   essais, survie à un publieur qui panique, et un compte rendu distinct pour « publié mais non
   marqué » — le seul cas qui produit un doublon chez le consommateur.
-- **`knownDrivers` ne liste plus que le construit.** Un module absent de la table refuse d'être
-  activé : on n'active pas un module dont le code n'existe pas.
+- **Un module absent du CATALOGUE refuse d'être activé** : on n'active pas un module dont le code
+  n'existe pas. La table globale `knownDrivers` a disparu avec l'ADR 014 — chaque module déclare
+  ses pilotes dans son propre `catalog.go`.
 - **`arch-go` : 100 % de conformité, 17 règles sur 17**, dont les 12 règles de dépendance —
   l'hexagone tient. Il n'avait JAMAIS pu tourner : l'outil cherche `arch-go.yml` et le fichier
   s'appelait `.arch-go.yml`, avec un point. Renommé.
@@ -368,9 +369,10 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 - **Chaque module a un pilote sans dépendance externe, choisi par défaut.** `hexa new` puis
   `go run` doit démarrer sans base, sans Redis, sans Docker.
 - **Un pilote documente ses NON-garanties** en tête de paquet.
-- **`knownDrivers` (`internal/config/modules.go`) liste ce qui EXISTE**, pas ce qui est prévu. Le
-  catalogue d'intentions vit dans `documentation/technique/pilotes.md` ; un pilote y migre le jour
-  où il est écrit, testé, et documente ses NON-garanties.
+- **Le `catalog.go` d'un module liste ce qui EXISTE**, pas ce qui est prévu — et il partage ses
+  constantes avec le `switch` de `New`, dans le même paquet (ADR 014). `internal/config` ne nomme
+  aucun module. Le catalogue d'intentions vit dans `documentation/technique/pilotes.md` ; un pilote
+  en migre le jour où il est écrit, testé, et documente ses NON-garanties.
 - **`application/` ne journalise pas et ne lit pas l'horloge.** Il rend compte par un port et reçoit
   son horloge — c'est ce qui le garde pur et testable sans analyser des journaux.
 - Tests : `{paquet}/tests/` en boîte noire · `{paquet}/internal_test.go` pour les internes ·
@@ -462,8 +464,8 @@ F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont pl
    commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
 3. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
    par F001 (Docker), donc CI ou WSL. `cache` en fait partie : `New` fait un `Ping`
-4. **#76** : implémenter l'ADR 014 — le catalogue de modules passé au chargeur. La décision est
-   prise ; c'est le préalable à `hexa new`, et l'un des trois blocages de la persona primaire
+4. **#17** : `hexa new`. Débloqué par l'ADR 014 (#76, livrée) — un module généré apporte son
+   propre `catalog.go`, le générateur n'a aucun fichier du framework à réécrire
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
@@ -487,25 +489,24 @@ faire ensuite :
   pour écrire `billing`. Tout dossier manquant serait reproduit comme « pas nécessaire » — d'où
   l'exigence qu'elle soit canoniquement complète.
 
-### Déclaration des pilotes d'un module métier — TRANCHÉ par l'ADR 014
+### Déclaration des pilotes d'un module métier — RÉSOLU (ADR 014, #76)
 
-**La décision est prise, l'implémentation reste à faire (#76).**
+**Tranché ET implémenté.** Un module métier se déclare désormais dans
+`config/modules.yaml` sans qu'aucun fichier du framework ne le nomme.
 
-`config/modules.yaml` et `knownDrivers` ne valident que les modules **noyau**. Mesuré, pas déduit :
-déclarer `billing:` dans la configuration livrée fait rendre `modules.billing : module inconnu` et
-un code de retour **1**. Un module métier ne peut donc ni s'activer, ni choisir son pilote, ni
-porter d'options — trois capacités que le socle s'offre et lui refuse. Aujourd'hui
-`user_registration` s'en tire parce qu'il est livré AVEC le socle : `cmd/server` lit
-`cfg.Modules[Name].Driver`, un champ qui **reste vide**.
+`internal/config` ne contient plus **aucun nom de module** : les trois tables globales —
+`knownDrivers`, `defaultDrivers`, `sqlBackedDrivers` — ont disparu. Chaque module déclare ses
+pilotes dans son propre `catalog.go`, dans le même paquet que le `switch` de `New`, et **partage
+une constante avec lui** : la divergence entre catalogue et fabrique est devenue *impossible*, là
+où l'ADR ne promettait que de la rendre improbable. C'est `goconst` qui l'a signalée.
 
-L'[ADR 014](documentation/adr/014-catalogue-de-modules-passe-au-chargeur.md) tranche : **le
-catalogue des modules est une valeur construite par le composition root et passée au chargeur**, et
-chaque module — noyau comme métier — déclare ses pilotes dans son propre `module.go`, à côté de la
-fabrique qui les construit. `internal/config` définit les types, jamais le contenu : c'est ce que
-la règle 7 d'`arch-go` impose déjà, et que la table globale contournait dans l'esprit.
+Le catalogue appartient à l'**application** (`internal/modules/catalog.go`), pas au binaire : les
+deux composition roots lisent le même `config/modules.yaml`, donc le même ensemble de noms
+déclarables. Monter un module reste une décision par binaire.
 
-⚠️ **Rupture d'API assumée** : `config.Load` change de signature. Avant `v0.1.0`, donc maintenant
-ou jamais.
+⚠️ **`RequiresSQL` et `RequiresCache` ne sont appelées par aucun binaire** — seuls des tests les
+utilisent. La promesse « démarre sans base » est donc *assertée*, pas *exercée*. Défaut
+préexistant, indépendant de l'ADR 014.
 
 > **Terminé** : la campagne `golangci-lint` (239 → 0) et **#5** (schéma `platform`, rôles,
 > ADR 011, garde `verify.sql`, job CI `migrations`). Ce paragraphe créditait **#2** par erreur —
