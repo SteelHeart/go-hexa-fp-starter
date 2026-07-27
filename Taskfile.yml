@@ -262,9 +262,10 @@ tasks:
 
   ci:pr-title:
     desc: 'Le job pr-title : task ci:pr-title -- "feat(scope): description"'
+    silent: true
     cmds:
       - cmd: |
-          titre='{{.CLI_ARGS}}'
+          titre={{.CLI_ARGS}}
           if echo "$titre" | grep -Eq '^(feat|fix|sec|refactor|test|docs|perf|ci|chore|build)(\([a-z0-9_-]+\))?!?: .+'; then
             echo "  titre conforme : $titre"
           else
@@ -275,11 +276,19 @@ tasks:
 
   ci:inertia:
     desc: 'Le job inertia : task ci:inertia -- <ref-de-base>'
+    silent: true
     cmds:
       - cmd: |
-          base='{{.CLI_ARGS}}'
+          base={{.CLI_ARGS}}
           [ -n "$base" ] || { echo "  usage : task ci:inertia -- <ref-de-base>" >&2; exit 1; }
-          motif='Co-Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)|Generated with|Co-authored-by:.*noreply@anthropic'
+          # Le motif est ASSEMBLÉ, jamais écrit d'un seul tenant. Sinon il
+          # apparaît en clair dans le fichier qui le définit, et TOUTE PR
+          # touchant au garde se fait signaler par le garde lui-même.
+          #
+          # Le job `inertia` de ci.yml porte ce défaut : son motif y est écrit
+          # littéralement. Découvert en exécutant celui-ci pour la première fois.
+          motif="Co-""Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)"
+          motif="$motif|Generated ""with|Co-""authored-by:.*noreply@anthropic"
           fail=0
           if git log --format='%B' "$base..HEAD" | grep -Eiq "$motif"; then
             echo "  mention d'outillage d'assistance dans un message de commit" >&2; fail=1

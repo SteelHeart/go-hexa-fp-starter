@@ -435,7 +435,6 @@ jobs:
       REDIS_ADDR: localhost:6379
       SMTP_ADDR: localhost:1025
       SMTP_FROM: no-reply@hexa.test
-      SECURITY_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       OTEL_ENABLED: "false"
       HTTP_PORT: "8080"
       E2E_BASE_URL: http://localhost:8080
@@ -448,6 +447,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      # La cle etait FIGEE dans le bloc `env` ci-dessus. Manifestement fausse —
+      # 32 octets de `0123456789abcdef` repete — donc conforme a
+      # rules/securite.md §3, mais gitleaks la classe en `generic-api-key` par
+      # entropie et faisait rougir le job « Fuite de secrets ». Personne ne
+      # pouvait le savoir : aucun job n'avait jamais demarre (#47).
+      #
+      # La generer ici SUPPRIME le probleme au lieu de le declarer acceptable.
+      # Une liste d'exception aurait grossi, et le garde aurait cesse de garder.
+      # Elle ne chiffre que des donnees creees et detruites dans ce meme job.
+      - name: Cle de chiffrement ephemere
+        run: echo "SECURITY_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
 
       - name: Migrations
         run: |
