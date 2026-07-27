@@ -9,8 +9,9 @@
 
 Six modules sont convertis à l'anatomie de l'ADR 012 : `domain/` pur, `ports/` en types fonction,
 un pilote par magasin, `module.go` seul à connaître les pilotes. Ils sont activables par
-`config/modules.yaml` et couverts par des tests. Les autres n'existent pas — et un module absent de
-`knownDrivers` **refuse d'être activé**, précisément pour qu'on ne puisse pas croire le contraire.
+`config/modules.yaml` et couverts par des tests. Les autres n'existent pas — et un module absent du
+**catalogue** assemblé par le composition root **refuse d'être activé** (ADR 014), précisément pour
+qu'on ne puisse pas croire le contraire.
 
 | Module | Rôle | Pilote par défaut | Autres pilotes | État |
 |---|---|---|---|---|

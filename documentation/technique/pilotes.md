@@ -8,10 +8,10 @@
 
 ## Ce qui est réellement construit
 
-Une centaine de pilotes sont décrits plus bas. **Onze existent.** La table qui fait autorité sur ce
-qu'on peut activer est `knownDrivers`, dans
-[`internal/config/modules.go`](../../internal/config/modules.go) : elle ne liste que les pilotes
-écrits, testés, et qui documentent leurs NON-garanties.
+Une centaine de pilotes sont décrits plus bas. **Onze existent.** Ce qui fait autorité sur ce qu'on
+peut activer est le `catalog.go` **de chaque module** — depuis l'ADR 014, `internal/config` ne nomme
+aucun module. Chaque catalogue ne liste que les pilotes écrits, testés, et qui documentent leurs
+NON-garanties, et il partage ses constantes avec la fabrique du même paquet.
 
 | Module noyau | Pilotes construits |
 |---|---|
@@ -26,8 +26,8 @@ Tout le reste **refuse le démarrage**. C'est délibéré : accepter `driver: s3
 puis échouer plus loin avec « pilote inconnu » ferait se contredire deux sources de vérité, et le
 message accuserait l'utilisateur d'une faute qui serait la nôtre.
 
-Un pilote migre de ce catalogue vers `knownDrivers` le jour où il est écrit, testé, et où il déclare
-ce qu'il ne garantit pas — jamais avant.
+Un pilote migre de ce catalogue d'intentions vers le `catalog.go` de son module le jour où il est
+écrit, testé, et où il déclare ce qu'il ne garantit pas — jamais avant.
 
 > Les pilotes `postgres` et `redis` ci-dessus sont **écrits mais jamais exécutés** : aucune migration
 > n'existe (issue #2) et aucun service ne tourne sur la machine de référence (friction F001). Ils
