@@ -24,7 +24,7 @@ Conséquences, non négociables parce qu'imposées par le langage :
   `IsOk`, `IsErr`, `Get`, `ValueOr`.
 - Pour éviter la pyramide de `FlatMap` imbriqués, un cas d'usage s'écrit comme une **suite d'étapes
   de même type** (`func(state) Result[state, Error]`) composée par `result.Chain`. C'est le patron
-  imposé — voir `internal/features/user_registration/application/register_user.go`.
+  imposé — voir `internal/modules/user_registration/application/register_user.go`.
 
 Prétendre l'inverse produit du code illisible qu'on finit par abandonner. Le cadre assume la
 limite plutôt que de la combattre.

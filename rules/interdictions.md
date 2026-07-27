@@ -20,16 +20,16 @@ la détecte : c'est une faiblesse connue, pas une tolérance.
 | Un `application/` qui importe `adapters/` ou `infrastructure/` | `arch-go` |
 | Muter le receveur d'un *value object* (`func (e *Email) Set…`) | `revive: modifies-value-receiver` |
 
-## Étanchéité entre features
+## Étanchéité entre modules métier
 
 | Interdit | Garde |
 |---|---|
-| Importer quoi que ce soit d'une **autre** feature (`features/a` → `features/b`) | `arch-go` |
-| Écrire une jointure SQL qui traverse deux features | `[humain]` + revue |
-| Partager une table entre deux features | `[humain]` + revue |
-| Faire communiquer deux features autrement que par un **événement outbox** | `[humain]` + revue |
+| Importer quoi que ce soit d'un **autre** module métier (`modules/a` → `modules/b`) | `arch-go` |
+| Écrire une jointure SQL qui traverse deux modules | `[humain]` + revue |
+| Partager une table entre deux modules | `[humain]` + revue |
+| Faire communiquer deux modules métier autrement que par un **événement outbox** | `[humain]` + revue |
 
-> Deux features qui se parlent directement forment un monolithe avec des dossiers. Le coût de
+> Deux modules qui se parlent directement forment un monolithe avec des dossiers. Le coût de
 > l'événement (latence, cohérence à terme) est le prix de la découpe — le payer ou renoncer à la
 > découpe, mais pas les deux.
 
@@ -40,8 +40,8 @@ la détecte : c'est une faiblesse connue, pas une tolérance.
 | Une variable globale mutable | `gochecknoglobals` |
 | Une `func init()` | `gochecknoinits` |
 | Un paramètre booléen de contrôle (`doSomething(x, true)`) — écrire **deux** fonctions | `revive: flag-parameter` |
-| Une fonction de plus de **50 lignes** dans une feature, **40** dans `internal/pkg` | `funlen` + `arch-go` |
-| Plus de **4 paramètres** ou **2 valeurs de retour** dans une feature | `arch-go` |
+| Une fonction de plus de **50 lignes** dans un module, **40** dans `internal/pkg` | `funlen` + `arch-go` |
+| Plus de **4 paramètres** ou **2 valeurs de retour** dans un module | `arch-go` |
 | Ignorer une erreur avec `_` | `errcheck` (`check-blank`) |
 | Retourner `nil, nil` | `nilnil` |
 | Retourner `nil` alors que `err != nil` | `nilerr` |

@@ -13,7 +13,7 @@
 | Les failles ouvertes | [`documentation/securite/registre-securite.md`](../documentation/securite/registre-securite.md) |
 | Qui a le droit d'appeler quoi | [`documentation/securite/matrice-acces.md`](../documentation/securite/matrice-acces.md) |
 | Ce qui manque au socle et fait perdre du temps | [`documentation/process/JOURNAL_FRICTION.md`](../documentation/process/JOURNAL_FRICTION.md) |
-| Un exemple complet de feature | `internal/features/user_registration/` |
+| Un exemple de module métier | `internal/modules/user_registration/` |
 | Le contrat d'API | `api/openapi.yaml` — **généré**, jamais édité à la main |
 
 ## Hiérarchie des sources en cas de contradiction
@@ -33,7 +33,7 @@ Ce dépôt ne dépend d'aucune personne ni d'aucune organisation :
 - aucun pseudo, aucune équipe, aucun `CODEOWNERS` — les contraintes portent sur des **règles**,
   vérifiées par la CI ;
 - le **chemin de module** est la seule valeur nominative, isolée derrière `task rename` ;
-- la feature `user_registration` est un **exemple de référence**, à supprimer ou remplacer — elle
+- le module métier `user_registration` est un **exemple de référence**, à supprimer ou remplacer — il
   n'est requise par rien d'autre que ses propres tests.
 
 Pour démarrer un projet à partir de ce socle, voir [`toolchain.md`](toolchain.md) § 7.
@@ -45,7 +45,12 @@ nom :
 
 | On écrit | On n'écrit pas |
 |---|---|
-| **feature** | module, bounded context, domaine, service |
+| **module** | composant, brique, paquet |
+| **module noyau** | module framework, module systeme |
+| **module metier** | feature, bounded context, domaine |
+| **pilote** | driver, backend, implementation, provider |
+| **surface** | canal, frontend, delivery |
+| ~~**service**~~ | **PROSCRIT** \u2014 signifie deja microservice, couche service, unite systeme |
 | **port** | interface, contrat, repository, gateway |
 | **adaptateur primaire** | contrôleur, handler, delivery, entrypoint |
 | **adaptateur secondaire** | repository, infrastructure, DAO |

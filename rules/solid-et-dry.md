@@ -7,7 +7,7 @@ et des couches vides. Voici la traduction qui fait foi dans ce dépôt.
 
 ### S — Responsabilité unique
 
-**Une fonction, une raison de changer.** Outillé, pas déclaratif : `funlen` (50 lignes en feature,
+**Une fonction, une raison de changer.** Outillé, pas déclaratif : `funlen` (50 lignes dans un module,
 40 en `pkg`), `cyclop` (complexité 10), `arch-go` (`maxLines`, `maxPublicFunctionPerFile: 6`).
 
 Un fichier expose **au plus 6 fonctions publiques**. Au-delà, il porte deux sujets : le découper.
@@ -57,7 +57,7 @@ jamais côté implémentation, et `arch-go` interdit de la mettre dans `domain/`
 ### D — Inversion des dépendances
 
 Le cœur déclare ses besoins (`ports/`), les adaptateurs les satisfont, `cmd/` les relie. La flèche
-d'import est vérifiée mécaniquement par `.arch-go.yml` : c'est le seul principe SOLID de ce dépôt
+d'import est vérifiée mécaniquement par `arch-go.yml` : c'est le seul principe SOLID de ce dépôt
 qui est **impossible** à violer sans faire rougir la CI.
 
 ## DRY — et sa limite
@@ -78,8 +78,8 @@ qui est **impossible** à violer sans faire rougir la CI.
 
 | Situation | Règle |
 |---|---|
-| Deux features ont un `User` qui se ressemble | **Deux types distincts.** Ils divergeront. |
-| Deux features ont besoin de la même règle | La règle est **copiée**, ou l'une publie un événement |
+| Deux modules ont un `User` qui se ressemble | **Deux types distincts.** Ils divergeront. |
+| Deux modules ont besoin de la même règle | La règle est **copiée**, ou l'une publie un événement |
 | Web et mobile veulent presque la même réponse | **Deux présentateurs.** Un DTO partagé fige les deux frontends ensemble |
 | Deux adaptateurs secondaires font un `INSERT` similaire | Duplication acceptée : le SQL suit la table, pas le code |
 

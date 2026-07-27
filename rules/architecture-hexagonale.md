@@ -1,7 +1,7 @@
 # Architecture hexagonale
 
 > Décision de référence : [ADR 001](../documentation/adr/001-hexagonal-modulaire-et-fonctionnel.md).
-> Garde : [`.arch-go.yml`](../.arch-go.yml) + `depguard` dans [`.golangci.yml`](../.golangci.yml).
+> Garde : [`arch-go.yml`](../arch-go.yml) + `depguard` dans [`.golangci.yml`](../.golangci.yml).
 
 ## 1. La seule règle qui compte
 
@@ -25,14 +25,14 @@ extérieur ; il déclare ce dont il a besoin, et quelqu'un d'autre le lui fourni
 
 ## 2. Matrice d'imports — qui a le droit d'importer quoi
 
-| Depuis ↓ / Vers → | `domain` | `ports` | `application` | `adapters` | `infrastructure` | `pkg` | autre feature |
+| Depuis ↓ / Vers → | `domain` | `ports` | `application` | `adapters` | `infrastructure` | `pkg` | autre module |
 |---|---|---|---|---|---|---|---|
 | `domain` | — | ❌ | ❌ | ❌ | ❌ | ✅ `result`, `fp` | ❌ |
 | `ports` | ✅ | — | ❌ | ❌ | ❌ | ✅ `result`, `fp` | ❌ |
 | `application` | ✅ | ✅ | — | ❌ | ❌ | ✅ | ❌ |
 | `adapters/primary` | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `adapters/secondary` | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `module.go` (racine feature) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `module.go` (racine du module) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `infrastructure` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `cmd/*` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
@@ -41,14 +41,14 @@ Deux cases méritent une explication :
 - **`adapters/primary` n'importe pas `application`.** Un adaptateur reçoit un *port* (type
   fonction) par paramètre. Il ne construit rien. C'est ce qui rend un handler HTTP testable avec
   une closure de trois lignes.
-- **`module.go` a le droit de tout voir.** C'est le *composition root* local de la feature : il
+- **`module.go` a le droit de tout voir.** C'est le *composition root* local du module : il
   assemble les adaptateurs secondaires, construit les cas d'usage, applique les décorateurs, et
   expose les ports primaires. Il n'a **aucune logique**.
 
-## 3. Anatomie d'une feature
+## 3. Anatomie d'un module
 
 ```
-internal/features/{feature}/
+internal/modules/{module}/
 ├── module.go                 # composition root local — assemble et expose les ports primaires
 ├── domain/                   # PUR : value objects, règles, erreurs, événements
 ├── ports/                    # SIGNATURES SEULEMENT — types fonction
@@ -67,18 +67,18 @@ internal/features/{feature}/
 `domain/` ne contient **aucune** interface : les contrats sont dans `ports/`, et ce sont des types
 fonction ([`ports-et-contrats.md`](ports-et-contrats.md)).
 
-## 4. Étanchéité entre features
+## 4. Étanchéité entre modules métier
 
-Une feature **n'importe jamais** une autre feature. Aucune exception, y compris « juste pour un
+Un module métier **n'importe jamais** un autre module métier. Aucune exception, y compris « juste pour un
 type partagé ».
 
-Deux features communiquent par **événement** : la source écrit dans l'`outbox` **dans la même
+Deux modules métier communiquent par **événement** : la source écrit dans l'`outbox` **dans la même
 transaction** que son changement d'état ; le worker dépile et publie ; la cible consomme via son
 adaptateur `primary/events/` et met à jour **ses propres tables**.
 
 Ce que ça coûte : de la cohérence à terme, de la duplication de données, un worker à opérer.
-Ce que ça achète : la possibilité de supprimer, réécrire ou extraire une feature sans toucher aux
-autres. Si ce coût n'est pas acceptable pour deux features données, **elles n'en font qu'une** —
+Ce que ça achète : la possibilité de supprimer, réécrire ou extraire un module métier sans toucher aux
+autres. Si ce coût n'est pas acceptable pour deux modules donnés, **elles n'en font qu'une** —
 fusionner est une décision légitime, contourner ne l'est pas.
 
 ## 5. Composition root
@@ -87,7 +87,7 @@ Trois niveaux, et un seul autorisé à connaître le monde entier :
 
 1. `cmd/{server,worker,cli}/main.go` — lit la config, ouvre les connexions, construit les modules,
    branche les adaptateurs primaires, gère l'arrêt propre.
-2. `internal/features/{feature}/module.go` — assemble **une** feature.
+2. `internal/modules/{module}/module.go` — assemble **un** module métier.
 3. Tout le reste — reçoit ses dépendances, n'en construit aucune.
 
 **Aucun conteneur d'injection.** La composition manuelle *est* de la programmation fonctionnelle
@@ -98,7 +98,7 @@ bas ([ADR 004](../documentation/adr/004-composition-manuelle-sans-conteneur-di.m
 
 Technique et **sans connaissance du métier** : pool Postgres, client Redis, serveur HTTP,
 télémétrie, chiffrement, dépileur d'outbox générique. `arch-go` refuse tout import de
-`internal/features/**` depuis ce dossier.
+`internal/modules/**` depuis ce dossier.
 
 Corollaire : il ne contient **aucune** règle métier, et il est réutilisable tel quel dans un autre
 projet.

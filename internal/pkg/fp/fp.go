@@ -2,7 +2,7 @@
 // gestion d'erreur : Option, composition et opérations sur les tranches.
 //
 // Comme result, ce paquet n'importe rien et ne doit jamais rien importer.
-// Voir .arch-go.yml.
+// Voir arch-go.yml.
 package fp
 
 // Option porte une valeur éventuellement absente. Elle remplace un pointeur nil
@@ -39,7 +39,7 @@ func (o Option[T]) ValueOr(fallback T) T {
 }
 
 // MapOption applique f à la valeur contenue. Une Option vide traverse inchangée.
-func MapOption[T any, U any](o Option[T], f func(T) U) Option[U] {
+func MapOption[T, U any](o Option[T], f func(T) U) Option[U] {
 	if !o.present {
 		return None[U]()
 	}
@@ -47,7 +47,7 @@ func MapOption[T any, U any](o Option[T], f func(T) U) Option[U] {
 }
 
 // FlatMapOption enchaîne une opération qui peut elle-même ne rien retourner.
-func FlatMapOption[T any, U any](o Option[T], f func(T) Option[U]) Option[U] {
+func FlatMapOption[T, U any](o Option[T], f func(T) Option[U]) Option[U] {
 	if !o.present {
 		return None[U]()
 	}
@@ -55,7 +55,7 @@ func FlatMapOption[T any, U any](o Option[T], f func(T) Option[U]) Option[U] {
 }
 
 // FoldOption réduit les deux branches à une seule valeur.
-func FoldOption[T any, R any](o Option[T], onSome func(T) R, onNone func() R) R {
+func FoldOption[T, R any](o Option[T], onSome func(T) R, onNone func() R) R {
 	if o.present {
 		return onSome(o.value)
 	}
@@ -76,18 +76,18 @@ func FromPointer[T any](p *T) Option[T] {
 func Identity[T any](value T) T { return value }
 
 // Pipe2 compose deux fonctions de gauche à droite.
-func Pipe2[A any, B any, C any](f func(A) B, g func(B) C) func(A) C {
+func Pipe2[A, B, C any](f func(A) B, g func(B) C) func(A) C {
 	return func(a A) C { return g(f(a)) }
 }
 
 // Pipe3 compose trois fonctions de gauche à droite.
-func Pipe3[A any, B any, C any, D any](f func(A) B, g func(B) C, h func(C) D) func(A) D {
+func Pipe3[A, B, C, D any](f func(A) B, g func(B) C, h func(C) D) func(A) D {
 	return func(a A) D { return h(g(f(a))) }
 }
 
 // Map applique f à chaque élément et retourne une nouvelle tranche.
 // L'entrée n'est jamais modifiée.
-func Map[T any, U any](items []T, f func(T) U) []U {
+func Map[T, U any](items []T, f func(T) U) []U {
 	out := make([]U, 0, len(items))
 	for _, item := range items {
 		out = append(out, f(item))
@@ -107,7 +107,7 @@ func Filter[T any](items []T, keep func(T) bool) []T {
 }
 
 // Reduce replie la tranche sur un accumulateur.
-func Reduce[T any, A any](items []T, initial A, f func(A, T) A) A {
+func Reduce[T, A any](items []T, initial A, f func(A, T) A) A {
 	acc := initial
 	for _, item := range items {
 		acc = f(acc, item)

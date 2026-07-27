@@ -79,6 +79,10 @@ Chaque migration a un `-- +goose Down` **réellement testé**. Un `Down` faux es
 
 Nommage : `{YYYYMMDDHHMMSS}_{slug_snake}.sql`, une migration par PR, jamais modifiée après merge.
 
+Emplacement : **`migrations/{moteur}/`**, jamais `migrations/` à la racine. Aujourd'hui
+`migrations/postgres/`. Le moteur figure dans le chemin parce qu'aucun n'est imposé (ADR 012) : un
+pilote SQLite (#36) prendra `migrations/sqlite/` sans que rien ne soit à renommer.
+
 ## 6. Le rôle SQL des migrations n'est pas celui du runtime
 
 Le rôle applicatif **ne possède pas** le schéma : il n'a ni `CREATE`, ni `ALTER`, ni `DROP`. C'est
@@ -86,6 +90,31 @@ ce qui empêche une injection SQL réussie de modifier la structure ou de désac
 
 Deux DSN distincts : `DB_DSN` (runtime) et `DB_MIGRATION_DSN` (migrations). En développement local
 ils peuvent coïncider ; en UAT et en production, jamais.
+
+## 6 bis. Un schéma et un rôle SQL par module — [ADR 011](../documentation/adr/011-isolation-des-donnees-par-module.md)
+
+`arch-go` empêche un module d'en **importer** un autre. Rien n'empêche son SQL d'aller lire les
+tables d'un autre : il n'y a aucun import à détecter. La frontière modulaire est donc étanche en Go
+et poreuse en SQL — tant qu'on ne la fait pas tenir par la base.
+
+- Modules **noyau** → schéma `platform`, partagé. Ce sont des mécanismes du socle, pas des domaines.
+- Modules **métier** → **un schéma par module**, et **un rôle** `hexa_m_{module}` qui n'a `USAGE`
+  que sur le sien.
+- `hexa_app` est **`NOINHERIT`** : il ne peut rien par lui-même. Un adaptateur secondaire fait
+  `SET LOCAL ROLE hexa_m_{module}` dans sa transaction. Une requête vers le schéma d'un autre module
+  échoue sur `permission denied`, **quand elle est écrite**.
+- **RLS obligatoire** sur toute table portant une donnée de client, `ENABLE` **et** `FORCE`.
+  Absence de tenant = aucune ligne visible, jamais « toutes ».
+- `UPDATE` et `DELETE` sont **révoqués** sur `platform.audit_log`.
+
+Ces invariants sont interrogeables : `task db:verify`
+([`deploy/postgres/verify.sql`](../deploy/postgres/verify.sql)), exécuté par la CI après
+chaque migration. Une jointure entre deux modules devient impossible — c'est le but, pas un effet
+de bord.
+
+Les **rôles** ne sont pas créés par une migration : ce sont des objets de cluster, et `CREATE ROLE`
+exige des droits que le rôle de migration ne doit pas avoir. Voir
+[`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql), exécuté une fois.
 
 ## 7. Types
 

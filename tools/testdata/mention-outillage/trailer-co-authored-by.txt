@@ -1,0 +1,6 @@
+TÉMOIN — faux exprès. Ne pas corriger.
+Message de commit tel que l'outillage le pose par défaut.
+
+fix(outbox): borner le recul exponentiel du dépileur (#12)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

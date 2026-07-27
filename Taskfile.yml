@@ -8,7 +8,10 @@ vars:
     sh: go list -m
   BIN: bin
   COVER_PROFILE: coverage.out
-  COVER_THRESHOLD: 80
+  # Aucun seuil ici, volontairement. Il y en avait un — `COVER_THRESHOLD: 80` —
+  # que AUCUNE tâche ne lisait, pendant que la CI en appliquait 70 et 90. Trois
+  # valeurs, trois endroits, dont un mort : la seule source de vérité est
+  # désormais `tools/covergate`.
 
 tasks:
   default:
@@ -32,7 +35,7 @@ tasks:
     desc: Installe l'outillage (linter, arch guardrails, migrations, vuln scan)
     cmds:
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - go install github.com/fdaines/arch-go@latest
+      - go install github.com/arch-go/arch-go@latest
       - go install github.com/pressly/goose/v3/cmd/goose@latest
       - go install golang.org/x/vuln/cmd/govulncheck@latest
 
@@ -41,7 +44,11 @@ tasks:
     desc: Démarre Postgres, Redis, Jaeger, Mailpit puis applique les migrations
     cmds:
       - docker compose up -d --wait
+      # Les rôles d'abord : une migration qui accorde un privilège à un rôle
+      # absent échoue, et c'est le comportement voulu.
+      - task: db:provision
       - task: migrate:up
+      - task: db:verify
 
   down:
     desc: Arrête la stack locale
@@ -60,25 +67,44 @@ tasks:
       - docker compose logs -f
 
   # ── Base de données ─────────────────────────────────────────────────────────
+  #
+  # Les migrations tournent sous DB_MIGRATION_DSN, JAMAIS sous DB_DSN.
+  #
+  # Le rôle applicatif n'a ni CREATE, ni ALTER, ni DROP (ADR 011 §4) : lui faire
+  # appliquer les migrations exigerait de lui donner ces droits, et toute la
+  # protection tomberait. Deux DSN, deux rôles, deux pouvoirs.
+  #
+  # Le dossier est ./migrations/postgres et non ./migrations : postgres est un
+  # pilote parmi d'autres, pas le moteur du socle (ADR 012).
+  db:provision:
+    desc: 'Crée les rôles SQL — UNE FOIS, avec un rôle administrateur'
+    cmds:
+      - psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
   migrate:up:
     desc: Applique les migrations
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" up
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
   migrate:down:
     desc: Annule la dernière migration
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" down
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" down
 
   migrate:status:
     desc: Affiche l'état des migrations
     cmds:
-      - goose -dir ./migrations postgres "$DB_DSN" status
+      - goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" status
 
   migrate:new:
     desc: 'Crée une migration : task migrate:new -- add_something'
     cmds:
-      - goose -dir ./migrations create {{.CLI_ARGS}} sql
+      - goose -dir ./migrations/postgres create {{.CLI_ARGS}} sql
+
+  db:verify:
+    desc: Vérifie les invariants d'isolation de l'ADR 011
+    cmds:
+      - psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
 
   # ── Exécution ───────────────────────────────────────────────────────────────
   run:
@@ -107,6 +133,223 @@ tasks:
       - task: test
       - task: vuln
 
+  # ── La barrière complète, hors GitHub ───────────────────────────────────────
+  #
+  # `task check` couvre 4 des 12 jobs de la CI. L'écart — migrations, e2e,
+  # compilation croisée, secrets, images — est PRÉCISÉMENT là où tous les défauts
+  # récents se sont logés, parce que rien ne les exécutait.
+  #
+  # `task ci` referme cet écart. Elle rejoue 10 jobs sur 12 dans la toolbox.
+  #
+  # ⚠️ CE N'EST PAS UNE GARDE. Elle s'exécute sur la machine de l'auteur, et
+  # l'auteur peut ne pas la lancer. C'est un INSTRUMENT DE MESURE reproductible,
+  # pas un contrôle — la même distinction que `rules/toolchain.md` §4 fait entre
+  # le crochet local et le ruleset serveur. Tant que la CI ne démarre pas (#47),
+  # fusionner reste une décision DOCUMENTÉE, jamais un gate franchi.
+  #
+  # Ce qu'elle ne couvre pas, et pourquoi :
+  #   pr-title  le titre n'existe qu'au niveau de la PR — `task ci:pr-title -- "…"`
+  #   inertia   exige les SHA base/head de la PR — `task ci:inertia -- <base>`
+  ci:
+    desc: "Rejoue hors GitHub la barrière de la CI — 10 jobs sur 12"
+    cmds:
+      - task: check
+      - task: ci:schemas
+      - task: ci:hygiene
+      - task: ci:build
+      - task: ci:secrets
+      - task: ci:migrations
+      - task: ci:e2e
+      - task: ci:images
+      - cmd: |
+          echo ""
+          echo "  task ci : toutes les étapes ont rendu 0."
+          echo "  NON couverts : pr-title, inertia (contexte de PR) — voir task --list-all"
+
+  ci:build:
+    desc: "Compilation croisée — la matrice exacte du job build"
+    cmds:
+      - cmd: |
+          set -e
+          for pair in linux/amd64 linux/arm64 darwin/arm64 windows/amd64; do
+            os=${pair%/*}; arch=${pair#*/}
+            printf '  build %-14s' "$pair"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags="-s -w" -o "{{.BIN}}/$os-$arch/" ./cmd/...
+            echo " ok"
+          done
+
+  ci:schemas:
+    desc: "Isolation des schémas SQL (ADR 011) — et le cas qui fait échouer le garde"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : le script. Le dépôt a
+      # déjà payé la divergence local/CI avec trois seuils en trois endroits.
+      - cmd: |
+          set -e
+          echo "  sens succès — le dépôt réel :"
+          ./tools/verifie-isolation-schemas.sh
+          # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans
+          # cette moitié, on ne distingue pas « aucune violation » de « le garde
+          # ne tourne pas » — la confusion exacte qui a laissé passer huit gardes
+          # défectueux dans ce dépôt.
+          echo "  sens échec — le témoin :"
+          if ./tools/verifie-isolation-schemas.sh tools/testdata/isolation-violation internal/modules >/dev/null 2>&1; then
+            echo "  LE GARDE NE GARDE PLUS : le témoin de violation est passé" >&2
+            exit 1
+          fi
+          echo "    refus confirmé sur tools/testdata/isolation-violation"
+
+  ci:secrets:
+    desc: "gitleaks sur l'historique complet — le job « Fuite de secrets »"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : le script. Il porte la
+      # commande, ses motifs, et le témoin de l'ADR 013.
+      - cmd: |
+          set -e
+          ./tools/verifie-fuite-de-secrets.sh
+          echo "  sens échec — le témoin :"
+          ./tools/verifie-fuite-de-secrets.sh --temoin
+
+  ci:migrations:
+    desc: "Le job « Migrations & isolation » en entier, Down et refus compris"
+    cmds:
+      - task: up
+      # Un Down faux est PIRE que pas de Down : il rassure au moment précis où
+      # l'on en a besoin. La seule façon de savoir qu'il marche est de l'exécuter.
+      - task: migrate:down
+      - task: migrate:up
+      - task: db:verify
+      # Les deux refus de l'ADR 011 se CONSTATENT. Un test qui vérifie qu'une
+      # chose est interdite doit voir le refus, pas l'absence de tentative.
+      - cmd: |
+          set -e
+          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+               -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
+            echo "  ADR 011 violée : le rôle applicatif a pu créer une table" >&2; exit 1
+          fi
+          echo "  refus confirmé : pas de DDL pour le rôle applicatif"
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q -c \
+            "INSERT INTO platform.audit_log (actor, action, entity_type, entity_id, occurred_at)
+             VALUES ('ci-local', 'test.executed', 'run', '1', now());"
+          for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" "DELETE FROM platform.audit_log"; do
+            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+                 -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
+              echo "  ADR 011 violée : le journal d'audit a accepté « $sql »" >&2; exit 1
+            fi
+          done
+          echo "  refus confirmé : journal d'audit en ajout seul"
+
+  ci:e2e:
+    desc: "Le job e2e — serveur démarré, tag e2e, et les tests COMPTÉS"
+    env:
+      E2E_BASE_URL: http://localhost:8080
+    cmds:
+      - cmd: |
+          set -e
+          go run ./cmd/server > /tmp/hexa-e2e-server.log 2>&1 &
+          srv=$!
+          trap 'kill $srv 2>/dev/null || true' EXIT
+          if ! curl --retry 60 --retry-delay 1 --retry-connrefused -fsS "$E2E_BASE_URL/healthz" >/dev/null; then
+            echo "  le serveur n'a pas démarré :" >&2; cat /tmp/hexa-e2e-server.log >&2; exit 1
+          fi
+          go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/... > /tmp/hexa-e2e.log 2>&1
+          code=$?
+          # LE piège de ce dépôt : sans le tag, zéro test compile et `ok` s'affiche.
+          # Un compte nul doit donc échouer, pas passer.
+          runs=$(grep -c '^=== RUN' /tmp/hexa-e2e.log || true)
+          grep -E '^(--- PASS|--- FAIL|ok|FAIL)' /tmp/hexa-e2e.log | sed 's/^/  /'
+          echo "  tests réellement exécutés : $runs"
+          if [ "$runs" -eq 0 ]; then
+            echo "  FAUX VERT : aucun test e2e exécuté" >&2; exit 1
+          fi
+          exit $code
+
+  ci:hygiene:
+    desc: "Version de Go cohérente et encodage sain — et les cas qui font échouer"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : les scripts.
+      - cmd: |
+          set -e
+          temoin=tools/testdata/version-de-go-divergente
+          echo "  version de Go — sens succès :"
+          ./tools/verifie-version-de-go.sh
+          # ADR 013 : un garde est livré avec le cas qui le fait échouer.
+          echo "  version de Go — sens échec :"
+          if ./tools/verifie-version-de-go.sh \
+               "$temoin/go.mod.temoin" "$temoin/Dockerfile.temoin" \
+               "$temoin/Containerfile.temoin" >/dev/null 2>&1; then
+            echo "  LE GARDE NE GARDE PLUS : le témoin de divergence est passé" >&2
+            exit 1
+          fi
+          echo "    refus confirmé sur $temoin"
+          echo "  encodage — sens succès :"
+          ./tools/verifie-encodage.sh
+          echo "  encodage — sens échec :"
+          ./tools/verifie-encodage.sh --temoin
+
+  ci:images:
+    desc: "Construit les deux images livrées — le job docker"
+    cmds:
+      # Le contexte est `.`, et c'est bien le chemin vu par le CONTENEUR — pas
+      # celui de l'hôte. La distinction n'est pas intuitive et coûte un
+      # diagnostic si on la prend à l'envers :
+      #
+      #   docker build <ctx>   le CLIENT empaquette le répertoire et le transmet
+      #                        → chemin côté client, donc /src
+      #   docker run -v a:b    le MOTEUR résout le montage
+      #                        → chemin côté hôte, donc $HEXA_HOST_ROOT
+      #
+      # Pris à l'envers, le message est « path not found » sur un chemin qui
+      # existe pourtant — sous les yeux, mais pas dans le bon espace de noms.
+      - cmd: |
+          set -e
+          for c in server worker; do
+            printf '  image %-8s' "$c"
+            docker build -q --build-arg CMD="$c" -t "localhost/hexa-$c:ci" . >/dev/null
+            echo " ok"
+          done
+
+  ci:pr-title:
+    desc: 'Le job pr-title : task ci:pr-title -- "feat(scope): description"'
+    silent: true
+    cmds:
+      - cmd: |
+          titre={{.CLI_ARGS}}
+          if echo "$titre" | grep -Eq '^(feat|fix|sec|refactor|test|docs|perf|ci|chore|build)(\([a-z0-9_-]+\))?!?: .+'; then
+            echo "  titre conforme : $titre"
+          else
+            echo "  titre NON conforme : $titre" >&2
+            echo "  attendu : {type}({scope}): {description}" >&2
+            exit 1
+          fi
+
+  ci:inertia:
+    desc: 'Le job inertia : task ci:inertia -- <ref-de-base>'
+    silent: true
+    cmds:
+      - cmd: |
+          base={{.CLI_ARGS}}
+          [ -n "$base" ] || { echo "  usage : task ci:inertia -- <ref-de-base>" >&2; exit 1; }
+          fail=0
+          # UNE seule définition, partagée avec `ci.yml` : le script. Il porte
+          # le motif, les exclusions motivées, et le garde anti-pourriture.
+          echo "  sens succès — le dépôt réel :"
+          ./tools/verifie-mention-outillage.sh "$base" HEAD || fail=1
+          # ADR 013 : le garde est livré avec le cas qui le fait échouer.
+          echo "  sens échec — les témoins :"
+          ./tools/verifie-mention-outillage.sh --temoin || fail=1
+          zones=$(git diff --name-only "$base" HEAD | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
+          if [ -n "$zones" ]; then
+            echo "  zones à haute inertie touchées — ADR ou label inertia:justified exigé :"
+            echo "$zones" | sed 's/^/    /'
+          else
+            echo "  aucune zone à haute inertie touchée"
+          fi
+          exit "$fail"
+
   fmt:
     desc: Formate le code
     cmds:
@@ -124,7 +367,7 @@ tasks:
       - golangci-lint run ./...
 
   arch:
-    desc: Vérifie les guardrails d'architecture (.arch-go.yml)
+    desc: Vérifie les guardrails d'architecture (arch-go.yml)
     cmds:
       - arch-go --verbose
 
@@ -135,9 +378,28 @@ tasks:
 
   # ── Tests ───────────────────────────────────────────────────────────────────
   test:
-    desc: Tests unitaires + course aux données
+    desc: 'Tests unitaires (sans -race : CGO absent sur Windows sans compilateur C)'
     cmds:
-      - go test -race -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=atomic ./...
+      # -coverpkg=./... est INDISPENSABLE ici, pas une option de confort.
+      #
+      # Les tests de ce dépôt sont en BOÎTE NOIRE : ils vivent dans `{paquet}/tests/`,
+      # donc dans un paquet DIFFÉRENT du code qu'ils exercent. Sans -coverpkg, le
+      # profil n'attribue la couverture qu'au paquet de test lui-même, et le total
+      # tombe à 3,6 % alors que la couverture réelle est de 52 %.
+      #
+      # Un chiffre faux dans ce sens est le pire : il ferait échouer un cliquet de
+      # couverture, puis quelqu'un baisserait le seuil pour « débloquer la CI » —
+      # et le garde ne garderait plus rien.
+      - go test -shuffle=on -coverprofile={{.COVER_PROFILE}} -covermode=count -coverpkg=./... ./...
+      # Les cliquets sont appliqués par un PROGRAMME, pas par du shell dupliqué :
+      # la CI lance exactement cette commande. Les seuils vivent à un seul
+      # endroit, dans tools/covergate, et ils sont compilés.
+      - go run ./tools/covergate {{.COVER_PROFILE}}
+
+  test:race:
+    desc: 'Tests + detecteur de courses (exige CGO : CI Linux)'
+    cmds:
+      - go test -race -shuffle=on -covermode=atomic ./...
 
   test:cover:
     desc: Rapport de couverture HTML
@@ -164,21 +426,73 @@ tasks:
       - cmd: echo "api/openapi.yaml régénéré"
 
   # ── Maintenance ─────────────────────────────────────────────────────────────
+  # Le chemin de module est la SEULE valeur nominative du dépôt. C'est cette
+  # tâche qui rend le socle réutilisable — et c'est elle qu'exerceront le premier
+  # transfert de propriétaire comme chaque `hexa new`.
+  #
+  # Elle ne se limite donc pas aux fichiers Go. Deux fichiers de configuration
+  # portent le chemin, et les oublier ne casse rien tout de suite — ce qui est
+  # exactement le problème :
+  #
+  #   .golangci.yml  `goimports.local-prefixes`. Le module renommé cesse d'être
+  #                  reconnu comme local : goimports reclasse TOUS les imports du
+  #                  projet en tiers et veut réordonner chaque bloc. `task fmt` et
+  #                  `task lint` divergent alors sur des centaines de fichiers,
+  #                  chez quelqu'un qui n'a écrit aucun d'eux.
+  #
+  #   Dockerfile     `org.opencontainers.image.source`. Chaque image annoncerait
+  #                  la provenance du dépôt d'ORIGINE. Une provenance fausse est
+  #                  un problème de chaîne d'approvisionnement, pas de cosmétique.
+  #
+  # La dernière étape VÉRIFIE qu'il ne reste rien. Sans elle, le prochain fichier
+  # qui portera le chemin rouvrira le trou en silence, et on ne l'apprendra qu'au
+  # rename suivant — c'est-à-dire chez un utilisateur.
   rename:
     desc: 'Change le module path : task rename -- github.com/moi/mon-projet'
     cmds:
       - go mod edit -module {{.CLI_ARGS}}
       - cmd: |
           git ls-files '*.go' | xargs sed -i 's|{{.MODULE}}|{{.CLI_ARGS}}|g'
+          sed -i 's|{{.MODULE}}|{{.CLI_ARGS}}|g' .golangci.yml Dockerfile
         platforms: [linux, darwin]
       - cmd: >-
           powershell -NoProfile -Command "Get-ChildItem -Recurse -Filter *.go |
           ForEach-Object { (Get-Content $_.FullName -Raw) -replace
           [regex]::Escape('{{.MODULE}}'), '{{.CLI_ARGS}}' |
-          Set-Content $_.FullName -NoNewline -Encoding utf8 }"
+          Set-Content $_.FullName -NoNewline -Encoding utf8 };
+          @('.golangci.yml','Dockerfile') | ForEach-Object {
+          (Get-Content $_ -Raw) -replace [regex]::Escape('{{.MODULE}}'),
+          '{{.CLI_ARGS}}' | Set-Content $_ -NoNewline -Encoding utf8 }"
         platforms: [windows]
       - go mod tidy
       - go build ./...
+      - task: rename:verify
+        vars: { FROM: '{{.MODULE}}' }
+
+  rename:verify:
+    desc: "Vérifie qu'aucune trace du chemin de module d'origine ne subsiste"
+    internal: true
+    cmds:
+      # EXCLUSIONS DÉCLARÉES, et non oubliées : CLAUDE.md et REPRISE.md citent le
+      # chemin dans des liens vers des PR HISTORIQUES. Les réécrire ferait pointer
+      # l'historique du socle vers un dépôt qui ne l'a jamais porté. GitHub
+      # redirige les URL d'un dépôt transféré, donc ces liens restent valides.
+      #
+      # Toute AUTRE occurrence est un oubli, et fait échouer la tâche.
+      - cmd: |
+          restant=$(git ls-files \
+            | grep -v -e '^CLAUDE\.md$' -e '^documentation/process/REPRISE\.md$' \
+            | xargs grep -l '{{.FROM}}' 2>/dev/null || true)
+          if [ -n "$restant" ]; then
+            echo "task rename : le chemin d'origine subsiste dans :" >&2
+            echo "$restant" | sed 's/^/  /' >&2
+            echo "" >&2
+            echo "Ajouter le fichier à la tâche rename, ou l'inscrire dans les" >&2
+            echo "exclusions déclarées de rename:verify — jamais le laisser passer." >&2
+            exit 1
+          fi
+          echo "rename : aucune trace résiduelle hors exclusions déclarées."
+        platforms: [linux, darwin]
 
   clean:
     desc: Supprime les artefacts de build

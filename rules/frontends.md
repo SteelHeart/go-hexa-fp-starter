@@ -79,7 +79,7 @@ appel, sur la base de l'état persisté — jamais sur un *claim* de jeton
 
 ## 6. Ajouter une surface — la procédure
 
-1. Créer `internal/features/{feature}/adapters/primary/{transport}/`.
+1. Créer `internal/modules/{module}/adapters/primary/{transport}/`.
 2. Écrire le parsing d'entrée, l'appel du port, la traduction du `Result`. **Rien d'autre.**
 3. Ajouter son propre présentateur. Ne pas réutiliser celui d'une autre surface.
 4. Monter l'adaptateur dans le `cmd/*` concerné (ou en créer un nouveau si le cycle de vie diffère).

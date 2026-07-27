@@ -1,7 +1,7 @@
-﻿// Package httpserver monte le routeur, l'API documentÃ©e et l'arrÃªt propre.
+// Package httpserver monte le routeur, l'API documentée et l'arrêt propre.
 //
-// C'est le SEUL paquet qui connaÃ®t chi et huma en dehors des adaptateurs
-// primaires HTTP. Le coÃ»t de sortie du framework tient donc dans ce fichier
+// C'est le SEUL paquet qui connaît chi et huma en dehors des adaptateurs
+// primaires HTTP. Le coût de sortie du framework tient donc dans ce fichier
 // (documentation/adr/008).
 package httpserver
 
@@ -23,11 +23,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// Probe rapporte la santÃ© d'une dÃ©pendance. Elle retourne une erreur explicite
+// Probe rapporte la santé d'une dépendance. Elle retourne une erreur explicite
 // pour que /readyz puisse dire CE QUI ne va pas.
 type Probe = func(context.Context) error
 
-// Router porte le routeur et l'API documentÃ©e.
+// Router porte le routeur et l'API documentée.
 type Router struct {
 	Mux *chi.Mux
 	API huma.API
@@ -35,9 +35,9 @@ type Router struct {
 
 // NewRouter construit le routeur, la pile de middlewares et les sondes.
 //
-// L'ordre des middlewares est significatif et se lit de l'extÃ©rieur vers
-// l'intÃ©rieur : l'identifiant de corrÃ©lation doit exister avant que quoi que ce
-// soit ne journalise, et la rÃ©cupÃ©ration de panique doit envelopper tout le reste.
+// L'ordre des middlewares est significatif et se lit de l'extérieur vers
+// l'intérieur : l'identifiant de corrélation doit exister avant que quoi que ce
+// soit ne journalise, et la récupération de panique doit envelopper tout le reste.
 func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Probe) *Router {
 	mux := chi.NewMux()
 
@@ -45,7 +45,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Prob
 	mux.Use(
 		middleware.RequestID(),
 		middleware.Recover(logger),
-		middleware.SecurityHeaders(!cfg.App.Env.IsDevelopment()),
+		securityHeadersFor(cfg.App.Env),
 		middleware.CORS(cfg.HTTP.AllowedOrigins),
 		middleware.MaxBody(cfg.HTTP.MaxBodyBytes),
 		middleware.AccessLog(logger),
@@ -60,12 +60,24 @@ func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Prob
 	return &Router{Mux: mux, API: humachi.New(mux, humaCfg)}
 }
 
-// mountProbes monte les sondes hors de l'API documentÃ©e : elles ne font pas
-// partie du contrat public et ne doivent pas apparaÃ®tre dans l'OpenAPI.
+// securityHeadersFor choisit le jeu d'en-têtes selon l'environnement.
+//
+// Deny par défaut : SEUL le développement obtient la version sans HSTS, et il doit
+// se nommer pour l'obtenir. Un environnement inconnu — donc mal configuré — reçoit
+// le durcissement complet.
+func securityHeadersFor(env config.Environment) middleware.Middleware {
+	if env.IsDevelopment() {
+		return middleware.SecurityHeadersWithoutHSTS()
+	}
+	return middleware.SecurityHeaders()
+}
+
+// mountProbes monte les sondes hors de l'API documentée : elles ne font pas
+// partie du contrat public et ne doivent pas apparaître dans l'OpenAPI.
 func mountProbes(mux *chi.Mux, readiness map[string]Probe) {
-	// /healthz ne vÃ©rifie AUCUNE dÃ©pendance : sinon un incident base ferait
-	// redÃ©marrer tous les conteneurs, transformant une panne partielle en
-	// indisponibilitÃ© totale.
+	// /healthz ne vérifie AUCUNE dépendance : sinon un incident base ferait
+	// redémarrer tous les conteneurs, transformant une panne partielle en
+	// indisponibilité totale.
 	mux.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -87,7 +99,7 @@ func mountProbes(mux *chi.Mux, readiness map[string]Probe) {
 	})
 }
 
-// Server encapsule le serveur HTTP et son arrÃªt propre.
+// Server encapsule le serveur HTTP et son arrêt propre.
 type Server struct {
 	http   *http.Server
 	logger *slog.Logger
@@ -96,30 +108,30 @@ type Server struct {
 
 // New construit le serveur applicatif.
 //
-// otelhttp enveloppe le gestionnaire : chaque requÃªte ouvre un span racine, ce
-// qui relie ensuite tous les logs et spans de la requÃªte.
+// otelhttp enveloppe le gestionnaire : chaque requête ouvre un span racine, ce
+// qui relie ensuite tous les logs et spans de la requête.
 func New(cfg config.Config, handler http.Handler, logger *slog.Logger) *Server {
 	return &Server{
 		http: &http.Server{
 			Addr:    cfg.HTTP.Addr(),
 			Handler: otelhttp.NewHandler(handler, "http.server"),
 			// ReadHeaderTimeout non nul : sans lui, une connexion qui n'envoie
-			// jamais ses en-tÃªtes immobilise une goroutine indÃ©finiment.
-			ReadHeaderTimeout: cfg.HTTP.ReadTimeout,
-			ReadTimeout:       cfg.HTTP.ReadTimeout,
-			WriteTimeout:      cfg.HTTP.WriteTimeout,
-			IdleTimeout:       cfg.HTTP.IdleTimeout,
+			// jamais ses en-têtes immobilise une goroutine indéfiniment.
+			ReadHeaderTimeout: cfg.HTTP.ReadTimeout.Duration(),
+			ReadTimeout:       cfg.HTTP.ReadTimeout.Duration(),
+			WriteTimeout:      cfg.HTTP.WriteTimeout.Duration(),
+			IdleTimeout:       cfg.HTTP.IdleTimeout.Duration(),
 		},
 		logger: logger,
-		grace:  cfg.HTTP.ShutdownTimeout,
+		grace:  cfg.HTTP.ShutdownTimeout.Duration(),
 	}
 }
 
-// Run Ã©coute jusqu'Ã  l'annulation du contexte, puis vide les connexions en cours.
+// Run écoute jusqu'à l'annulation du contexte, puis vide les connexions en cours.
 func (s *Server) Run(ctx context.Context) error {
 	errs := make(chan error, 1)
 	go func() {
-		s.logger.InfoContext(ctx, "serveur HTTP Ã  l'Ã©coute", slog.String("addr", s.http.Addr))
+		s.logger.InfoContext(ctx, "serveur HTTP à l'écoute", slog.String("addr", s.http.Addr))
 		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errs <- err
 			return
@@ -134,25 +146,29 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		return nil
 	case <-ctx.Done():
-		return s.shutdown()
+		return s.shutdown(ctx)
 	}
 }
 
-func (s *Server) shutdown() error {
-	// Contexte dÃ©tachÃ© : le contexte parent est dÃ©jÃ  annulÃ©, l'utiliser ici
-	// couperait les requÃªtes en cours au lieu de les laisser finir.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.grace)
+func (s *Server) shutdown(ctx context.Context) error {
+	// WithoutCancel plutôt que Background : le contexte parent est déjà annulé et
+	// l'utiliser tel quel couperait les requêtes en cours au lieu de les laisser
+	// finir — mais repartir de Background jetterait AUSSI les valeurs portées par
+	// le contexte, dont la trace. L'arrêt serait alors le seul moment du cycle de
+	// vie invisible dans l'observabilité, c'est-à-dire précisément celui qu'on
+	// cherche à comprendre après un incident.
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.grace)
 	defer cancel()
-	s.logger.Info("arrÃªt du serveur HTTP", slog.Duration("grace", s.grace))
+	s.logger.InfoContext(shutdownCtx, "arrêt du serveur HTTP", slog.Duration("grace", s.grace))
 	if err := s.http.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("arrÃªt du serveur HTTP: %w", err)
+		return fmt.Errorf("arrêt du serveur HTTP: %w", err)
 	}
 	return nil
 }
 
-// NewMetricsServer expose /metrics sur un port sÃ©parÃ©.
+// NewMetricsServer expose /metrics sur un port séparé.
 //
-// Port sÃ©parÃ© et non exposÃ© publiquement : les mÃ©triques rÃ©vÃ¨lent la volumÃ©trie
+// Port séparé et non exposé publiquement : les métriques révèlent la volumétrie
 // et la structure interne du service.
 func NewMetricsServer(port int, logger *slog.Logger) *Server {
 	mux := http.NewServeMux()

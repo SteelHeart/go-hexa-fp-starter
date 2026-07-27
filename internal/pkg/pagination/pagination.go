@@ -52,7 +52,7 @@ func DecodeCursor(encoded string) (Cursor, error) {
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return Cursor{}, fmt.Errorf("%w: base64: %s", ErrInvalidCursor, err)
+		return Cursor{}, fmt.Errorf("%w: base64: %w", ErrInvalidCursor, err)
 	}
 	micros, id, found := strings.Cut(string(raw), "|")
 	if !found || id == "" {
@@ -60,7 +60,7 @@ func DecodeCursor(encoded string) (Cursor, error) {
 	}
 	parsed, err := strconv.ParseInt(micros, 10, 64)
 	if err != nil {
-		return Cursor{}, fmt.Errorf("%w: horodatage: %s", ErrInvalidCursor, err)
+		return Cursor{}, fmt.Errorf("%w: horodatage: %w", ErrInvalidCursor, err)
 	}
 	return Cursor{CreatedAt: time.UnixMicro(parsed).UTC(), ID: id}, nil
 }

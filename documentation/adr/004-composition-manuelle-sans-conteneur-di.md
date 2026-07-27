@@ -16,7 +16,7 @@ et voulu — lui sont indiscernables.
 
 Les dépendances sont câblées **à la main**, par application partielle explicite, à deux niveaux :
 
-1. `internal/features/{f}/module.go` — assemble une feature et expose ses ports primaires.
+1. `internal/modules/{f}/module.go` — assemble une feature et expose ses ports primaires.
 2. `cmd/{server,worker,cli}/main.go` — lit la config, ouvre les connexions, construit les modules,
    monte les adaptateurs primaires, gère l'arrêt propre.
 

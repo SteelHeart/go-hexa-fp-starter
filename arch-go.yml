@@ -1,0 +1,179 @@
+# arch-go — https://github.com/arch-go/arch-go
+#
+# C'est le fichier le plus important du dépôt : il transforme les règles
+# d'architecture en test automatisé. Sans lui, l'hexagone se dégrade en trois
+# semaines. Exécuter avec `task arch`.
+version: 1
+
+threshold:
+  compliance: 100
+
+dependenciesRules:
+  # ── 1. Le domaine est absolument pur ────────────────────────────────────────
+  # Aucune dépendance externe, aucune infrastructure. Il ne dépend que des
+  # primitives fonctionnelles (Result, fp) qui sont elles-mêmes pures.
+  - package: "**.internal.modules.*.domain"
+    shouldOnlyDependsOn:
+      internal:
+        - "**.internal.pkg.result"
+        - "**.internal.pkg.fp"
+      external: []
+
+  # ── 2. Les ports ne sont que des signatures ─────────────────────────────────
+  # Ils peuvent nommer le domaine et les primitives, rien d'autre.
+  - package: "**.internal.modules.*.ports"
+    shouldOnlyDependsOn:
+      internal:
+        - "**.internal.modules.*.domain"
+        - "**.internal.pkg.result"
+        - "**.internal.pkg.fp"
+      external: []
+
+  # ── 3. L'application orchestre, elle n'implémente pas ───────────────────────
+  # Elle ne doit JAMAIS voir un adaptateur ni l'infrastructure : sinon
+  # l'inversion de dépendance est rompue.
+  - package: "**.internal.modules.*.application"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.*.adapters.**"
+        - "**.internal.infrastructure.**"
+
+  # ── 4. Étanchéité entre bounded contexts ────────────────────────────────────
+  # Une feature ne parle jamais directement à une autre : elle passe par le
+  # LANGAGE PUBLIÉ (internal/contracts) puis par un événement ou un appel de
+  # module résolu par modulebus. Jamais par un import direct, jamais par la base
+  # de l'autre module (ADR 011).
+  - package: "**.internal.modules.user_registration.**"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.!(user_registration).**"
+
+  # ── 4c. Les modules NOYAU ne connaissent aucun module métier ────────────────
+  # La dépendance va toujours du métier vers le noyau, jamais l'inverse : un
+  # module noyau qui nommerait un module métier ne serait plus réutilisable.
+  # C'est cette règle qui rendra possible d'extraire internal/core en module Go
+  # indépendant (ADR 012).
+  - package: "**.internal.core.**"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.**"
+
+  # ── 4d. Le domaine d'un module noyau est pur lui aussi ──────────────────────
+  - package: "**.internal.core.*.domain"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+  # ── 4e. Les ports d'un module noyau ne nomment que leur domaine ─────────────
+  - package: "**.internal.core.*.ports"
+    shouldOnlyDependsOn:
+      internal:
+        - "**.internal.core.*.domain"
+      external: []
+
+  # ── 4b. Le langage publié ne dépend de rien ─────────────────────────────────
+  # internal/contracts ne contient que des types primitifs sérialisables. S'il
+  # importait un domaine, il recréerait le couplage qu'il sert à éviter.
+  - package: "**.internal.contracts.**"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+  # ── 5. Le socle ne connaît pas les features ─────────────────────────────────
+  # La dépendance va toujours de l'extérieur vers l'intérieur.
+  - package: "**.internal.infrastructure.**"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.**"
+
+  # ── 6. Les primitives sont sans dépendance ──────────────────────────────────
+  - package: "**.internal.pkg.result"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+  - package: "**.internal.pkg.fp"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+  # ── 7. La config est immuable et sans dépendance interne ────────────────────
+  - package: "**.config"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.**"
+
+  # ── 8. L'outillage de build est ISOLÉ du produit ─────────────────────────────
+  # `tools/` contient les gardes de la CI, pas du code livré. Il ne doit dépendre
+  # de RIEN du dépôt : sinon un garde deviendrait solidaire du code qu'il
+  # surveille, et refactorer le produit casserait le garde — jusqu'à ce que
+  # quelqu'un le désactive « le temps de finir ».
+  #
+  # La réciproque compte tout autant : aucun paquet du produit ne doit importer
+  # `tools/`, sinon un binaire livré embarquerait de l'outillage de build. Elle
+  # est couverte par la règle qui suit.
+  - package: "**.tools.**"
+    shouldOnlyDependsOn:
+      internal: []
+      external: []
+
+contentsRules:
+  # Le domaine ne contient pas d'interfaces : les contrats sont des types
+  # fonction déclarés dans ports/.
+  - package: "**.internal.modules.*.domain"
+    shouldNotContainInterfaces: true
+
+  # Les ports ne contiennent pas d'implémentation : ni struct, ni fonction.
+  - package: "**.internal.modules.*.ports"
+    shouldNotContainFunctions: true
+    shouldNotContainStructs: true
+
+functionsRules:
+  # Mêmes seuils pour le noyau et le métier : une seule anatomie, donc une seule
+  # exigence de composabilité (ADR 012). Le seuil de fonctions publiques est
+  # légèrement plus haut car un pilote expose une méthode par port.
+  - package: "**.internal.core.**"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 50
+    maxPublicFunctionPerFile: 8
+
+  # Des fonctions courtes et peu paramétrées sont la condition de la
+  # composabilité. Ces seuils sont volontairement serrés.
+  - package: "**.internal.modules.**"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 50
+    maxPublicFunctionPerFile: 6
+
+  - package: "**.internal.pkg.**"
+    maxParameters: 4
+    maxReturnValues: 3
+    maxLines: 40
+
+  # Le composition root a le droit de TOUT connaître — c'est sa raison d'être
+  # (ADR 004). La contrainte porte donc sur sa forme, pas sur ses dépendances.
+  #
+  # `maxPublicFunctionPerFile: 1` est la règle qui compte : un binaire n'exporte
+  # que `main`. Dès qu'il exporte autre chose, c'est qu'on a écrit de la logique
+  # dans le câblage — et cette logique-là échappe à l'hexagone, puisqu'elle vit
+  # hors de tout module et n'est vérifiée par aucune règle de dépendance.
+  - package: "**.cmd.**"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 60
+    maxPublicFunctionPerFile: 1
+
+  # L'outillage de build tient aux mêmes limites de forme que le reste. Un garde
+  # illisible est un garde qu'on finit par contourner au lieu de le corriger.
+  #
+  # Cette règle a AUSSI une raison mécanique : le seuil `coverage` d'arch-go
+  # mesure la part des paquets couverts par au moins une règle. Un paquet neuf
+  # non couvert le fait tomber sous 100 %, et `task check` échoue à l'étape
+  # `arch`. C'est arrivé en ajoutant `tools/covergate` : le garde de couverture
+  # a lui-même fait échouer un autre garde, ce qui est exactement le
+  # comportement voulu.
+  - package: "**.tools.**"
+    maxParameters: 4
+    maxReturnValues: 3
+    maxLines: 60

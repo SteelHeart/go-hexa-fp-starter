@@ -1,0 +1,129 @@
+# Activation et choix de pilote de chaque module noyau.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Zéro prérequis d'infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
+# Les pilotes ci-dessous n'ont AUCUNE dépendance externe. Avec cette
+# configuration, `go run ./cmd/server` démarre : ni Postgres, ni Redis, ni
+# Docker. C'est la promesse de l'ADR 012, et elle est vérifiée par un test
+# (Modules.RequiresSQL).
+#
+# `options` porte le paramétrage propre au pilote. Il n'est pas typé ici : chaque
+# pilote valide ses options à sa construction, et une option illisible REFUSE le
+# démarrage plutôt que de se rabattre sur une valeur par défaut surprise.
+#
+# Un module ABSENT de ce fichier est DÉSACTIVÉ. On n'active jamais une capacité
+# que personne n'a demandée — deny par défaut jusque dans la configuration.
+#
+# Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
+# jamais en « le pilote le plus proche ». Catalogue complet des pilotes :
+# documentation/technique/pilotes.md
+#
+# ⚠️ Chaque pilote documente ses NON-garanties. Les pilotes en mémoire ne
+# survivent pas à un redémarrage — c'est le bon choix en développement et en
+# test, jamais en production.
+modules:
+  # Publication garantie d'événements.
+  # memory : perdu au redémarrage · postgres : durable, transactionnel
+  outbox:
+    enabled: true
+    driver: memory
+    options:
+      # Taille d'un lot. Trop grand, une réplique monopolise le travail et tient
+      # ses verrous longtemps ; trop petit, le débit s'effondre en aller-retours.
+      batch_size: 50
+      # Au-delà, le message passe en `failed` et n'est plus rejoué. Il n'est PAS
+      # supprimé : c'est la seule trace de ce qui n'a pas été publié.
+      max_attempts: 8
+      # Pas du recul exponentiel, borné à 2^10 fois cette valeur.
+      base_backoff: 1s
+      # Période de scrutation du dépileur.
+      interval: 2s
+
+  # Écritures rejouables sans effet de bord. Obligatoire dès qu'il y a du mobile.
+  # memory : par instance, donc SANS garantie derrière plusieurs répliques
+  # postgres : exclusivité entre répliques · redis : idem, expiration passive
+  idempotency:
+    enabled: true
+    driver: memory
+    options:
+      # Fenêtre pendant laquelle un rejeu est reconnu. Au-delà, il recrée la
+      # ressource : c'est un arbitrage assumé, pas un oubli. 24 h couvre le cas
+      # qui motive le module — un mobile hors réseau qui reprend le lendemain.
+      ttl: 24h
+
+  # Drapeaux de fonctionnalité et réglages métier modifiables à chaud.
+  # file : lu depuis config/, donc PAS modifiable à chaud — c'est le compromis
+  # du pilote par défaut, et il est assumé
+  dynconf:
+    enabled: true
+    driver: file
+
+  # Journal en ajout seul.
+  # log : ni requêtable, ni inaltérable · postgres : UPDATE et DELETE révoqués
+  audit:
+    enabled: true
+    driver: log
+
+  # Objets et fichiers.
+  # disk : non partagé entre répliques
+  storage:
+    enabled: true
+    driver: disk
+
+  # Tâches périodiques, exécutées une seule fois quel que soit le nombre de
+  # répliques. Le vrai problème n'est pas la périodicité mais l'ÉLECTION.
+  # cron-inproc : aucune élection entre répliques, mais aucun recouvrement local
+  # advisory-lock : élection réelle, exige une base
+  scheduler:
+    enabled: false
+    driver: cron-inproc
+
+  # ── Modules non encore implémentés ──────────────────────────────────────────
+  # Volontairement ABSENTS et non « désactivés » : un module absent de
+  # internal/config/modules.go REFUSE d'être activé, parce que son code n'existe
+  # pas. Les écrire ici en commentaire décrit la cible sans permettre de croire
+  # qu'il suffit de basculer `enabled` pour en disposer.
+  #
+  # Feuille de route : documentation/technique/modules-noyau.md
+  # Catalogue des pilotes envisagés : documentation/technique/pilotes.md
+  #
+  # notification  canaux × fournisseurs (log, smtp, mailjet, ses…)
+  # ratelimit     memory, redis, postgres, gateway
+  # secrets       env, file, sops, vault, aws-secrets-manager…
+  # i18n          embedded, file, postgres
+  # tenancy       rls, schema, database
+  # workflow      builtin, temporal
+  # search        postgres-fts, bleve, meilisearch, opensearch…
+  # document      html, gotenberg, weasyprint, chromedp
+  # payment       log, stripe, adyen, paypal, mollie
+  # media         disk, minio, s3, gcs, azure-blob
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Communication ENTRE modules
+# ─────────────────────────────────────────────────────────────────────────────
+# Distinct de `modules` : ici on décide comment deux modules se PARLENT, pas
+# comment un module s'implémente.
+#
+# Un module n'accède JAMAIS aux tables d'un autre. Il passe par le langage
+# publié (internal/contracts/) puis par l'un de ces modes :
+#
+#   inproc    appel de fonction direct — même binaire (le moins coûteux)
+#   http      appel réseau — déploiements séparés
+#   event     dépôt d'un événement — asynchrone, SANS réponse
+#   disabled  refus explicite
+#
+# Passer un module de `inproc` à `http`, c'est l'extraire en service sans
+# changer une ligne de code. C'est le premier pas vers les microservices.
+interop:
+  default_transport: inproc
+  call_timeout: 5s
+
+  # Surcharge par module. La clé est le nom du module.
+  transports: {}
+  #   user_registration: http
+
+  # Requis quand le transport d'un module est `http`. La validation refuse le
+  # démarrage si l'adresse manque.
+  base_urls: {}
+  #   user_registration: http://user-registration:8080

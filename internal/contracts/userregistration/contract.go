@@ -64,6 +64,13 @@ type RegisterResponse struct {
 
 // RegisterRoute est la route HTTP qui expose la capacité, utilisée quand le
 // module est appelé à distance.
+//
+// Globale assumée : c'est une CONSTANTE du langage publié, au même titre que les
+// types ci-dessus. Go n'a pas de constante structurée ; la rendre fonction
+// (`func RegisterRoute() ...`) déguiserait une donnée en calcul sans rien protéger,
+// puisque la valeur rendue serait de toute façon copiable et modifiable.
+//
+//nolint:gochecknoglobals // constante du langage publié : Go n'a pas de constante structurée
 var RegisterRoute = struct {
 	Method string
 	Path   string

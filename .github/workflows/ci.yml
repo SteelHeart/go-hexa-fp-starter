@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+  # AUCUN filtre `branches:` ici, et c'est délibéré : une PR est contrôlée
+  # quelle que soit sa base. Avec `branches: [main]`, toute la pile de travail
+  # — dont les PR visent une branche d'intégration — n'affichait « no checks
+  # reported », c'est-à-dire une case VIDE, jamais une case rouge. Et une case
+  # vide se fusionne (#64).
+  #
+  # C'est le défaut de forme de l'ADR 013 appliqué au déclencheur lui-même :
+  # l'absence de contrôle ressemble en tout point à l'absence de problème.
+  #
+  # Le coût est borné par `concurrency` ci-dessous : une nouvelle poussée
+  # annule le run précédent.
   pull_request:
-    branches: [main]
     types: [opened, synchronize, reopened, edited]
   merge_group:
   workflow_dispatch:
@@ -117,7 +127,7 @@ jobs:
           changed=$(git diff --name-only "$BASE" "$HEAD")
           echo "$changed" | sed 's/^/  /'
 
-          inertia=$(echo "$changed" | grep -E '^(rules/|\.arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
+          inertia=$(echo "$changed" | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
           [ -z "$inertia" ] && { echo "Aucune zone à haute inertie touchée."; exit 0; }
 
           echo ""
@@ -139,30 +149,22 @@ jobs:
           echo "Ajouter documentation/adr/{NNN}-{slug}.md, ou poser le label 'inertia:justified' en expliquant pourquoi dans le corps de la PR."
           exit 1
 
+      # UNE seule définition, partagée avec `task ci:inertia` : le script. Le
+      # motif n'est écrit NULLE PART ici — la version précédente le portait en
+      # clair, donc toute PR touchant à ce job se faisait signaler par lui.
       - name: Aucune mention d'outillage d'assistance dans le diff
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          # rules/interdictions.md § Artefacts versionnés.
-          PATTERN='Co-Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)|Generated with|🤖|Co-authored-by:.*noreply@anthropic'
-          fail=0
+        run: ./tools/verifie-mention-outillage.sh "$BASE" "$HEAD"
 
-          if git log --format='%B' "$BASE..$HEAD" | grep -Eiq "$PATTERN"; then
-            echo "::error::un message de commit porte une mention d'outillage d'assistance"; fail=1
-          fi
-          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -Eiq "$PATTERN"; then
-            echo "::error::le titre ou le corps de la PR porte une mention d'outillage d'assistance"; fail=1
-          fi
-          if git diff "$BASE" "$HEAD" -- . | grep -E '^\+' | grep -Eiq "$PATTERN"; then
-            echo "::error::le diff introduit une mention d'outillage d'assistance"; fail=1
-          fi
-
-          [ "$fail" -eq 0 ] && echo "Aucune mention détectée."
-          exit "$fail"
+      # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans cette
+      # moitié, « aucune mention détectée » et « le motif ne reconnaît plus
+      # rien » rendent exactement la même sortie.
+      - name: Ce garde-là sait échouer
+        run: ./tools/verifie-mention-outillage.sh --temoin
 
       - name: Aucune dette dissimulée
         env:
@@ -197,51 +199,55 @@ jobs:
 
       - name: arch-go
         run: |
-          go install github.com/fdaines/arch-go@${ARCHGO_VERSION}
+          go install github.com/arch-go/arch-go@${ARCHGO_VERSION}
           arch-go --verbose
 
       # ── Isolation des données par module (ADR 011) ──────────────────────────
       # Un module ne doit JAMAIS toucher la zone exclusive d'un autre. Chaque
       # module possède un schéma Postgres ; les migrations d'un module ne
       # référencent que son schéma et le schéma partagé `platform`.
+      # Le garde vit dans UN script, appelé ici comme par `task ci:schemas`.
+      # Sa version précédente était inline et rendait NEUF faux positifs : son
+      # motif s'appliquait au fichier entier, commentaires compris, et accusait
+      # de la prose d'être un schéma étranger. Le job ne pouvait pas être vert.
       - name: Isolation des schémas Postgres
+        run: ./tools/verifie-isolation-schemas.sh
+
+      # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans cette
+      # étape, un script devenu muet — chemin faux, dossier vide, motif cassé —
+      # rendrait 0 et le job passerait au vert sans rien vérifier.
+      - name: Le garde d'isolation sait échouer
         run: |
-          set -euo pipefail
-          fail=0
-          shared="platform|pg_catalog|information_schema|public"
+          if ./tools/verifie-isolation-schemas.sh \
+               tools/testdata/isolation-violation internal/modules >/dev/null 2>&1; then
+            echo "::error::le témoin de violation est passé — le garde ne garde plus"
+            exit 1
+          fi
+          echo "refus confirmé sur tools/testdata/isolation-violation"
 
-          for dir in migrations/*/; do
-            module=$(basename "$dir")
-            [ "$module" = "platform" ] && continue
-            # Tout identifiant qualifié `autre_schema.` est une violation.
-            offenders=$(grep -rhoE '\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*' "$dir" 2>/dev/null \
-              | cut -d. -f1 | sort -u \
-              | grep -Ev "^($module|$shared)$" || true)
-            if [ -n "$offenders" ]; then
-              echo "::error::migrations/$module référence un schéma étranger :"
-              echo "$offenders" | sed 's/^/    /'
-              fail=1
-            fi
-          done
+      # ── Hygiène des déclarations de build (#66) ─────────────────────────────
+      # Deux propriétés que rien ne tenait, et dont la violation ne produit
+      # AUCUN message : la version de Go déclarée à trois endroits, et
+      # l'encodage des fichiers suivis.
+      - name: Version de Go cohérente aux trois déclarations
+        run: ./tools/verifie-version-de-go.sh
 
-          # Aucun SQL applicatif ne doit qualifier le schéma d'un autre module :
-          # le search_path du rôle du module s'en charge.
-          for dir in internal/features/*/; do
-            module=$(basename "$dir")
-            others=$(find internal/features -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
-              | grep -v "^$module$" || true)
-            [ -z "$others" ] && continue
-            for other in $others; do
-              if grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' >/dev/null 2>&1; then
-                echo "::error::$module référence le schéma de $other dans du SQL"
-                grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' | sed 's/^/    /'
-                fail=1
-              fi
-            done
-          done
+      - name: Ce garde-là sait échouer
+        run: |
+          t=tools/testdata/version-de-go-divergente
+          if ./tools/verifie-version-de-go.sh \
+               "$t/go.mod.temoin" "$t/Dockerfile.temoin" "$t/Containerfile.temoin" \
+               >/dev/null 2>&1; then
+            echo "::error::le témoin de divergence est passé — le garde ne garde plus"
+            exit 1
+          fi
+          echo "refus confirmé sur $t"
 
-          [ "$fail" -eq 0 ] && echo "Isolation des schémas respectée."
-          exit "$fail"
+      - name: Encodage — ni BOM, ni accent doublement encodé
+        run: ./tools/verifie-encodage.sh
+
+      - name: Celui-là aussi sait échouer
+        run: ./tools/verifie-encodage.sh --temoin
 
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
@@ -257,28 +263,47 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # -coverpkg=./... est INDISPENSABLE : les tests sont en BOÎTE NOIRE, dans
+      # `{paquet}/tests/`, donc dans un paquet different du code qu'ils exercent.
+      # Sans lui, le profil n'attribue la couverture qu'au paquet de test et le
+      # total tombe a 3,6 % au lieu de 52 %. Le cliquet ci-dessous echouerait
+      # alors pour une raison fausse, et quelqu'un finirait par baisser le seuil.
       - name: go test -race
-        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out -coverpkg=./... ./...
 
-      - name: Seuil de couverture
+      # Les trois cliquets sont appliqués par `tools/covergate`, le MÊME
+      # programme que `task test` lance en local. Ce qui était ici en shell
+      # dupliquait la logique et, surtout, mesurait mal :
+      #
+      #  - le seuil global de 70 % portait sur un profil produit SANS TAG, donc
+      #    incapable par construction d'exécuter une ligne de pilote Postgres ou
+      #    Redis. Il était inatteignable, et un seuil inatteignable finit
+      #    toujours par être abaissé « pour débloquer la CI » ;
+      #  - la couverture du cœur moyennait les pourcentages PAR FONCTION : une
+      #    fonction d'une instruction pesait autant qu'une fonction de
+      #    cinquante. Elle est désormais pondérée par instruction.
+      #
+      # Le seuil de 70 % n'a PAS été abaissé : il s'applique au périmètre que ce
+      # lot peut atteindre. Ce qui en sort est énuméré, motivé, affiché à chaque
+      # exécution, et un cliquet distinct garde le total du code produit — donc
+      # ajouter du code non couvert échoue toujours. Voir #37.
+      - name: Cliquets de couverture
+        shell: bash
         run: |
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
-          echo "Couverture globale : ${total}%"
-          echo "### Couverture : ${total}%" >> "$GITHUB_STEP_SUMMARY"
-          awk -v t="$total" 'BEGIN { exit (t + 0 >= 70) ? 0 : 1 }' \
-            || { echo "::error::Couverture ${total}% < seuil 70%"; exit 1; }
-
-      - name: Couverture du cœur métier (domain + application ≥ 90%)
-        run: |
-          go tool cover -func=coverage.out \
-            | grep -E '/(domain|application)/' \
-            | awk '{ gsub(/%/, "", $3); sum += $3; n++ }
-                   END {
-                     if (n == 0) { print "::warning::aucun fichier de cœur mesuré"; exit 0 }
-                     avg = sum / n
-                     printf "Couverture du cœur : %.1f%% sur %d fonctions\n", avg, n
-                     if (avg < 90) { printf "::error::cœur à %.1f%% < 90%%\n", avg; exit 1 }
-                   }'
+          # `set -o pipefail` est OBLIGATOIRE ici : le shell par défaut des
+          # étapes `run` est `bash -e`, SANS pipefail. Sans cette ligne, le code
+          # de retour du cliquet serait celui de `tee` — toujours 0 — et la CI
+          # serait verte sur une couverture insuffisante. C'est précisément le
+          # faux vert que cette étape est censée empêcher.
+          set -o pipefail
+          {
+            echo '### Couverture'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          go run ./tools/covergate coverage.out | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -288,7 +313,96 @@ jobs:
           retention-days: 7
 
   # ───────────────────────────────────────────────────────────────────────────
-  # 5. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
+  # 5. Migrations : les appliquer, VÉRIFIER l'isolation, puis prouver le Down.
+  #
+  # C'est le seul endroit du projet où une base existe (friction F001). Sans ce
+  # job, `migrations/` serait du SQL écrit que personne n'a jamais exécuté.
+  # ───────────────────────────────────────────────────────────────────────────
+  migrations:
+    name: Migrations & isolation des données
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hexa
+          POSTGRES_PASSWORD: hexa
+          POSTGRES_DB: hexa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hexa -d hexa"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+
+    env:
+      # En CI, `hexa` est administrateur de sa base : il tient donc les deux rôles
+      # à la fois. En UAT et en production, DB_MIGRATION_DSN est un rôle
+      # `hexa_owner` distinct, et DB_DSN un rôle `hexa_app` sans aucun droit DDL
+      # (ADR 011 §4). La séparation est vérifiée par la configuration, qui refuse
+      # deux DSN identiques hors développement.
+      DB_SUPERUSER_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Installe goose et le client psql
+        run: |
+          go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Provisionne les rôles
+        run: psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
+      - name: Applique les migrations
+        run: goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
+
+      - name: Vérifie les invariants d'isolation (ADR 011)
+        run: psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
+
+      # Un Down faux est PIRE que pas de Down : il donne une fausse assurance au
+      # moment précis où l'on en a besoin, c'est-à-dire pendant un incident. La
+      # seule façon de savoir qu'il fonctionne est de l'exécuter.
+      - name: Prouve le retour arrière, puis rejoue
+        run: |
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" down
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
+
+      # Le rôle applicatif ne doit PAS pouvoir faire de DDL. On le prouve en
+      # essayant : la commande doit échouer. Un test qui vérifie qu'une chose est
+      # interdite doit constater le refus, pas l'absence de tentative.
+      - name: Le rôle applicatif ne peut pas créer de table
+        run: |
+          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+               -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
+            echo "::error::hexa_platform a pu créer une table — ADR 011 §4 est violée"
+            exit 1
+          fi
+          echo "refus confirmé : le rôle applicatif n'a pas le DDL"
+
+      # Même logique pour l'inaltérabilité du journal d'audit.
+      - name: Le journal d'audit refuse UPDATE et DELETE
+        run: |
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q -c \
+            "INSERT INTO platform.audit_log (actor, action, entity_type, entity_id, occurred_at)
+             VALUES ('ci', 'test.executed', 'ci_run', '1', now());"
+          for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" \
+                     "DELETE FROM platform.audit_log"; do
+            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+                 -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
+              echo "::error::le journal d'audit a accepté « $sql » — ADR 011 §5 est violée"
+              exit 1
+            fi
+          done
+          echo "refus confirmé : le journal d'audit est en ajout seul"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 6. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
   # ───────────────────────────────────────────────────────────────────────────
   e2e:
     name: Tests end-to-end
@@ -320,10 +434,13 @@ jobs:
     env:
       APP_ENV: test
       DB_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      # En CI les deux DSN coïncident : `hexa` est administrateur de sa base. La
+      # configuration l'autorise en local et en test, et le REFUSE en UAT comme
+      # en production (rules/donnees-et-migrations.md §6).
+      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
       REDIS_ADDR: localhost:6379
       SMTP_ADDR: localhost:1025
       SMTP_FROM: no-reply@hexa.test
-      SECURITY_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       OTEL_ENABLED: "false"
       HTTP_PORT: "8080"
       E2E_BASE_URL: http://localhost:8080
@@ -337,17 +454,29 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # La cle etait FIGEE dans le bloc `env` ci-dessus. Manifestement fausse —
+      # 32 octets de `0123456789abcdef` repete — donc conforme a
+      # rules/securite.md §3, mais gitleaks la classe en `generic-api-key` par
+      # entropie et faisait rougir le job « Fuite de secrets ». Personne ne
+      # pouvait le savoir : aucun job n'avait jamais demarre (#47).
+      #
+      # La generer ici SUPPRIME le probleme au lieu de le declarer acceptable.
+      # Une liste d'exception aurait grossi, et le garde aurait cesse de garder.
+      # Elle ne chiffre que des donnees creees et detruites dans ce meme job.
+      - name: Cle de chiffrement ephemere
+        run: echo "SECURITY_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       - name: Migrations
         run: |
           go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
-          goose -dir ./migrations postgres "$DB_DSN" up
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
-      - name: Démarre l'API et le worker
+      - name: Démarre l'API
         run: |
           go build -o bin/server ./cmd/server
-          go build -o bin/worker ./cmd/worker
           ./bin/server > server.log 2>&1 &
-          ./bin/worker > worker.log 2>&1 &
           for i in $(seq 1 40); do
             if curl -fsS "$E2E_BASE_URL/healthz" > /dev/null 2>&1; then
               echo "API prête après ${i} tentative(s)"; exit 0
@@ -356,8 +485,39 @@ jobs:
           done
           echo "::error::l'API n'a pas démarré"; cat server.log; exit 1
 
+      # Le dépileur n'est PAS lancé ici, et ce n'est pas un oubli : la
+      # configuration livrée met l'outbox sur le pilote `memory`, qui vit dans le
+      # processus. Le worker refuse alors de démarrer, délibérément — il
+      # dépilerait un magasin que le serveur ne partage pas.
+      #
+      # On vérifie donc que le refus SE PRODUIT, plutôt que de lancer un binaire
+      # dont on sait qu'il s'arrêtera. Un job qui démarre un processus condamné
+      # et n'en tient pas compte finit par masquer une vraie panne.
+      - name: Le dépileur refuse une outbox non partagée
+        run: |
+          go build -o bin/worker ./cmd/worker
+          if ./bin/worker > worker.log 2>&1; then
+            echo '::error::le worker a démarré sur une outbox memory : il dépilerait un magasin vide'
+            cat worker.log; exit 1
+          fi
+          grep -q "non partagé entre processus" worker.log || {
+            echo "::error::le worker a échoué, mais pas pour la bonne raison"; cat worker.log; exit 1; }
+          echo "refus confirmé, avec son motif"
+
+      # `-v` puis comptage des `=== RUN` : sans tag, ce paquet compile ZÉRO test
+      # et `go test` affiche `ok`. Vérifier le code de retour ne suffit donc pas —
+      # c'est le piège du faux vert documenté dans CLAUDE.md, et il a déjà eu
+      # cours ici : `tests/e2e/` est resté vide pendant toute la phase 0 pendant
+      # que ce job affichait vert.
       - name: go test -tags=e2e
-        run: go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/...
+        run: |
+          go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/... 2>&1 | tee e2e.log
+          ran=$(grep -c '^=== RUN' e2e.log || true)
+          echo "tests e2e exécutés : ${ran}"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::aucun test e2e n'a été exécuté — sortie verte, couverture nulle"
+            exit 1
+          fi
 
       - name: Logs des services (en cas d'échec)
         if: failure()
@@ -427,10 +587,33 @@ jobs:
           # l'historique, donc reste compromis.
           fetch-depth: 0
 
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      # Le BINAIRE, pas l'action : sur une `pull_request`, `gitleaks-action@v2`
+      # interroge l'API GitHub, se fait refuser par `contents: read` et meurt
+      # AVANT d'avoir analysé un seul fichier (#67). Le job était vert sur
+      # `push`, où l'autre chemin n'appelle pas l'API — et aucune PR n'avait
+      # jamais déclenché la CI (#64). Le seul chemin cassé était le seul jamais
+      # exercé.
+      #
+      # Version épinglée : `latest` rendrait ce job irreproductible (F004).
+      - name: Installe gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download"
+          curl -sSfL "$url/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # UNE seule définition, partagée avec `task ci:secrets`.
+      - name: gitleaks
+        run: ./tools/verifie-fuite-de-secrets.sh
+
+      # ADR 013 : sans cette moitié, « aucune fuite » et « le scanner n'a pas
+      # tourné » rendent exactement la même sortie. C'est très précisément ce
+      # qui vient d'arriver.
+      - name: Ce garde-là sait échouer
+        run: ./tools/verifie-fuite-de-secrets.sh --temoin
 
   # ───────────────────────────────────────────────────────────────────────────
   # 9. Image conteneur — construite sur chaque PR, poussée sur main seulement.
@@ -490,7 +673,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [pr-title, inertia, quality, architecture, test, e2e, build, vuln, secrets, docker]
+    needs: [pr-title, inertia, quality, architecture, test, migrations, e2e, build, vuln, secrets, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Tous les jobs requis ont-ils réussi ?

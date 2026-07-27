@@ -1,6 +1,6 @@
 module github.com/SteelHeart/go-hexa-fp-starter
 
-go 1.25.4
+go 1.25.12
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.39.0

@@ -1,0 +1,95 @@
+#!/usr/bin/env sh
+#
+# tb — exécute une commande du dépôt DANS la toolbox.
+#
+#   ./deploy/toolbox/tb                 ouvre un shell
+#   ./deploy/toolbox/tb task check      la barrière qualité, à l'identique
+#   ./deploy/toolbox/tb task up         démarre la pile — via le moteur de l'HÔTE
+#   ./deploy/toolbox/tb --rebuild       reconstruit l'image
+#
+# C'est le SEUL script qui s'exécute sur le poste. Tout le reste — Go, Task, les
+# linters, goose, psql — vit dans l'image et ne touche jamais la machine.
+#
+# Ce script est délibérément en `sh` POSIX et sans dépendance : il doit tourner
+# là où, par construction, rien n'est installé.
+
+set -eu
+
+IMAGE="localhost/hexa-toolbox:dev"
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+
+# ── Moteur de conteneurs ─────────────────────────────────────────────────────
+#
+# Podman d'abord : c'est le moteur retenu en local. Le repli sur Docker n'est pas
+# une politesse, il rend le script utilisable en CI et sur un poste qui n'a que
+# Docker, sans qu'il existe deux scripts à maintenir.
+if command -v podman >/dev/null 2>&1; then
+    ENGINE=podman
+    HOST_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
+elif command -v docker >/dev/null 2>&1; then
+    ENGINE=docker
+    HOST_SOCKET="/var/run/docker.sock"
+else
+    echo "tb: ni podman ni docker sur ce poste — rien ne peut être lancé." >&2
+    exit 1
+fi
+
+# ── Construction ─────────────────────────────────────────────────────────────
+if [ "${1:-}" = "--rebuild" ]; then
+    shift
+    "$ENGINE" build --pull -t "$IMAGE" -f "$ROOT/deploy/toolbox/Containerfile" "$ROOT/deploy/toolbox"
+elif ! "$ENGINE" image exists "$IMAGE" 2>/dev/null && ! "$ENGINE" image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "tb: image absente, construction (une seule fois)…" >&2
+    "$ENGINE" build -t "$IMAGE" -f "$ROOT/deploy/toolbox/Containerfile" "$ROOT/deploy/toolbox"
+fi
+
+# ── Terminal ─────────────────────────────────────────────────────────────────
+#
+# `-t` sans terminal réel fait échouer la commande sous un ordonnanceur ou dans
+# un pipe. La détection évite d'avoir deux invocations selon le contexte.
+if [ -t 0 ] && [ -t 1 ]; then TTY="-it"; else TTY="-i"; fi
+
+# ── Socket du moteur ─────────────────────────────────────────────────────────
+#
+# La toolbox pilote le moteur de l'hôte plutôt que d'en embarquer un second.
+# C'est ce qui fait fonctionner `task up` depuis l'intérieur sans toucher au
+# Taskfile. Si la socket est absente, tout le reste marche : seules les tâches
+# de pile locale échoueront, en le disant.
+SOCKET_MOUNT=""
+if [ -S "$HOST_SOCKET" ]; then
+    SOCKET_MOUNT="-v $HOST_SOCKET:/var/run/docker.sock"
+else
+    echo "tb: socket $HOST_SOCKET absente — 'task up' et 'task logs' ne fonctionneront pas." >&2
+    echo "tb: pour podman :  systemctl --user enable --now podman.socket" >&2
+fi
+
+# ── Exécution ────────────────────────────────────────────────────────────────
+#
+# --network host : les ports publiés par la pile sont vus à `localhost`, ce qui
+#   rend `.env` et `config/*.yaml` valables à l'identique dedans et dehors. Et le
+#   serveur lancé par `task run` reste joignable depuis le poste.
+#
+# Volumes de cache : sans eux, chaque exécution retélécharge le graphe de modules
+#   et recompile tout. Ils survivent à la reconstruction de l'image.
+#
+# En rootless, l'UID 0 du conteneur EST l'utilisateur de l'hôte : les fichiers
+#   produits dans le dépôt (coverage.out, bin/) lui appartiennent normalement.
+# shellcheck disable=SC2086
+# HEXA_HOST_ROOT : le chemin du dépôt vu par l'HÔTE, pas par le conteneur.
+#   Nécessaire pour tout `docker run -v` lancé DEPUIS la toolbox : c'est le
+#   MOTEUR qui résout un montage, donc côté hôte. `$PWD` vaudrait /src, un
+#   chemin qui n'existe pas là-bas, et l'erreur ne dirait pas pourquoi.
+#
+#   ⚠️ L'inverse vaut pour `docker build <contexte>` : c'est le CLIENT qui
+#   empaquette le répertoire et le transmet, donc le chemin est celui du
+#   CONTENEUR. Confondre les deux donne un « path not found » sur un chemin
+#   qui existe — mais dans l'autre espace de noms.
+exec "$ENGINE" run --rm $TTY \
+    --network host \
+    -e HEXA_HOST_ROOT="$ROOT" \
+    -v "$ROOT:/src" \
+    -v hexa-toolbox-gomod:/go/pkg/mod \
+    -v hexa-toolbox-gobuild:/root/.cache/go-build \
+    $SOCKET_MOUNT \
+    -w /src \
+    "$IMAGE" "$@"

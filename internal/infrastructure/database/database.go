@@ -1,10 +1,10 @@
-﻿// Package database porte le pool Postgres, l'unitÃ© de travail et la portÃ©e RLS.
+// Package database porte le pool Postgres, l'unité de travail et la portée RLS.
 //
 // Point central du paquet : la fonction Querier. Un adaptateur secondaire ne
-// reÃ§oit jamais le pool directement â€” il demande le Â« querier Â» du contexte,
-// qui est la transaction en cours s'il y en a une, le pool sinon. Le mÃªme code
-// SQL fonctionne donc Ã  l'identique dans et hors transaction, et il devient
-// impossible d'Ã©crire une requÃªte qui Ã©chappe Ã  la transaction ouverte.
+// reçoit jamais le pool directement — il demande le « querier » du contexte,
+// qui est la transaction en cours s'il y en a une, le pool sinon. Le même code
+// SQL fonctionne donc à l'identique dans et hors transaction, et il devient
+// impossible d'écrire une requête qui échappe à la transaction ouverte.
 package database
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Querier est le sous-ensemble commun au pool et Ã  une transaction.
+// Querier est le sous-ensemble commun au pool et à une transaction.
 type Querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
@@ -29,15 +29,25 @@ type Querier interface {
 
 type contextKey struct{ name string }
 
+// Clés de contexte du paquet.
+//
+// Globales assumées : c'est l'idiome Go qui rend toute collision IMPOSSIBLE. Le
+// type `contextKey` est privé au paquet, donc aucun autre paquet ne peut fabriquer
+// une clé égale à celles-ci, même en copiant le littéral. Les rendre locales ou
+// exportées casserait précisément la propriété recherchée, et une collision de clé
+// de contexte se manifeste par une transaction attribuée à la mauvaise requête —
+// donc par une écriture dans les données d'un autre client.
+//
+//nolint:gochecknoglobals // clés de contexte : le type privé au niveau paquet EST le remède aux collisions
 var (
 	txKey     = &contextKey{name: "pgx-tx"}
 	tenantKey = &contextKey{name: "tenant-id"}
 )
 
-// New ouvre le pool de connexions et vÃ©rifie qu'il rÃ©pond.
+// New ouvre le pool de connexions et vérifie qu'il répond.
 //
-// La vÃ©rification au dÃ©marrage est dÃ©libÃ©rÃ©e : un service qui dÃ©marre sans base
-// signalera son dÃ©faut Ã  la premiÃ¨re requÃªte utilisateur, c'est-Ã -dire trop tard.
+// La vérification au démarrage est délibérée : un service qui démarre sans base
+// signalera son défaut à la première requête utilisateur, c'est-à-dire trop tard.
 func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
@@ -45,15 +55,15 @@ func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	}
 	poolCfg.MaxConns = cfg.MaxConns
 	poolCfg.MinConns = cfg.MinConns
-	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime
-	poolCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime.Duration()
+	poolCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout.Duration()
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("ouverture du pool: %w", err)
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout)
+	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout.Duration())
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
@@ -62,13 +72,13 @@ func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// WithTenant place la portÃ©e de tenant dans le contexte. RunInTx la traduira en
+// WithTenant place la portée de tenant dans le contexte. RunInTx la traduira en
 // `SET LOCAL` pour que les politiques RLS s'appliquent.
 func WithTenant(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, tenantKey, tenantID)
 }
 
-// TenantFrom lit la portÃ©e de tenant. ChaÃ®ne vide si aucune portÃ©e n'est posÃ©e.
+// TenantFrom lit la portée de tenant. Chaîne vide si aucune portée n'est posée.
 func TenantFrom(ctx context.Context) string {
 	tenantID, _ := ctx.Value(tenantKey).(string)
 	return tenantID
@@ -90,16 +100,16 @@ func InTx(ctx context.Context) bool {
 	return ok
 }
 
-// RunInTx construit une unitÃ© de travail Ã  la forme d'un port.
+// RunInTx construit une unité de travail à la forme d'un port.
 //
-// Le rollback est dÃ©clenchÃ© par un Result en Err â€” l'erreur mÃ©tier est donc
+// Le rollback est déclenché par un Result en Err — l'erreur métier est donc
 // transactionnellement significative, ce qui est le comportement attendu : un
-// email dÃ©jÃ  pris ne doit pas laisser d'Ã©vÃ©nement dans l'outbox.
+// email déjà pris ne doit pas laisser d'événement dans l'outbox.
 //
-// Une transaction dÃ©jÃ  ouverte n'est pas imbriquÃ©e : la fonction est exÃ©cutÃ©e
+// Une transaction déjà ouverte n'est pas imbriquée : la fonction est exécutée
 // dans la transaction courante. C'est ce qui permet de composer plusieurs
-// dÃ©corateurs transactionnels sans surprise.
-func RunInTx[T any, E any](
+// décorateurs transactionnels sans surprise.
+func RunInTx[T, E any](
 	pool *pgxpool.Pool,
 ) func(context.Context, func(context.Context) result.Result[T, E]) result.Result[T, E] {
 	return func(ctx context.Context, fn func(context.Context) result.Result[T, E]) result.Result[T, E] {
@@ -115,8 +125,8 @@ func RunInTx[T any, E any](
 	}
 }
 
-// runWithRollback isole la mÃ©canique de validation/annulation.
-func runWithRollback[T any, E any](
+// runWithRollback isole la mécanique de validation/annulation.
+func runWithRollback[T, E any](
 	ctx context.Context,
 	tx pgx.Tx,
 	fn func(context.Context) result.Result[T, E],
@@ -124,16 +134,16 @@ func runWithRollback[T any, E any](
 	committed := false
 	defer func() {
 		if !committed {
-			// Le contexte parent peut Ãªtre annulÃ© : on annule sur un contexte
-			// neuf, sinon le rollback lui-mÃªme Ã©choue et la connexion reste sale.
+			// Le contexte parent peut être annulé : on annule sur un contexte
+			// neuf, sinon le rollback lui-même échoue et la connexion reste sale.
 			_ = tx.Rollback(context.WithoutCancel(ctx))
 		}
 	}()
 
 	txCtx := context.WithValue(ctx, txKey, tx)
 	if tenantID := TenantFrom(ctx); tenantID != "" {
-		// SET LOCAL est bornÃ© Ã  la transaction : aucune fuite d'Ã©tat vers le
-		// pool, donc aucun risque qu'une requÃªte suivante hÃ©rite du tenant.
+		// SET LOCAL est borné à la transaction : aucune fuite d'état vers le
+		// pool, donc aucun risque qu'une requête suivante hérite du tenant.
 		if _, err := tx.Exec(txCtx, "SELECT set_config('app.current_tenant', $1, true)", tenantID); err != nil {
 			var zero E
 			return result.Err[T, E](zero)
@@ -154,9 +164,9 @@ func runWithRollback[T any, E any](
 
 // TryAdvisoryLock tente de prendre un verrou consultatif de session.
 //
-// C'est le mÃ©canisme d'Ã©lection utilisÃ© par l'ordonnanceur : derriÃ¨re N
-// rÃ©pliques, une seule obtient le verrou et exÃ©cute la tÃ¢che. Le verrou est
-// libÃ©rÃ© Ã  la fermeture de la connexion, donc la mort d'une rÃ©plique ne bloque
+// C'est le mécanisme d'élection utilisé par l'ordonnanceur : derrière N
+// répliques, une seule obtient le verrou et exécute la tâche. Le verrou est
+// libéré à la fermeture de la connexion, donc la mort d'une réplique ne bloque
 // pas les autres durablement.
 func TryAdvisoryLock(ctx context.Context, q Querier, key int64) (bool, error) {
 	var acquired bool
@@ -166,7 +176,7 @@ func TryAdvisoryLock(ctx context.Context, q Querier, key int64) (bool, error) {
 	return acquired, nil
 }
 
-// ReleaseAdvisoryLock libÃ¨re un verrou consultatif.
+// ReleaseAdvisoryLock libère un verrou consultatif.
 func ReleaseAdvisoryLock(ctx context.Context, q Querier, key int64) error {
 	if _, err := q.Exec(ctx, "SELECT pg_advisory_unlock($1)", key); err != nil {
 		return fmt.Errorf("pg_advisory_unlock: %w", err)
@@ -174,18 +184,18 @@ func ReleaseAdvisoryLock(ctx context.Context, q Querier, key int64) error {
 	return nil
 }
 
-// Codes d'erreur Postgres utilisÃ©s pour la traduction en erreurs de domaine.
+// Codes d'erreur Postgres utilisés pour la traduction en erreurs de domaine.
 // Un adaptateur secondaire ne doit jamais laisser remonter une erreur de pilote
-// (rules/donnees-et-migrations.md Â§2).
+// (rules/donnees-et-migrations.md §2).
 const (
-	CodeUniqueViolation     = "23505"
-	CodeForeignKeyViolation = "23503"
-	CodeCheckViolation      = "23514"
-	CodeQueryCanceled       = "57014"
+	CodeUniqueViolation      = "23505"
+	CodeForeignKeyViolation  = "23503"
+	CodeCheckViolation       = "23514"
+	CodeQueryCanceled        = "57014"
 	CodeSerializationFailure = "40001"
 )
 
-// PgErrorCode extrait le code SQLSTATE d'une erreur, ou la chaÃ®ne vide.
+// PgErrorCode extrait le code SQLSTATE d'une erreur, ou la chaîne vide.
 func PgErrorCode(err error) string {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -194,10 +204,10 @@ func PgErrorCode(err error) string {
 	return ""
 }
 
-// ConstraintName extrait le nom de la contrainte violÃ©e, ou la chaÃ®ne vide.
+// ConstraintName extrait le nom de la contrainte violée, ou la chaîne vide.
 //
-// C'est ce nom qui permet de traduire une violation d'unicitÃ© en erreur mÃ©tier
-// prÃ©cise : une table peut porter plusieurs contraintes uniques.
+// C'est ce nom qui permet de traduire une violation d'unicité en erreur métier
+// précise : une table peut porter plusieurs contraintes uniques.
 func ConstraintName(err error) string {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -206,10 +216,10 @@ func ConstraintName(err error) string {
 	return ""
 }
 
-// IsNotFound indique une absence de ligne. C'est un cas nominal, pas un dÃ©faut.
+// IsNotFound indique une absence de ligne. C'est un cas nominal, pas un défaut.
 func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-// IsUnavailable indique une indisponibilitÃ© transitoire du stockage : Ã  traduire
+// IsUnavailable indique une indisponibilité transitoire du stockage : à traduire
 // en CodeUnavailable, jamais en CodeInternal (les deux ne s'alertent pas pareil).
 func IsUnavailable(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
