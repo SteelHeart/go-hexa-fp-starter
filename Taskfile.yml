@@ -151,7 +151,7 @@ tasks:
   #   pr-title  le titre n'existe qu'au niveau de la PR — `task ci:pr-title -- "…"`
   #   inertia   exige les SHA base/head de la PR — `task ci:inertia -- <base>`
   ci:
-    desc: "Rejoue hors GitHub la barrière de la CI — 10 jobs sur 12"
+    desc: "Rejoue hors GitHub la barrière de la CI — 11 jobs sur 13"
     cmds:
       - task: check
       - task: ci:schemas
@@ -160,6 +160,7 @@ tasks:
       - task: ci:secrets
       - task: ci:migrations
       - task: ci:e2e
+      - task: ci:integration
       - task: ci:images
       - cmd: |
           echo ""
@@ -240,6 +241,25 @@ tasks:
             fi
           done
           echo "  refus confirmé : journal d'audit en ajout seul"
+
+  ci:integration:
+    desc: "Le niveau `integration` — les pilotes contre les SERVICES REELS (#37)"
+    cmds:
+      - task: up
+      - cmd: |
+          set -e
+          go test -tags=integration -count=1 -v -timeout=5m ./tests/integration/... \
+            > /tmp/hexa-integration.log 2>&1
+          code=$?
+          # Le meme piege que pour e2e : sans le tag, zero test compile et `ok`
+          # s'affiche. Un compte nul doit echouer, pas passer.
+          runs=$(grep -c '^=== RUN' /tmp/hexa-integration.log || true)
+          grep -E '^(--- PASS|--- FAIL|ok|FAIL)' /tmp/hexa-integration.log | sed 's/^/  /'
+          echo "  tests réellement exécutés : $runs"
+          if [ "$runs" -eq 0 ]; then
+            echo "  FAUX VERT : aucun test d'intégration exécuté" >&2; exit 1
+          fi
+          exit $code
 
   ci:e2e:
     desc: "Le job e2e — serveur démarré, tag e2e, et les tests COMPTÉS"

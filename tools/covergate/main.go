@@ -94,12 +94,17 @@ type exclusion struct {
 	reason string
 }
 
-// Raisons partagées. Nommées plutôt que répétées : le jour où l'issue #37 est
-// close, il n'y a qu'un endroit à corriger — et le linter refuse la répétition
-// précisément pour éviter qu'une des cinq copies survive à l'oubli.
+// Raisons partagées. Nommées plutôt que répétées, pour qu'une des copies ne
+// survive pas à l'oubli des autres.
+//
+// ⚠️ Ces motifs affirmaient « AUCUN test à ce jour, à aucun niveau (voir #37) ».
+// C'est devenu FAUX le jour où le niveau `integration` est arrivé, et un motif
+// d'exclusion faux est pire qu'une exclusion : il justifie un trou qui n'existe
+// plus, et décourage d'aller voir. Chaque ligne ci-dessous dit désormais
+// exactement ce qui couvre le paquet — ou ce qui ne le couvre pas.
 const (
-	reasonNeedsPostgres = "exige une base Postgres — AUCUN test à ce jour, à aucun niveau (voir #37)"
-	reasonNeedsRedis    = "exige un Redis — AUCUN test à ce jour, à aucun niveau (voir #37)"
+	reasonNeedsPostgres = "exige Postgres : hors du périmètre unitaire, couvert par tests/integration (tag integration)"
+	reasonNeedsRedis    = "exige Redis : hors du périmètre unitaire, couvert par tests/integration (tag integration)"
 )
 
 //nolint:gochecknoglobals // table de configuration du programme, lue une fois
@@ -130,11 +135,14 @@ var exclusions = []exclusion{
 	},
 	{
 		prefix: "internal/infrastructure/database/",
-		reason: "ouvre un pool pgx à la construction — exige une base (voir #37)",
+		// Le SEUL paquet de cette liste qui n'a toujours AUCUN test direct. Il est
+		// traversé par tests/integration — RunInTx et QuerierFrom y sont exercés —
+		// mais sa gestion du pool, ses délais et son arrêt ne le sont pas.
+		reason: "ouvre un pool pgx à la construction — traversé par tests/integration, jamais testé DIRECTEMENT (#37)",
 	},
 	{
 		prefix: "internal/infrastructure/cache/",
-		reason: "ouvre une connexion Redis à la construction — exige un service (voir #37)",
+		reason: reasonNeedsRedis,
 	},
 	{
 		prefix: "cmd/",

@@ -58,8 +58,29 @@ func (s *Store) Enqueue(ctx context.Context, msg domain.NewMessage) (domain.Mess
 		return "", fmt.Errorf("génération de l'identifiant du message (%s): %w", msg.Type, err)
 	}
 
+	// Une carte nil arrive en NULL, et la colonne est NOT NULL.
+	//
+	// Le `DEFAULT '{}'::jsonb` de la migration ne sauve pas : un DEFAULT ne
+	// s'applique que si la colonne est OMISE de l'INSERT, or elle est ici
+	// passée explicitement. Sans cette normalisation, tout message sans
+	// en-têtes est REFUSÉ par ce pilote — et `outboxpub`, l'adaptateur réel du
+	// module de référence, n'en pose aucun. Autrement dit : `POST /v1/users`
+	// aurait échoué en production sur `driver: postgres`.
+	//
+	// Le pilote `memory` accepte nil sans broncher. Les deux pilotes ne
+	// respectaient donc PAS le même contrat, et les 285 tests unitaires ne
+	// pouvaient pas le voir : ils tournent tous sur `memory`. C'est ce défaut
+	// exact qui justifie le niveau `integration` (#37).
+	//
+	// nil signifie « aucun en-tête », pas « en-têtes inconnus » : la carte vide
+	// est la traduction fidèle.
+	headers := msg.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+
 	if _, err := database.QuerierFrom(ctx, s.pool).Exec(ctx, query,
-		id.String(), msg.Type, msg.AggregateID, msg.Payload, msg.TraceParent, msg.Headers,
+		id.String(), msg.Type, msg.AggregateID, msg.Payload, msg.TraceParent, headers,
 	); err != nil {
 		return "", fmt.Errorf("insertion dans l'outbox (%s): %w", msg.Type, err)
 	}

@@ -402,6 +402,84 @@ jobs:
           echo "refus confirmé : le journal d'audit est en ajout seul"
 
   # ───────────────────────────────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────
+  # 6. Niveau `integration` — les PILOTES contre les services réels (#37).
+  #
+  #    Huit paquets de pilotes avaient zéro test, à aucun niveau. Le tag
+  #    `integration` n'était porté par AUCUN fichier, et ce job n'existait pas :
+  #    la dette était nommée, jamais payée.
+  #
+  #    Ce niveau garde ce qu'aucun test unitaire ne peut atteindre — la validité
+  #    du SQL, l'effet réel des contraintes, et les garanties de CONCURRENCE.
+  # ───────────────────────────────────────────────────────────────────────────
+  integration:
+    name: Tests d'intégration (pilotes)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hexa
+          POSTGRES_PASSWORD: hexa
+          POSTGRES_DB: hexa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hexa -d hexa"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+
+    env:
+      APP_ENV: test
+      DB_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      REDIS_ADDR: localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Les rôles d'abord, le schéma ensuite : ces tests écrivent dans les vraies
+      # tables, donc elles doivent exister avec leurs vraies contraintes. C'est
+      # même tout l'intérêt — c'est une contrainte `NOT NULL` qui a fait tomber
+      # le pilote d'outbox à la première exécution de ce job.
+      - name: Provision et migrations
+        run: |
+          go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+          goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
+
+      - name: go test -tags=integration
+        run: |
+          set -euo pipefail
+          go test -tags=integration -count=1 -v -timeout=5m ./tests/integration/... \
+            > integration.log 2>&1 && code=0 || code=$?
+          grep -E '^(--- PASS|--- FAIL|ok|FAIL)' integration.log | sed 's/^/  /' || true
+
+          # Le piège que ce dépôt a déjà payé avec `e2e` : sans le tag, zéro test
+          # compile et `ok` s'affiche. Un compte nul doit ÉCHOUER, pas passer.
+          runs=$(grep -c '^=== RUN' integration.log || true)
+          echo "tests réellement exécutés : $runs"
+          if [ "$runs" -eq 0 ]; then
+            echo "::error::FAUX VERT — aucun test d'intégration exécuté"
+            cat integration.log
+            exit 1
+          fi
+          exit "$code"
+
+      - name: Journal en cas d'échec
+        if: failure()
+        run: cat integration.log || true
+
   # 6. Tests end-to-end contre la vraie stack (Postgres + Redis + SMTP).
   # ───────────────────────────────────────────────────────────────────────────
   e2e:
@@ -673,7 +751,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [pr-title, inertia, quality, architecture, test, migrations, e2e, build, vuln, secrets, docker]
+    needs: [pr-title, inertia, quality, architecture, test, migrations, integration, e2e, build, vuln, secrets, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Tous les jobs requis ont-ils réussi ?
