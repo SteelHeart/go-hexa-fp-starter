@@ -351,6 +351,8 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | Accès aux données en pile, pas d'ORM unique | ADR 009 |
 | Isolation : un schéma et un rôle SQL par module, `NOINHERIT` + `SET LOCAL ROLE` | ADR 011 |
 | Anatomie de module, pilotes, zéro prérequis, vocabulaire | ADR 012 |
+| Un garde est livré avec le cas qui le fait échouer | ADR 013 |
+| Le catalogue des modules est passé au chargeur, pas écrit dans le framework | ADR 014 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
 
@@ -460,8 +462,8 @@ F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont pl
    commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
 3. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
    par F001 (Docker), donc CI ou WSL. `cache` en fait partie : `New` fait un `Ping`
-4. **Trancher la déclaration des pilotes d'un module métier** (voir « point de conception OUVERT »)
-   avant d'écrire `hexa new`
+4. **#76** : implémenter l'ADR 014 — le catalogue de modules passé au chargeur. La décision est
+   prise ; c'est le préalable à `hexa new`, et l'un des trois blocages de la persona primaire
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
@@ -485,16 +487,25 @@ faire ensuite :
   pour écrire `billing`. Tout dossier manquant serait reproduit comme « pas nécessaire » — d'où
   l'exigence qu'elle soit canoniquement complète.
 
-### Point de conception OUVERT — déclaration des pilotes d'un module métier
+### Déclaration des pilotes d'un module métier — TRANCHÉ par l'ADR 014
 
-`config/modules.yaml` et `knownDrivers` ne valident que les modules **noyau**. Un module métier ne
-peut donc pas y déclarer ses pilotes : son `module.go` les valide lui-même, et `cmd/server` lit
-`cfg.Modules[Name].Driver` qui reste vide.
+**La décision est prise, l'implémentation reste à faire (#76).**
 
-Ça tient pour un module de référence livré AVEC le socle. Ça ne tiendra pas pour une application :
-faire modifier `internal/config/modules.go` — un fichier du framework — pour déclarer le pilote de
-son propre module `billing` est exactement la friction qu'un framework ne doit pas avoir.
-**Ouvert, pas oublié.** À trancher avant `hexa new`.
+`config/modules.yaml` et `knownDrivers` ne valident que les modules **noyau**. Mesuré, pas déduit :
+déclarer `billing:` dans la configuration livrée fait rendre `modules.billing : module inconnu` et
+un code de retour **1**. Un module métier ne peut donc ni s'activer, ni choisir son pilote, ni
+porter d'options — trois capacités que le socle s'offre et lui refuse. Aujourd'hui
+`user_registration` s'en tire parce qu'il est livré AVEC le socle : `cmd/server` lit
+`cfg.Modules[Name].Driver`, un champ qui **reste vide**.
+
+L'[ADR 014](documentation/adr/014-catalogue-de-modules-passe-au-chargeur.md) tranche : **le
+catalogue des modules est une valeur construite par le composition root et passée au chargeur**, et
+chaque module — noyau comme métier — déclare ses pilotes dans son propre `module.go`, à côté de la
+fabrique qui les construit. `internal/config` définit les types, jamais le contenu : c'est ce que
+la règle 7 d'`arch-go` impose déjà, et que la table globale contournait dans l'esprit.
+
+⚠️ **Rupture d'API assumée** : `config.Load` change de signature. Avant `v0.1.0`, donc maintenant
+ou jamais.
 
 > **Terminé** : la campagne `golangci-lint` (239 → 0) et **#5** (schéma `platform`, rôles,
 > ADR 011, garde `verify.sql`, job CI `migrations`). Ce paragraphe créditait **#2** par erreur —
