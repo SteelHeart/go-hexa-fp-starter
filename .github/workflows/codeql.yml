@@ -1,5 +1,25 @@
 name: CodeQL
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ Ce workflow ÉCHOUE aujourd'hui, et ce n'est pas un défaut du code — F011
+# ─────────────────────────────────────────────────────────────────────────────
+# « Code scanning is not enabled for this repository. » Le dépôt est privé
+# depuis le 2026-07-27, et l'analyse de code n'est pas disponible pour un dépôt
+# privé sur ce plan. `autobuild` réussit ; c'est la REMONTÉE des résultats qui
+# est refusée.
+#
+# Il n'est NI désactivé, NI rendu non bloquant, et c'est une décision prise —
+# issue #72, consignée en F011 dans documentation/process/JOURNAL_FRICTION.md.
+#
+# Motif : un job vert qui n'analyse rien est très exactement la forme que
+# l'ADR 013 combat, et ce dépôt vient d'en extirper onze. Un contrôle ROUGE qui
+# signifie « indisponible » vaut mieux qu'un contrôle VERT qui ne signifie rien.
+#
+# Conséquence assumée : tant que ceci dure, fusionner vers `main` est une
+# décision DOCUMENTÉE, jamais un gate franchi. Ne pas « réparer » ce workflow
+# en le rendant tolérant — il faudrait rendre l'analyse disponible, ce qui est
+# une décision de compte, pas d'ingénierie.
+
 on:
   push:
     branches: [main]
@@ -26,6 +46,18 @@ jobs:
       actions: read
       contents: read
     steps:
+      # Dire POURQUOI avant d'échouer. Sans ceci, la seule trace est une erreur
+      # d'outil au milieu de 400 lignes de journal, et le lecteur conclut à un
+      # défaut du code — c'est-à-dire cherche au mauvais endroit.
+      - name: L'analyse de code est-elle disponible ?
+        run: |
+          set -eu
+          echo "::notice::si ce workflow échoue à l'étape « analyze » avec"
+          echo "::notice::« Code scanning is not enabled for this repository »,"
+          echo "::notice::la cause est F011 : dépôt privé, analyse indisponible"
+          echo "::notice::sur ce plan. Ce n'est PAS un défaut du code, et ce job"
+          echo "::notice::ne sera pas rendu tolérant — voir l'issue #72."
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
