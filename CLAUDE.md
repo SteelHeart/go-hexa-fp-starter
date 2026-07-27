@@ -41,6 +41,9 @@ chemin de module est la seule valeur nominative, isolée derrière `task rename`
 3. **[`documentation/adr/`](documentation/adr/README.md)** — décisions d'architecture. **Font foi.**
    En cas de contradiction avec un autre document, l'ADR gagne.
 4. **[`rules/definition-of-done.md`](rules/definition-of-done.md)** — la barre à franchir pour livrer.
+4 bis. **[`documentation/produit/personas.md`](documentation/produit/personas.md)** — **le pour qui**.
+   À interroger **avant** d'ouvrir un ADR : une décision qui ne sert aucune persona n'a pas à être
+   prise. Porte aussi la **matrice par version** et la ligne de ce qu'on ne fera **jamais**.
 5. **[`documentation/process/`](documentation/process/README.md)** — nomenclature, labels, templates.
 
 ## Règles d'or
@@ -101,6 +104,7 @@ sont fournis par la CI.
 ```
 rules/                        règlement d'ingénierie — fait foi
 documentation/adr/            décisions d'architecture — font foi
+documentation/produit/        personas, périmètre, matrice par version — le POUR QUI
 documentation/process/        nomenclature, labels, templates
 documentation/securite/       registre de failles, matrice d'accès
 cmd/{server,worker}           composition root — le seul code qui connaît tout
