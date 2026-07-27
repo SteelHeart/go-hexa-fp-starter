@@ -204,11 +204,28 @@ points : créer un module, brancher un module, configurer un module.
 
 | # | Hypothèse | Ce qui change si elle est fausse |
 |---|---|---|
-| H1 | P1 évolue dans un contexte **mobile-first, réseaux peu fiables, paiement mobile (XOF)** | `notification` et `ratelimit` redescendent ; `payment` reste en 5ᵉ position |
+| ~~H1~~ | ~~P1 évolue dans un contexte **mobile-first, paiement mobile (XOF)**~~ | **INFIRMÉE le 2026-07-27.** P1 construit **tout à la fois** : aucune verticale dominante. Et le paiement doit être **universel**, pas XOF — voir ci-dessous |
 | ~~H2~~ | ~~L'adoption **externe** est visée~~ | **CONFIRMÉE le 2026-07-27.** P3 reste au jeu — voir « Ce que l'adoption externe change » ci-dessous |
-| H3 | `v0.1.0` est un **jalon interne**, pas une annonce publique | Si annonce publique, la barrière CI et la frontière API deviennent bloquantes avant le tag |
+| ~~H3~~ | ~~`v0.1.0` est un **jalon interne**~~ | **CONFIRMÉE le 2026-07-27.** `v0.1.0` = framework opérationnel, usage interne · `v0.2.0+` = nouveaux modules · `v1.0.0` = frontière publique gelée. Publication = décision distincte |
 
-**H2 est tranchée** : l'adoption externe est visée. Restent H1 et H3.
+**Les trois hypothèses sont tranchées** au 2026-07-27. Ce qui suit remplace H1 et
+précise ce que sa réfutation change.
+
+### H1 infirmée — P1 ne se spécialise sur rien
+
+P1 construit **tout à la fois** : il n'existe pas de verticale dominante à
+optimiser. C'est une **contrainte**, pas un confort — le socle n'a pas le droit
+de se spécialiser, sous peine de gêner la moitié des projets de l'équipe.
+
+Conséquence directe sur `payment` : il doit être **universel**, jamais lié à une
+devise ni à un fournisseur. Le port sera un type fonction, chaque fournisseur un
+pilote, exactement comme les modules noyau (ADR 012). Le socle ne nommera **ni
+XOF, ni Stripe, ni aucun opérateur** — et la formule de P1 vaut règle : *un
+adaptateur pour tous les ports futurs*.
+
+Ce qui change dans le classement : `payment` ne redescend plus au motif d'un
+contexte régional, et `notification` / `ratelimit` ne remontent plus au motif de
+réseaux peu fiables. Aucun module ne se justifie par une géographie.
 
 ---
 

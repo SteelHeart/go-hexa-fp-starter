@@ -1,0 +1,45 @@
+Tous droits réservés — All rights reserved
+==========================================
+
+Copyright (c) 2026 Pacôm Charbel YABI
+
+Ce dépôt n'est PAS un logiciel libre à ce jour. Aucune licence d'utilisation, de
+copie, de modification ou de distribution n'est accordée, explicitement ou
+implicitement, par la seule mise à disposition de ce code.
+
+This repository is NOT open source at this time. No licence to use, copy,
+modify or distribute is granted, expressly or by implication, by the mere
+availability of this code.
+
+
+Pourquoi ce fichier existe alors que le dépôt est privé
+-------------------------------------------------------
+
+L'absence de fichier de licence ne signifie pas « libre » : elle signifie « tous
+droits réservés » par défaut. Le silence est donc juridiquement correct — mais
+il est illisible, et il se lit à tort comme un oubli.
+
+Ce fichier rend l'état EXPLICITE. Il existe surtout parce que l'image conteneur
+livrée déclarait `org.opencontainers.image.licenses="MIT"` sans qu'aucune
+licence MIT n'ait jamais été accordée : une affirmation juridique fausse dans un
+artefact publiable. L'étiquette dit désormais la même chose que ce fichier.
+
+Un document qui coche « MIT » sans licence est pire qu'aucun document — c'est la
+règle d'or du dépôt appliquée au droit plutôt qu'à la technique.
+
+
+Intention — ouverture après validation sur des projets réels
+------------------------------------------------------------
+
+Ce socle a vocation à être publié en logiciel libre une fois éprouvé sur des
+projets réels. L'adoption externe fait partie de la cible ; seule la date de
+publication reste à décider.
+
+⚠️ Choisir la licence d'ouverture est d'autant moins coûteux qu'on le fait TÔT :
+re-licencier exige l'accord de chaque contributeur, et ce nombre ne fait que
+croître. Recommandation posée, non tranchée : Apache-2.0 plutôt que MIT, pour la
+concession de brevet explicite et pour des termes de contribution écrits — deux
+choses que MIT ne dit pas, et dont un framework visant l'adoption externe a
+besoin.
+
+Suivi : issue #61.
