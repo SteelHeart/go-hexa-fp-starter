@@ -149,30 +149,22 @@ jobs:
           echo "Ajouter documentation/adr/{NNN}-{slug}.md, ou poser le label 'inertia:justified' en expliquant pourquoi dans le corps de la PR."
           exit 1
 
+      # UNE seule définition, partagée avec `task ci:inertia` : le script. Le
+      # motif n'est écrit NULLE PART ici — la version précédente le portait en
+      # clair, donc toute PR touchant à ce job se faisait signaler par lui.
       - name: Aucune mention d'outillage d'assistance dans le diff
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          # rules/interdictions.md § Artefacts versionnés.
-          PATTERN='Co-Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)|Generated with|🤖|Co-authored-by:.*noreply@anthropic'
-          fail=0
+        run: ./tools/verifie-mention-outillage.sh "$BASE" "$HEAD"
 
-          if git log --format='%B' "$BASE..$HEAD" | grep -Eiq "$PATTERN"; then
-            echo "::error::un message de commit porte une mention d'outillage d'assistance"; fail=1
-          fi
-          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -Eiq "$PATTERN"; then
-            echo "::error::le titre ou le corps de la PR porte une mention d'outillage d'assistance"; fail=1
-          fi
-          if git diff "$BASE" "$HEAD" -- . | grep -E '^\+' | grep -Eiq "$PATTERN"; then
-            echo "::error::le diff introduit une mention d'outillage d'assistance"; fail=1
-          fi
-
-          [ "$fail" -eq 0 ] && echo "Aucune mention détectée."
-          exit "$fail"
+      # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans cette
+      # moitié, « aucune mention détectée » et « le motif ne reconnaît plus
+      # rien » rendent exactement la même sortie.
+      - name: Ce garde-là sait échouer
+        run: ./tools/verifie-mention-outillage.sh --temoin
 
       - name: Aucune dette dissimulée
         env:
