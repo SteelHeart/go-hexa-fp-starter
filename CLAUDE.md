@@ -130,8 +130,14 @@ tools/covergate/              cliquets de couverture — LA source unique des se
 ```
 
 Six modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`.
-Un seul module métier, `user_registration` : son **cœur est couvert** (31 tests) mais il n'a
-encore aucun adaptateur, donc aucune surface ne l'appelle.
+Un seul module métier, `user_registration` : cœur couvert (18 tests de domaine, 13 de cas d'usage),
+plus 4 tests de module en boîte noire et **une surface HTTP** de 3 tests. La phrase précédente
+affirmait qu'« il n'a encore aucun adaptateur, donc aucune surface ne l'appelle » — faux depuis la
+tranche verticale : `POST /v1/users` répond.
+
+⚠️ Mais **une seule** surface existe. `cmd/cli` (#8) et le consommateur d'événements (#9) sont
+absents, donc la promesse « le nombre de frontends est un non-sujet » n'a **qu'une instance** — elle
+est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
 
 ## État réel du dépôt — vérifié le 2026-07-25
 
@@ -341,7 +347,7 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | Accès aux données en pile, pas d'ORM unique | ADR 009 |
 | Isolation : un schéma et un rôle SQL par module, `NOINHERIT` + `SET LOCAL ROLE` | ADR 011 |
 | Anatomie de module, pilotes, zéro prérequis, vocabulaire | ADR 012 |
-| Monorepo multi-modules `core/` + `cli/` + `template/` | issue #14, **après** v0.1.0 |
+| Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
 
 ### Invariants à ne pas réapprendre
@@ -467,7 +473,7 @@ faire ensuite :
 - **Le socle a construit ce dont ce dev ignore avoir besoin** — outbox, idempotence, audit,
   ordonnanceur, isolation SQL. C'est l'infrastructure qu'on découvre au premier incident, six mois
   trop tard.
-- **Il manque ce qu'il vient chercher** — `auth` (#9), `tenancy` (#23), `notification`, `payment`,
+- **Il manque ce qu'il vient chercher** — `auth` (#11), `tenancy` (#23), `notification`, `payment`,
   `ratelimit` : tous 🔴. Un évaluateur pose deux questions, obtient deux « non », et repart sans
   jamais découvrir que l'outbox est excellente.
 - **Le délai avant premier succès était infini** jusqu'à cette tranche. Il ne l'est plus.
@@ -509,7 +515,7 @@ Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriét
 
 ### Arbitrages en attente côté produit
 
-- **#9 `auth`** : session cookie / jeton porteur par surface ? fournisseur d'identité externe
+- **#11 `auth`** : session cookie / jeton porteur par surface ? fournisseur d'identité externe
   (Keycloak, Zitadel, Auth0) ou magasin interne ? `rbac`, `permissions`, `abac`, ou ReBAC ?
 - **#18 F002** : dépôt public, GitHub Pro, ou assumer l'absence de protection ?
 - **#34** : langue du **code** — recommandation posée, anglais dès maintenant pour `godoc` et les
