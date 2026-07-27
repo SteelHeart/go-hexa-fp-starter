@@ -33,6 +33,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/adapters/secondary/hashing"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/adapters/secondary/outboxpub"
@@ -89,14 +90,14 @@ func run() error {
 		slog.String("build_date", buildDate),
 	)
 
-	modules, err := compose(cfg, logger)
+	mounted, err := compose(cfg, logger)
 	if err != nil {
 		return err
 	}
 
-	router := httpserver.NewRouter(cfg, logger, probes(modules))
-	userhttp.Mount(router.API, modules.users)
-	userhttp.MountAvailability(router.API, modules.users)
+	router := httpserver.NewRouter(cfg, logger, probes(mounted))
+	userhttp.Mount(router.API, mounted.users)
+	userhttp.MountAvailability(router.API, mounted.users)
 
 	// Les chemins annoncés sont ceux qui RÉPONDENT : huma sert le contrat sous
 	// `/openapi.json` et `/openapi.yaml`, jamais sous `/openapi` nu — qui rend 404.
@@ -141,14 +142,14 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 		Threads:    cfg.Security.Argon2.Threads,
 	})
 
-	// Le pilote vient de la configuration si elle le nomme, du défaut sinon.
+	// Le pilote vient de la configuration, qui le porte enfin.
 	//
-	// ⚠️ Point de conception OUVERT : `config/modules.yaml` ne valide aujourd'hui
-	// que les modules NOYAU. Un module métier ne peut donc pas encore y déclarer
-	// ses pilotes, et son `module.go` les valide lui-même. Faire déclarer ses
-	// pilotes par une application sans qu'elle modifie un fichier du socle est un
-	// vrai sujet de framework, pas un détail — il est ouvert, pas oublié.
-	driver := cfg.Modules[userregistration.Name].Driver
+	// Ce champ restait TOUJOURS vide avant l'ADR 014 : `config/modules.yaml` ne
+	// validait que les modules noyau, donc y déclarer `user_registration` faisait
+	// refuser le démarrage. Le module se rabattait silencieusement sur son
+	// défaut, et la tranche de référence contournait le mécanisme qu'elle est
+	// censée démontrer.
+	driver := cfg.Modules.DriverOf(userregistration.Name)
 
 	users, err := userregistration.New(driver, userregistration.Deps{
 		HashPassword: hashing.New(hasher),
@@ -221,10 +222,15 @@ func moduleCatalog() (config.ModuleCatalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("catalogue du noyau: %w", err)
 	}
-	merged, err := config.MergeCatalogs(
-		coreCatalog,
-		userregistration.Catalog(),
-	)
+	// Les deux binaires lisent le MÊME `config/modules.yaml` : l'ensemble des
+	// modules déclarables est donc une propriété de l'application, pas du
+	// binaire. Voir internal/modules/catalog.go — le dépileur refusait de
+	// démarrer tant que ce n'était pas le cas.
+	businessCatalog, err := modules.Catalog()
+	if err != nil {
+		return nil, fmt.Errorf("catalogue des modules métier: %w", err)
+	}
+	merged, err := config.MergeCatalogs(coreCatalog, businessCatalog)
 	if err != nil {
 		return nil, fmt.Errorf("fusion des catalogues: %w", err)
 	}

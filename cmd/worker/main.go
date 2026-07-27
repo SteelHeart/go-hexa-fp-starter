@@ -35,6 +35,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/relay"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
 )
 
 // Injectés à la compilation par la CI (voir Dockerfile).
@@ -160,7 +161,15 @@ func moduleCatalog() (config.ModuleCatalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("catalogue du noyau: %w", err)
 	}
-	merged, err := config.MergeCatalogs(coreCatalog)
+	// Les deux binaires lisent le MÊME `config/modules.yaml` : l'ensemble des
+	// modules déclarables est donc une propriété de l'application, pas du
+	// binaire. Voir internal/modules/catalog.go — le dépileur refusait de
+	// démarrer tant que ce n'était pas le cas.
+	businessCatalog, err := modules.Catalog()
+	if err != nil {
+		return nil, fmt.Errorf("catalogue des modules métier: %w", err)
+	}
+	merged, err := config.MergeCatalogs(coreCatalog, businessCatalog)
 	if err != nil {
 		return nil, fmt.Errorf("fusion des catalogues: %w", err)
 	}
