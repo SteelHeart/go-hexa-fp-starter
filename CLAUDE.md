@@ -354,6 +354,9 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | Anatomie de module, pilotes, zéro prérequis, vocabulaire | ADR 012 |
 | Un garde est livré avec le cas qui le fait échouer | ADR 013 |
 | Le catalogue des modules est passé au chargeur, pas écrit dans le framework | ADR 014 |
+| La frontière publique est dérivée d'un usage mesuré, pas décidée d'avance | ADR 015 |
+| Dépôt INTERNE — `LICENSE` tous droits réservés, ouverture visée sans date | décision du 2026-07-27 |
+| `v0.1.0` opérationnel · `v0.2.0+` nouveaux modules · `v1.0.0` frontière GELÉE | décision du 2026-07-27 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
 
@@ -464,8 +467,10 @@ F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont pl
    commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
 3. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
    par F001 (Docker), donc CI ou WSL. `cache` en fait partie : `New` fait un `Ping`
-4. **#17** : `hexa new`. Débloqué par l'ADR 014 (#76, livrée) — un module généré apporte son
-   propre `catalog.go`, le générateur n'a aucun fichier du framework à réécrire
+4. **#17** : `hexa new`, en mode **gabarit**. Débloqué par l'ADR 014 ; et l'ADR 015 en fait le
+   préalable à la frontière publique — il est la seule façon de produire l'application dont la
+   liste d'imports MESURERA cette frontière. **Aucun paquet n'est importable aujourd'hui** :
+   `go list ./... | grep -v /internal/` ne rend que deux binaires et un outil de build
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
