@@ -151,7 +151,7 @@ tasks:
   #   pr-title  le titre n'existe qu'au niveau de la PR — `task ci:pr-title -- "…"`
   #   inertia   exige les SHA base/head de la PR — `task ci:inertia -- <base>`
   ci:
-    desc: "Rejoue hors GitHub la barrière de la CI — 11 jobs sur 13"
+    desc: "Rejoue hors GitHub la barrière de la CI — 12 jobs sur 14"
     cmds:
       - task: check
       - task: ci:schemas
@@ -161,6 +161,7 @@ tasks:
       - task: ci:migrations
       - task: ci:e2e
       - task: ci:integration
+      - task: ci:generateur
       - task: ci:images
       - cmd: |
           echo ""
@@ -268,6 +269,21 @@ tasks:
     cmds:
       - cmd: |
           set -e
+          # Le port est-il libre ? Sans ce contrôle, un autre service déjà à
+          # l'écoute répond à la place du serveur, et le message d'échec accuse
+          # « le serveur n'a pas démarré » — alors qu'il n'a pas pu se LIER.
+          # Diagnostiqué à la main une fois : un conteneur WordPress d'un autre
+          # projet tenait le 8080, et rendait un 404 très convaincant.
+          if curl -fsS -o /dev/null --max-time 2 "$E2E_BASE_URL/healthz" 2>/dev/null; then
+            echo "  un serveur répond DÉJÀ sur $E2E_BASE_URL — arrêter l'autre" >&2
+            echo "  instance avant de relancer." >&2
+            exit 1
+          fi
+          if curl -sS -o /dev/null --max-time 2 "$E2E_BASE_URL/" 2>/dev/null; then
+            echo "  le port 8080 est OCCUPÉ par un autre service : il répond, mais pas" >&2
+            echo "  sur /healthz. Libérer le port avant de relancer." >&2
+            exit 1
+          fi
           go run ./cmd/server > /tmp/hexa-e2e-server.log 2>&1 &
           srv=$!
           trap 'kill $srv 2>/dev/null || true' EXIT
@@ -309,6 +325,37 @@ tasks:
           ./tools/verifie-encodage.sh
           echo "  encodage — sens échec :"
           ./tools/verifie-encodage.sh --temoin
+
+  ci:generateur:
+    desc: "Le critere de #17 : un projet GENERE passe `task check` sans retouche"
+    silent: true
+    cmds:
+      # C'est la seule garantie qui compte pour un generateur. Tout le reste --
+      # il compile, il ecrit des fichiers -- se verifie en le regardant tourner.
+      # « Le projet genere franchit la meme barriere que le socle » ne se verifie
+      # qu'en le faisant.
+      #
+      # C'est aussi ce qui a trouve que `tools/covergate` portait le nom du socle
+      # EN DUR : dans un projet genere, aucune exclusion ne correspondait plus et
+      # les cliquets mesuraient un perimetre qui n'etait pas le leur.
+      - cmd: |
+          set -e
+          bac=$(mktemp -d)
+          # `trap ... EXIT` seul : le shell de la toolbox (busybox) refuse
+          # les noms de signaux ici, et EXIT couvre déjà l'interruption.
+          trap 'rm -rf "$bac"' EXIT
+          go build -o "$bac/hexa" ./cmd/hexa
+          echo "  génération :"
+          "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere | sed 's/^/    /'
+          echo "  barrière dans le projet généré :"
+          cp .env.example "$bac/projet/.env"
+          ( cd "$bac/projet" && task check ) > "$bac/check.log" 2>&1 || {
+            echo "  LE PROJET GÉNÉRÉ NE PASSE PAS LA BARRIÈRE :" >&2
+            tail -30 "$bac/check.log" >&2
+            exit 1
+          }
+          grep -E "cliquet|périmètre|cœur|code produit" "$bac/check.log" | sed 's/^/  /'
+          echo "    task check dans le projet généré : 0"
 
   ci:images:
     desc: "Construit les deux images livrées — le job docker"
@@ -493,15 +540,20 @@ tasks:
     desc: "Vérifie qu'aucune trace du chemin de module d'origine ne subsiste"
     internal: true
     cmds:
-      # EXCLUSIONS DÉCLARÉES, et non oubliées : CLAUDE.md et REPRISE.md citent le
-      # chemin dans des liens vers des PR HISTORIQUES. Les réécrire ferait pointer
+      # EXCLUSIONS DÉCLARÉES, et non oubliées : ces fichiers citent le chemin dans
+      # des liens vers des PR et des ISSUES historiques — CLAUDE.md, REPRISE.md,
+      # et l'en-tête « Issue » de chaque ADR. Les réécrire ferait pointer
       # l'historique du socle vers un dépôt qui ne l'a jamais porté. GitHub
       # redirige les URL d'un dépôt transféré, donc ces liens restent valides.
+      #
+      # La liste est identique à `citeLeSocleParHistoire` dans cmd/hexa, et pour
+      # la même raison. Les deux doivent bouger ensemble.
       #
       # Toute AUTRE occurrence est un oubli, et fait échouer la tâche.
       - cmd: |
           restant=$(git ls-files \
             | grep -v -e '^CLAUDE\.md$' -e '^documentation/process/REPRISE\.md$' \
+                      -e '^documentation/adr/' \
             | xargs grep -l '{{.FROM}}' 2>/dev/null || true)
           if [ -n "$restant" ]; then
             echo "task rename : le chemin d'origine subsiste dans :" >&2

@@ -165,7 +165,11 @@ func main() {
 	if len(os.Args) < 2 {
 		fail("usage: covergate <coverage.out>")
 	}
-	blocks, err := parseProfile(os.Args[1])
+	prefixe, err := lirePrefixeModule("go.mod")
+	if err != nil {
+		fail(err.Error())
+	}
+	blocks, err := parseProfile(os.Args[1], prefixe)
 	if err != nil {
 		fail(err.Error())
 	}
@@ -321,7 +325,7 @@ func contains(blocks []block, match func(block) bool) bool {
 // Format d'une ligne, après l'en-tête `mode:` :
 //
 //	<chemin>:<ligne>.<col>,<ligne>.<col> <nb instructions> <nb exécutions>
-func parseProfile(path string) ([]block, error) {
+func parseProfile(path, prefixe string) ([]block, error) {
 	file, err := os.Open(path) //nolint:gosec // chemin fourni par la CI ou le Taskfile, pas par un tiers
 	if err != nil {
 		return nil, fmt.Errorf("lecture du profil: %w", err)
@@ -351,7 +355,7 @@ func parseProfile(path string) ([]block, error) {
 		if raw == "" || strings.HasPrefix(raw, "mode:") {
 			continue
 		}
-		key, parsed, err := parseLine(raw)
+		key, parsed, err := parseLine(raw, prefixe)
 		if err != nil {
 			return nil, fmt.Errorf("profil ligne %d: %w", line, err)
 		}
@@ -373,7 +377,7 @@ func parseProfile(path string) ([]block, error) {
 
 // parseLine rend la CLÉ DE FUSION (le fichier et la plage, tels quels) et la
 // plage lue.
-func parseLine(raw string) (string, block, error) {
+func parseLine(raw, prefixe string) (string, block, error) {
 	fields := strings.Fields(raw)
 	const expectedFields = 3
 	if len(fields) != expectedFields {
@@ -388,7 +392,7 @@ func parseLine(raw string) (string, block, error) {
 		return "", block{}, fmt.Errorf("nombre d'exécutions illisible: %q", fields[2])
 	}
 	return fields[0], block{
-		path:       modulePath(fields[0]),
+		path:       modulePath(fields[0], prefixe),
 		statements: statements,
 		covered:    count > 0,
 	}, nil
@@ -399,16 +403,44 @@ func parseLine(raw string) (string, block, error) {
 // Le profil nomme les fichiers par leur chemin d'IMPORT complet
 // (`github.com/…/internal/config/config.go:12.5,14.3`). Les exclusions, elles,
 // sont écrites comme des chemins du dépôt : c'est ce qu'un relecteur reconnaît.
-func modulePath(raw string) string {
+//
+// # Le préfixe est LU dans go.mod, jamais écrit ici
+//
+// Il l'était : `const marker = "go-hexa-fp-starter/"`. Le défaut n'est apparu
+// qu'à la première utilisation de `hexa new` — dans un projet généré, ce
+// marqueur ne correspond à rien, AUCUNE exclusion ne s'applique, et les trois
+// cliquets mesurent un périmètre qui n'est pas le leur. Les deux premiers
+// tombaient à 56,7 % contre 74,8 % ici.
+//
+// Deux gardes existaient et ne pouvaient pas le voir : `task rename` et son
+// `rename:verify` cherchent le chemin de module COMPLET, or cette constante n'en
+// portait que le dernier segment. Une liaison par sous-chaîne échappe à toute
+// recherche-remplacement — c'est ce qui la rend durable.
+func modulePath(raw, prefixeModule string) string {
 	path := raw
 	if colon := strings.LastIndex(path, ":"); colon >= 0 {
 		path = path[:colon]
 	}
-	const marker = "go-hexa-fp-starter/"
-	if idx := strings.Index(path, marker); idx >= 0 {
-		return path[idx+len(marker):]
+	return strings.TrimPrefix(path, prefixeModule)
+}
+
+// prefixeModule lit le chemin de module du dépôt courant, terminé par `/`.
+//
+// Rendre une erreur plutôt qu'un défaut : sans ce préfixe, les exclusions ne
+// correspondent à rien et les cliquets mesurent faux. Un outil qui devine ici
+// échouerait silencieusement, dans le sens « trop bas » — celui qui fait baisser
+// un seuil pour une raison inexistante.
+func lirePrefixeModule(chemin string) (string, error) {
+	brut, err := os.ReadFile(chemin) //nolint:gosec // nom fixe, résolu depuis le répertoire courant
+	if err != nil {
+		return "", fmt.Errorf("lecture de %s: %w", chemin, err)
 	}
-	return path
+	for _, ligne := range strings.Split(string(brut), "\n") {
+		if reste, trouve := strings.CutPrefix(strings.TrimSpace(ligne), "module "); trouve {
+			return strings.TrimSpace(reste) + "/", nil
+		}
+	}
+	return "", fmt.Errorf("aucune directive `module` dans %s", chemin)
 }
 
 func fail(message string) {
