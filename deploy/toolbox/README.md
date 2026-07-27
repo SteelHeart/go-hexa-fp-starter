@@ -12,12 +12,29 @@
 
 ```bash
 ./deploy/toolbox/tb                # un shell dans la toolbox
-./deploy/toolbox/tb task check     # la barrière qualité, à l'identique de la CI
+./deploy/toolbox/tb task check     # fmt · vet · lint · arch · test · vuln
+./deploy/toolbox/tb task ci        # la barrière COMPLÈTE — 10 des 12 jobs de la CI
 ./deploy/toolbox/tb task up        # démarre la pile — via le moteur de l'HÔTE
 ```
 
-Rien d'autre à connaître : **toute** commande du dépôt se préfixe par `tb`, et le `Taskfile` n'a
-pas été modifié pour autant.
+Rien d'autre à connaître : **toute** commande du dépôt se préfixe par `tb`.
+
+### `task check` ou `task ci` ?
+
+`task check` couvre **4** des 12 jobs de la CI. `task ci` en couvre **10** — il y ajoute les
+migrations avec leur `Down` réellement exécuté, le niveau `e2e` avec les tests **comptés**, la
+compilation croisée sur les quatre cibles, `gitleaks` sur l'historique complet, et la construction
+des deux images livrées. Les deux restants dépendent du contexte d'une PR et se lancent à part :
+
+```bash
+./deploy/toolbox/tb task ci:pr-title -- "fix(data): un titre conventionnel"
+./deploy/toolbox/tb task ci:inertia  -- origin/main
+```
+
+> ⚠️ **`task ci` n'est pas une garde.** Elle s'exécute sur la machine de l'auteur, qui peut ne pas
+> la lancer. C'est un **instrument de mesure reproductible**, pas un contrôle — la même distinction
+> qu'entre le crochet local et le ruleset serveur (`rules/toolchain.md` §4). Tant que la CI ne
+> démarre pas, fusionner reste une **décision documentée**, jamais un gate franchi.
 
 ## Ce qui rend `task up` possible depuis l'intérieur
 
