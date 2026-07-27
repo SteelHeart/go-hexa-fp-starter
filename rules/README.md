@@ -71,6 +71,11 @@ Deux propriétés sont non négociables, et tout le reste en découle :
    contournée — sans mauvaise foi, simplement un vendredi soir. Chaque règle de ce dossier renvoie
    à l'outil qui la fait respecter ; celles qui n'en ont pas sont marquées **`[humain]`** et c'est
    un aveu de faiblesse, pas une tolérance.
+
+   **Corollaire — un outillage jamais exécuté n'est pas un outillage.** Tout garde est livré avec
+   **le cas qui le fait échouer** ([ADR 013](../documentation/adr/013-un-garde-doit-savoir-echouer.md)).
+   Le 2026-07-27, huit gardes de ce dépôt ont été allumés pour la première fois : **les huit étaient
+   défectueux**. Un garde qui n'a jamais rougi n'a pas été vérifié, il a seulement été écrit.
 2. **La doc ne mente jamais sur l'état réel.** Elle distingue explicitement **écrit** / **prouvé
    localement** / **déployé pour de vrai**. Un document qui coche « ✅ testé » sans test envoie
    l'humain et l'agent sur une fausse piste : c'est le pire échec possible.

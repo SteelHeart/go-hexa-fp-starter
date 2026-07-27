@@ -23,6 +23,7 @@ refonte.
 | 010 | Messagerie enfichable et communication inter-modules | **À écrire** |
 | [011](011-isolation-des-donnees-par-module.md) | Isolation des données : un schéma et un rôle SQL par module | Accepté |
 | [012](012-anatomie-d-un-module-et-pilotes.md) | Anatomie d'un module, pilotes, zéro prérequis d'infrastructure | Accepté |
+| [013](013-un-garde-doit-savoir-echouer.md) | Un garde est livré avec le cas qui le fait échouer | Accepté |
 
 > ⚠️ **010 n'existe pas encore, et du code le référence déjà** — `internal/infrastructure/messaging`
 > et `internal/infrastructure/modulebus`. Le numéro est réservé pour que rien d'autre ne le prenne.
