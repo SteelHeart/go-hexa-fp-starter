@@ -356,7 +356,7 @@ jobs:
         run: goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
       - name: Vérifie les invariants d'isolation (ADR 011)
-        run: psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+        run: psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
 
       # Un Down faux est PIRE que pas de Down : il donne une fausse assurance au
       # moment précis où l'on en a besoin, c'est-à-dire pendant un incident. La
@@ -365,7 +365,7 @@ jobs:
         run: |
           goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" down
           goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
-          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
 
       # Le rôle applicatif ne doit PAS pouvoir faire de DDL. On le prouve en
       # essayant : la commande doit échouer. Un test qui vérifie qu'une chose est
