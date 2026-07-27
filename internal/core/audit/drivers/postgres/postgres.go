@@ -33,7 +33,22 @@ func New(pool *pgxpool.Pool, now func() time.Time) ports.Record {
 		if !entry.IsComplete() {
 			return fmt.Errorf("%w: action=%q entité=%q", domain.ErrIncomplete, entry.Action, entry.EntityType)
 		}
-		metadata, err := json.Marshal(entry.Metadata)
+		// Une carte nil se sérialise en littéral JSON `null`, pas en `{}`.
+		//
+		// Ça ne CASSE pas : `null` est un jsonb valide, donc la contrainte
+		// NOT NULL passe. C'est précisément ce qui rend ce défaut durable — il
+		// ne se signale jamais, contrairement à son jumeau du pilote d'outbox,
+		// qui lui refusait l'insertion (#37).
+		//
+		// L'effet réel est chez le lecteur : le journal d'audit est conservé
+		// longtemps et relu pendant un incident. Y trouver deux formes de
+		// « aucune métadonnée » — `null` et `{}` — selon la version du code qui
+		// a écrit la ligne est exactement ce qu'on ne veut pas au pire moment.
+		champs := entry.Metadata
+		if champs == nil {
+			champs = map[string]any{}
+		}
+		metadata, err := json.Marshal(champs)
 		if err != nil {
 			return fmt.Errorf("sérialisation des métadonnées d'audit: %w", err)
 		}
