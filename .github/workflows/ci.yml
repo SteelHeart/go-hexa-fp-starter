@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+  # AUCUN filtre `branches:` ici, et c'est délibéré : une PR est contrôlée
+  # quelle que soit sa base. Avec `branches: [main]`, toute la pile de travail
+  # — dont les PR visent une branche d'intégration — n'affichait « no checks
+  # reported », c'est-à-dire une case VIDE, jamais une case rouge. Et une case
+  # vide se fusionne (#64).
+  #
+  # C'est le défaut de forme de l'ADR 013 appliqué au déclencheur lui-même :
+  # l'absence de contrôle ressemble en tout point à l'absence de problème.
+  #
+  # Le coût est borné par `concurrency` ci-dessous : une nouvelle poussée
+  # annule le run précédent.
   pull_request:
-    branches: [main]
     types: [opened, synchronize, reopened, edited]
   merge_group:
   workflow_dispatch:
