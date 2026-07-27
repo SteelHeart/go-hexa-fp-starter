@@ -154,6 +154,7 @@ tasks:
     desc: "Rejoue hors GitHub la barrière de la CI — 10 jobs sur 12"
     cmds:
       - task: check
+      - task: ci:schemas
       - task: ci:build
       - task: ci:secrets
       - task: ci:migrations
@@ -176,6 +177,27 @@ tasks:
               go build -trimpath -ldflags="-s -w" -o "{{.BIN}}/$os-$arch/" ./cmd/...
             echo " ok"
           done
+
+  ci:schemas:
+    desc: "Isolation des schémas SQL (ADR 011) — et le cas qui fait échouer le garde"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : le script. Le dépôt a
+      # déjà payé la divergence local/CI avec trois seuils en trois endroits.
+      - cmd: |
+          set -e
+          echo "  sens succès — le dépôt réel :"
+          ./tools/verifie-isolation-schemas.sh
+          # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans
+          # cette moitié, on ne distingue pas « aucune violation » de « le garde
+          # ne tourne pas » — la confusion exacte qui a laissé passer huit gardes
+          # défectueux dans ce dépôt.
+          echo "  sens échec — le témoin :"
+          if ./tools/verifie-isolation-schemas.sh tools/testdata/isolation-violation internal/modules >/dev/null 2>&1; then
+            echo "  LE GARDE NE GARDE PLUS : le témoin de violation est passé" >&2
+            exit 1
+          fi
+          echo "    refus confirmé sur tools/testdata/isolation-violation"
 
   ci:secrets:
     desc: "gitleaks sur l'historique complet — le job « Fuite de secrets »"

@@ -204,44 +204,24 @@ jobs:
       # Un module ne doit JAMAIS toucher la zone exclusive d'un autre. Chaque
       # module possède un schéma Postgres ; les migrations d'un module ne
       # référencent que son schéma et le schéma partagé `platform`.
+      # Le garde vit dans UN script, appelé ici comme par `task ci:schemas`.
+      # Sa version précédente était inline et rendait NEUF faux positifs : son
+      # motif s'appliquait au fichier entier, commentaires compris, et accusait
+      # de la prose d'être un schéma étranger. Le job ne pouvait pas être vert.
       - name: Isolation des schémas Postgres
+        run: ./tools/verifie-isolation-schemas.sh
+
+      # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans cette
+      # étape, un script devenu muet — chemin faux, dossier vide, motif cassé —
+      # rendrait 0 et le job passerait au vert sans rien vérifier.
+      - name: Le garde d'isolation sait échouer
         run: |
-          set -euo pipefail
-          fail=0
-          shared="platform|pg_catalog|information_schema|public"
-
-          for dir in migrations/*/; do
-            module=$(basename "$dir")
-            [ "$module" = "platform" ] && continue
-            # Tout identifiant qualifié `autre_schema.` est une violation.
-            offenders=$(grep -rhoE '\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*' "$dir" 2>/dev/null \
-              | cut -d. -f1 | sort -u \
-              | grep -Ev "^($module|$shared)$" || true)
-            if [ -n "$offenders" ]; then
-              echo "::error::migrations/$module référence un schéma étranger :"
-              echo "$offenders" | sed 's/^/    /'
-              fail=1
-            fi
-          done
-
-          # Aucun SQL applicatif ne doit qualifier le schéma d'un autre module :
-          # le search_path du rôle du module s'en charge.
-          for dir in internal/modules/*/; do
-            module=$(basename "$dir")
-            others=$(find internal/modules -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
-              | grep -v "^$module$" || true)
-            [ -z "$others" ] && continue
-            for other in $others; do
-              if grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' >/dev/null 2>&1; then
-                echo "::error::$module référence le schéma de $other dans du SQL"
-                grep -rInE "\b${other}\.[a-z_]+" "$dir" --include='*.go' | sed 's/^/    /'
-                fail=1
-              fi
-            done
-          done
-
-          [ "$fail" -eq 0 ] && echo "Isolation des schémas respectée."
-          exit "$fail"
+          if ./tools/verifie-isolation-schemas.sh \
+               tools/testdata/isolation-violation internal/modules >/dev/null 2>&1; then
+            echo "::error::le témoin de violation est passé — le garde ne garde plus"
+            exit 1
+          fi
+          echo "refus confirmé sur tools/testdata/isolation-violation"
 
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
