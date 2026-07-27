@@ -108,7 +108,7 @@ et poreuse en SQL — tant qu'on ne la fait pas tenir par la base.
 - `UPDATE` et `DELETE` sont **révoqués** sur `platform.audit_log`.
 
 Ces invariants sont interrogeables : `task db:verify`
-([`migrations/postgres/verify.sql`](../migrations/postgres/verify.sql)), exécuté par la CI après
+([`deploy/postgres/verify.sql`](../deploy/postgres/verify.sql)), exécuté par la CI après
 chaque migration. Une jointure entre deux modules devient impossible — c'est le but, pas un effet
 de bord.
 

@@ -6,11 +6,30 @@
 --
 -- Exécution — après les migrations, avec un rôle qui peut lire les catalogues :
 --
---   psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f migrations/postgres/verify.sql
+--   psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/verify.sql
 --
 -- Sortie : silencieuse si tout tient, `ERROR` et code de retour non nul sinon.
 -- ⚠️ Vérifier le CODE DE RETOUR, pas seulement la sortie : une commande qui n'a
 -- pas tourné rend une sortie vide, ce qui ressemble à « propre ».
+--
+-- ── Pourquoi ce fichier est ICI et non sous `migrations/postgres/` ───────────
+--
+-- Il y a vécu, et il y cassait TOUT : goose lit l'intégralité des `*.sql` du
+-- dossier passé à `-dir` et refuse ce qui n'est pas une migration.
+--
+--   goose run: could not parse SQL migration file "…/verify.sql":
+--   no filename separator '_' found
+--
+-- `goose … up` échouait donc avant d'appliquer quoi que ce soit — en local comme
+-- dans le job CI `migrations`, qui lance la même commande. Aucune migration de ce
+-- dépôt n'avait jamais été appliquée.
+--
+-- Le remède n'est pas de renommer le fichier pour amadouer goose : c'est de le
+-- ranger là où il appartient. Ce script n'est pas une migration, c'est une
+-- VÉRIFICATION d'opérateur, comme `provision.sql` juste à côté. Aucun des deux
+-- n'est versionné par goose, tous deux se lancent par psql, tous deux sont
+-- rejouables sans effet de bord. `migrations/{moteur}/` ne contient que ce que
+-- goose applique — et l'erreur redevient impossible plutôt que corrigée.
 
 \set ON_ERROR_STOP on
 

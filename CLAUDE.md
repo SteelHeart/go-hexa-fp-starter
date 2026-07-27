@@ -208,8 +208,8 @@ encore aucun adaptateur, donc aucune surface ne l'appelle.
 
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
-| Pilotes `postgres` des modules noyau | La migration existe désormais, mais **aucune base ici** : elle ne s'exécute qu'en CI (F001) |
-| `migrations/postgres/` + `deploy/postgres/provision.sql` | Écrits, **non exécutés en local**. Le job CI `migrations` les applique, vérifie l'isolation et prouve le `Down` |
+| Pilotes `postgres` des modules noyau | Le SCHÉMA est désormais appliqué et vérifié en local, mais les pilotes eux-mêmes n'ont **aucun test, à aucun niveau** (#37) |
+| ~~`migrations/postgres/` + `deploy/postgres/provision.sql`~~ | **PROUVÉ en local le 2026-07-27** : provision, `up`, `down`, rejeu, `deploy/postgres/verify.sql`, et les deux refus de l'ADR 011 — code de retour 0. ⚠️ Ils ne fonctionnaient **nulle part** avant : quatre défauts en cascade, détaillés dans [`JOURNAL_FRICTION.md`](documentation/process/JOURNAL_FRICTION.md) § « Ce que F001 a révélé ». La ligne précédente affirmait que le job CI les appliquait — **c'était faux**, il échouait sur la même commande |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `cache` | Compile, **zéro test** : `New` fait un `Ping` Redis et `JSON` exige un client — donc niveau intégration (#37), pas ici. `messaging` (13), `modulebus` (10), `httpserver` (14) et `telemetry` (9) sont désormais couverts |
@@ -433,6 +433,7 @@ est écrite à côté :
 | F003 | Aucun test de mutation |
 | F004 | Outillage en `latest` : CI non reproductible |
 | ~~F005~~ | **Résolue** — `gcc` dans la toolbox, `task test:race` vert en local |
+| **F010** | Le garde CI « Isolation des schémas Postgres » rend des **faux positifs** (il analyse la prose des commentaires) — déjà rouge sur `main`, issue #40 |
 | **F008** | **Aucun binaire Go ne peut écrire sous `C:\xampp\htdocs\`** → `task check` ne peut pas être vert ici. Sortir le dépôt de `htdocs`, ou passer sous WSL |
 | ~~F006~~ | **Résolue** — `task` et `govulncheck` installés par `go install` |
 | ~~F007~~ | **Résolue** — `go 1.25.12` dans `go.mod`, `GOTOOLCHAIN=auto` fait le reste |
