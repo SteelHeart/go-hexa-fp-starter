@@ -42,7 +42,10 @@ services:
 
   # Traces OpenTelemetry — UI sur http://localhost:16686
   jaeger:
-    image: jaegertracing/all-in-one:1.65
+    # `1.65` n'existe pas : les étiquettes de cette image portent le correctif
+    # (`1.65.0`). Écrite ainsi, la pile ne pouvait démarrer nulle part —
+    # `manifest unknown`. Jamais vu parce qu'elle n'avait jamais été lancée.
+    image: jaegertracing/all-in-one:1.65.0
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:

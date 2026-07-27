@@ -428,11 +428,11 @@ est écrite à côté :
 
 | Réf | Effet concret |
 |---|---|
-| F001 | Docker absent : migrations, intégration et e2e ne tournent qu'en CI |
+| ~~F001~~ | **Résolue** — WSL + Podman rootless + [`deploy/toolbox/`](deploy/toolbox/README.md) : l'outillage en image, rien sur le poste |
 | F002 | Aucune protection de branche serveur (plan gratuit) — le crochet est un filet, pas un contrôle |
 | F003 | Aucun test de mutation |
 | F004 | Outillage en `latest` : CI non reproductible |
-| F005 | `-race` exige CGO : `task test` sans `-race` en local, `task test:race` en CI |
+| ~~F005~~ | **Résolue** — `gcc` dans la toolbox, `task test:race` vert en local |
 | **F008** | **Aucun binaire Go ne peut écrire sous `C:\xampp\htdocs\`** → `task check` ne peut pas être vert ici. Sortir le dépôt de `htdocs`, ou passer sous WSL |
 | ~~F006~~ | **Résolue** — `task` et `govulncheck` installés par `go install` |
 | ~~F007~~ | **Résolue** — `go 1.25.12` dans `go.mod`, `GOTOOLCHAIN=auto` fait le reste |
