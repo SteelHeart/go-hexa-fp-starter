@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+  # AUCUN filtre `branches:` ici, et c'est délibéré : une PR est contrôlée
+  # quelle que soit sa base. Avec `branches: [main]`, toute la pile de travail
+  # — dont les PR visent une branche d'intégration — n'affichait « no checks
+  # reported », c'est-à-dire une case VIDE, jamais une case rouge. Et une case
+  # vide se fusionne (#64).
+  #
+  # C'est le défaut de forme de l'ADR 013 appliqué au déclencheur lui-même :
+  # l'absence de contrôle ressemble en tout point à l'absence de problème.
+  #
+  # Le coût est borné par `concurrency` ci-dessous : une nouvelle poussée
+  # annule le run précédent.
   pull_request:
-    branches: [main]
     types: [opened, synchronize, reopened, edited]
   merge_group:
   workflow_dispatch:
@@ -561,10 +571,33 @@ jobs:
           # l'historique, donc reste compromis.
           fetch-depth: 0
 
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      # Le BINAIRE, pas l'action : sur une `pull_request`, `gitleaks-action@v2`
+      # interroge l'API GitHub, se fait refuser par `contents: read` et meurt
+      # AVANT d'avoir analysé un seul fichier (#67). Le job était vert sur
+      # `push`, où l'autre chemin n'appelle pas l'API — et aucune PR n'avait
+      # jamais déclenché la CI (#64). Le seul chemin cassé était le seul jamais
+      # exercé.
+      #
+      # Version épinglée : `latest` rendrait ce job irreproductible (F004).
+      - name: Installe gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download"
+          curl -sSfL "$url/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # UNE seule définition, partagée avec `task ci:secrets`.
+      - name: gitleaks
+        run: ./tools/verifie-fuite-de-secrets.sh
+
+      # ADR 013 : sans cette moitié, « aucune fuite » et « le scanner n'a pas
+      # tourné » rendent exactement la même sortie. C'est très précisément ce
+      # qui vient d'arriver.
+      - name: Ce garde-là sait échouer
+        run: ./tools/verifie-fuite-de-secrets.sh --temoin
 
   # ───────────────────────────────────────────────────────────────────────────
   # 9. Image conteneur — construite sur chaque PR, poussée sur main seulement.

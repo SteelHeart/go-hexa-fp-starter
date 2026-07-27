@@ -201,10 +201,15 @@ tasks:
 
   ci:secrets:
     desc: "gitleaks sur l'historique complet — le job « Fuite de secrets »"
+    silent: true
     cmds:
-      # --exit-code 1 est explicite : le défaut de gitleaks a déjà changé, et un
-      # scanner qui rend 0 sur une fuite est pire que pas de scanner.
-      - gitleaks detect --source=. --redact --no-banner --exit-code 1
+      # UNE seule définition, partagée avec `ci.yml` : le script. Il porte la
+      # commande, ses motifs, et le témoin de l'ADR 013.
+      - cmd: |
+          set -e
+          ./tools/verifie-fuite-de-secrets.sh
+          echo "  sens échec — le témoin :"
+          ./tools/verifie-fuite-de-secrets.sh --temoin
 
   ci:migrations:
     desc: "Le job « Migrations & isolation » en entier, Down et refus compris"
