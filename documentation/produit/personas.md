@@ -205,9 +205,49 @@ points : créer un module, brancher un module, configurer un module.
 | # | Hypothèse | Ce qui change si elle est fausse |
 |---|---|---|
 | H1 | P1 évolue dans un contexte **mobile-first, réseaux peu fiables, paiement mobile (XOF)** | `notification` et `ratelimit` redescendent ; `payment` reste en 5ᵉ position |
-| H2 | L'adoption **externe** est visée | Si non, **P3 sort du jeu** : `internal/`, les versions et #34 cessent d'être urgents, et `v1.0` se simplifie beaucoup |
+| ~~H2~~ | ~~L'adoption **externe** est visée~~ | **CONFIRMÉE le 2026-07-27.** P3 reste au jeu — voir « Ce que l'adoption externe change » ci-dessous |
 | H3 | `v0.1.0` est un **jalon interne**, pas une annonce publique | Si annonce publique, la barrière CI et la frontière API deviennent bloquantes avant le tag |
 
-**H2 est la plus structurante des trois** : elle décide à elle seule si `v1.0` doit livrer une
-frontière API publique, une politique de versions et une traduction — soit une part majeure de son
-contenu.
+**H2 est tranchée** : l'adoption externe est visée. Restent H1 et H3.
+
+---
+
+## Ce que l'adoption externe change — décidé le 2026-07-27
+
+**P3 est confirmée comme persona réelle.** Cinq conséquences, dont une bonne surprise et une urgence.
+
+### ✅ La bonne surprise : l'API publique est déjà en anglais
+
+Vérifié : **530 identifiants exportés, aucun en français, aucun accentué.** `RegisterUser`,
+`EmailIsTaken`, `Broker`, `Cursor`, `Dispatcher`… Les noms de fichiers de test le sont aussi
+(`zero_value_is_err_test.go`).
+
+Conséquence : **#34 n'est pas une rupture d'API**, contrairement à ce qu'on pouvait craindre. Le
+périmètre réel est la **traduction du godoc et de `rules/`** — coûteux en pages, nul en compatibilité.
+La contrainte « traduire avant de figer l'API » tombe : on peut publier puis traduire.
+
+### 🔴 L'urgence : aucun fichier de licence
+
+Le dépôt est **public**, vise l'adoption, et le `Dockerfile` déclare `MIT` — mais il n'existe
+**aucun `LICENSE`**. Sans lui, le droit d'auteur s'applique par défaut : **tous droits réservés**.
+P3 ne peut légalement rien faire, et l'image affirme une licence sans fondement. Issue #61.
+
+### Ce qui devient bloquant pour `v1.0`
+
+| Sujet | Statut | Pourquoi maintenant |
+|---|---|---|
+| **Licence, `CONTRIBUTING`, `CHANGELOG`** | 🔴 #61 | Prérequis légal, le moins cher de tous |
+| **Sortir de `internal/`** (#16) | 🔴 | 75 paquets, **0 importable** : le dépôt ne peut qu'être **copié**. Sans ça, il n'y a pas de framework, quelle que soit l'intention |
+| **Frontière API publique / interne** | 🔴 | Extraire 530 identifiants sans les classer publierait une API par accident, et on ne la reprendrait plus |
+| **Politique de versions et de dépréciation** | 🔴 | Ce qu'un framework promet et qu'un boilerplate n'a jamais eu à promettre |
+| **Traduction du godoc et de `rules/`** (#34) | ⚠️ | Réel mais **non bloquant** : aucune rupture d'API à la clé |
+
+### Ce que ça change dans le séquencement
+
+La décision écrite « **stabiliser avant de restructurer** » ne tient plus telle quelle : on ne
+stabilise pas une API qu'on n'a pas le droit de publier, et rien ne distingue aujourd'hui l'API
+publique du détail interne. La **classification des 75 paquets** doit précéder #16, et #16 doit
+précéder toute promesse de compatibilité.
+
+Elle reste juste sur un point : classer n'oblige à **déplacer aucun fichier**. C'est un exercice de
+décision, faisable avant `v0.1.0` sans rien restructurer.
