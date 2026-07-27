@@ -14,7 +14,7 @@ import (
 func TestShippedDriverOptionsParse(t *testing.T) {
 	withShippedConfig(t)
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
 		t.Fatalf("chargement: %v", err)
 	}

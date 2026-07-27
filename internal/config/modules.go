@@ -27,74 +27,6 @@ type Module struct {
 	Options map[string]any `yaml:"options"`
 }
 
-// Noms des pilotes de module.
-//
-// Ils sont écrits une fois ici parce que les tables de validation et de défaut
-// doivent parler du même pilote : une faute de frappe dans l'une des deux rendrait
-// un module inactivable, avec un message qui accuse la configuration de
-// l'utilisateur.
-//
-// ⚠️ Ces noms se recoupent avec ceux des relais de messagerie (relayInproc) et des
-// puits d'observabilité (sinkFile). L'homonymie est un accident d'orthographe :
-// ce sont trois vocabulaires distincts, ils ne partagent PAS de constante.
-const (
-	driverMemory       = "memory"
-	driverPostgres     = "postgres"
-	driverRedis        = "redis"
-	driverFile         = "file"
-	driverLog          = "log"
-	driverDisk         = "disk"
-	driverCronInproc   = "cron-inproc"
-	driverAdvisoryLock = "advisory-lock"
-)
-
-// knownDrivers énumère les pilotes admis par module.
-//
-// # Cette table liste ce qui EXISTE, pas ce qui est prévu
-//
-// C'est une table de VALIDATION, pas un catalogue. Y faire figurer un pilote non
-// construit produirait le pire des messages : la configuration accepterait la
-// valeur, puis la fabrique du module refuserait au démarrage avec « pilote
-// inconnu » — pour un pilote que la configuration venait de déclarer connu. Deux
-// sources de vérité qui se contredisent valent moins qu'une seule qui refuse.
-//
-// Un module ABSENT de cette table ne peut pas être activé, et c'est voulu : on
-// n'active pas un module dont le code n'existe pas.
-//
-// Le catalogue des pilotes ENVISAGÉS — une centaine — vit dans
-// documentation/technique/pilotes.md. Un pilote y migre vers cette table le jour
-// où il est écrit, testé, et où il documente ses NON-garanties.
-//
-// Deny par défaut : ce qui n'est pas listé refuse le démarrage. Une faute de
-// frappe dans un nom de pilote ne doit jamais se résoudre en « le plus proche ».
-//
-//nolint:gochecknoglobals // table de référence immuable, lue en validation
-var knownDrivers = map[string][]string{
-	"outbox":      {driverMemory, driverPostgres},
-	"idempotency": {driverMemory, driverPostgres, driverRedis},
-	"dynconf":     {driverFile, driverPostgres},
-	"audit":       {driverLog, driverPostgres},
-	"storage":     {driverDisk},
-	"scheduler":   {driverCronInproc, driverAdvisoryLock},
-}
-
-// defaultDrivers donne le pilote sans dépendance externe de chaque module.
-//
-// C'est la table qui rend vraie la promesse « hexa new puis go run démarre » : le
-// défaut n'est JAMAIS le pilote le plus complet, toujours celui qui n'exige rien.
-//
-//nolint:gochecknoglobals // table de référence immuable, lue en validation
-var defaultDrivers = map[string]string{
-	"outbox":      driverMemory,
-	"idempotency": driverMemory,
-	"dynconf":     driverFile,
-	"audit":       driverLog,
-	"storage":     driverDisk,
-	// `advisory-lock` exigerait une base pour SIMPLEMENT répéter une tâche, y
-	// compris dans un binaire mono-instance qui n'a personne avec qui s'accorder.
-	"scheduler": driverCronInproc,
-}
-
 // DurationOption lit une option de durée du pilote.
 //
 // Les options ne sont pas typées à la lecture du fichier — le catalogue des
@@ -195,19 +127,49 @@ func (m Module) StringOption(key, fallback string) (string, error) {
 	return text, nil
 }
 
-// Get retourne la configuration d'un module, pilote par défaut compris.
+// Get retourne la configuration d'un module.
 //
 // Un module absent de la configuration est considéré comme DÉSACTIVÉ : on
 // n'active jamais une capacité que personne n'a demandée.
+//
+// Le pilote rendu est celui qui est ÉCRIT dans la valeur. Le défaut du
+// catalogue y est posé par Resolve, que Load appelle — de sorte que cet
+// accesseur ne mente jamais sur ce qu'il a reçu.
 func (m Modules) Get(name string) Module {
-	mod, found := m[name]
-	if !found {
-		return Module{Enabled: false, Driver: defaultDrivers[name]}
+	return m[name]
+}
+
+// Resolve rend une copie où chaque module actif porte un pilote explicite.
+//
+// C'est une fonction PURE : elle ne modifie pas son entrée. Elle existe pour que
+// « appliquer les défauts » soit une étape visible, au lieu d'un effet caché
+// dans un accesseur — le reproche exact qu'on peut faire à un conteneur
+// d'injection (ADR 004).
+func (m Modules) Resolve(catalog ModuleCatalog) Modules {
+	resolved := make(Modules, len(m))
+	for name, mod := range m {
+		if mod.Driver == "" {
+			mod.Driver = catalog.DefaultDriver(name)
+		}
+		resolved[name] = mod
 	}
-	if mod.Driver == "" {
-		mod.Driver = defaultDrivers[name]
+	// Les modules du catalogue que la configuration ne mentionne PAS reçoivent
+	// aussi leur pilote par défaut, désactivés.
+	//
+	// Sans ça, un module absent du fichier rendrait un pilote vide, et le
+	// composition root — qui monte `outbox` inconditionnellement — le
+	// construirait avec la chaîne vide, donc échouerait sur « pilote inconnu ».
+	// Autrement dit : une configuration MINIMALE cesserait de démarrer, ce qui
+	// contredirait frontalement la promesse de l'ADR 012.
+	//
+	// Ils restent désactivés : porter un pilote n'active rien.
+	for name, set := range catalog {
+		if _, declared := resolved[name]; declared {
+			continue
+		}
+		resolved[name] = Module{Enabled: false, Driver: set.Default}
 	}
-	return mod
+	return resolved
 }
 
 // IsEnabled indique si un module est actif.
@@ -216,73 +178,61 @@ func (m Modules) IsEnabled(name string) bool { return m.Get(name).Enabled }
 // DriverOf retourne le pilote retenu pour un module.
 func (m Modules) DriverOf(name string) string { return m.Get(name).Driver }
 
-// sqlBackedDrivers énumère les pilotes qui exigent une base SQL, quel que soit
-// le MOTEUR.
-//
-// # Aucun moteur n'est imposé par le socle
-//
-// `postgres` figure ici comme un pilote parmi d'autres, pas comme une
-// obligation. Le jour où un pilote `mysql`, `sqlite` ou `mssql` existe, il
-// s'ajoute à cette table et rien d'autre ne change : les ports ne nomment aucun
-// moteur, et chaque pilote possède son propre SQL et son propre client.
-//
-// C'est le sens de l'ADR 012 : le socle définit des contrats, pas une pile.
-//
-//nolint:gochecknoglobals // table de référence immuable
-var sqlBackedDrivers = map[string]struct{}{
-	"postgres": {},
-	// Ces trois-là n'ont pas encore de pilote. Ils figurent ici pour que la
-	// première implémentation n'ait RIEN à changer d'autre — et pour que le code
-	// dise, dès maintenant, qu'aucun moteur n'est imposé.
-	"mysql":  {},
-	"sqlite": {},
-	"mssql":  {},
-	// Élection entre répliques par verrou consultatif.
-	"advisory-lock": {},
-}
-
-// RequiresSQL indique si la configuration exige une base SQL — sans présumer
-// du moteur.
+// RequiresSQL indique si la configuration exige une base — sans présumer du MOTEUR.
 //
 // C'est ce qui permet à un binaire de n'ouvrir une connexion que s'il en a
-// besoin, et donc de démarrer sans base quand tous les pilotes actifs sont en
-// mémoire ou sur fichier.
-func (m Modules) RequiresSQL() bool {
-	for name := range knownDrivers {
+// besoin, et donc de démarrer sans base quand tous les pilotes actifs vivent en
+// mémoire ou sur fichier (ADR 012).
+//
+// Le catalogue est un PARAMÈTRE, pas un état caché : la réponse dépend des
+// modules montés, et c'est le composition root qui les connaît (ADR 014). Un
+// appelant qui oublie de le passer obtient `false`, pas un défaut arbitraire —
+// aucun module monté, aucune ressource exigée.
+func (m Modules) RequiresSQL(catalog ModuleCatalog) bool {
+	return m.requires(catalog, func(r Resources) bool { return r.SQL })
+}
+
+// RequiresCache indique si la configuration exige un cache réseau.
+func (m Modules) RequiresCache(catalog ModuleCatalog) bool {
+	return m.requires(catalog, func(r Resources) bool { return r.Cache })
+}
+
+// requires factorise les deux questions ci-dessus.
+//
+// Elle n'itère que les modules DÉCLARÉS : un module absent de la configuration
+// est désactivé (voir Get), donc il n'exige rien.
+func (m Modules) requires(catalog ModuleCatalog, wanted func(Resources) bool) bool {
+	for name := range m {
 		if !m.IsEnabled(name) {
 			continue
 		}
-		if _, needsSQL := sqlBackedDrivers[m.DriverOf(name)]; needsSQL {
+		if wanted(catalog.Requires(name, m.DriverOf(name))) {
 			return true
 		}
 	}
 	return false
 }
 
-// RequiresCache indique si la configuration exige une connexion Redis.
-func (m Modules) RequiresCache() bool {
-	for name := range knownDrivers {
-		if m.IsEnabled(name) && m.DriverOf(name) == "redis" {
-			return true
-		}
-	}
-	return false
-}
-
-// validate vérifie que chaque module actif désigne un pilote connu.
-func (m Modules) validate() []error {
+// validate vérifie que chaque module actif désigne un pilote connu du CATALOGUE.
+//
+// Un catalogue vide refuse tout, et c'est voulu : ce qui n'est pas monté n'est
+// pas configurable. On ne configure pas ce qu'on n'a pas branché (ADR 014).
+func (m Modules) validate(catalog ModuleCatalog) []error {
 	var problems []error
 	for name, mod := range m {
-		allowed, known := knownDrivers[name]
-		if !known {
+		allowed := catalog.AllowedDrivers(name)
+		if allowed == nil {
 			problems = append(problems, fmt.Errorf(
-				"modules.%s : module inconnu (voir documentation/technique/pilotes.md)", name))
+				"modules.%s : module inconnu — aucun module de ce nom n'est monté par le composition root", name))
 			continue
 		}
 		if !mod.Enabled {
 			continue
 		}
-		driver := m.DriverOf(name)
+		driver := mod.Driver
+		if driver == "" {
+			driver = catalog.DefaultDriver(name)
+		}
 		if !slices.Contains(allowed, driver) {
 			problems = append(problems, fmt.Errorf(
 				"modules.%s.driver=%q inconnu (attendu: %s)", name, driver, join(allowed)))

@@ -24,7 +24,7 @@ func TestShippedConfigurationRequiresExactlyOneSecret(t *testing.T) {
 	t.Setenv(config.EnvVarAppEnv, "")
 	t.Setenv("SECURITY_ENCRYPTION_KEY", "")
 
-	_, err := config.Load()
+	_, err := config.Load(shippedCatalog(t))
 
 	var missing config.ErrMissingSecret
 	if !errors.As(err, &missing) {

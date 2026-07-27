@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -18,55 +17,101 @@ import (
 // Un test d'interne est un aveu de couplage à l'implémentation : il doit rester
 // minoritaire, et disparaître si la fonction devient exportée.
 
-// TestDriverTablesAgree : les deux tables de référence doivent se répondre.
+// TestAnEmptyCatalogRefusesEverything : le deny-par-défaut de l'ADR 014.
 //
-// Un module connu sans pilote par défaut rendrait la chaîne vide comme pilote, et
-// la validation refuserait le démarrage d'un module pourtant correctement déclaré.
-// Un défaut absent de la liste des pilotes admis produirait le même refus. Dans les
-// deux cas, le message accuserait l'utilisateur d'une faute qui est la nôtre.
-func TestDriverTablesAgree(t *testing.T) {
+// Le catalogue vient du composition root. S'il est vide — parce que personne ne
+// l'a construit, ou parce qu'on l'a oublié — la configuration ne doit RIEN
+// admettre. L'oubli du catalogue doit être bruyant, jamais permissif : c'est ce
+// qui distingue « aucun module déclaré » de « tous les modules acceptés ».
+func TestAnEmptyCatalogRefusesEverything(t *testing.T) {
 	t.Parallel()
 
-	for module, allowed := range knownDrivers {
-		fallback, found := defaultDrivers[module]
-		if !found {
-			t.Errorf("module %q sans pilote par défaut", module)
-			continue
-		}
-		if !slices.Contains(allowed, fallback) {
-			t.Errorf("pilote par défaut de %q = %q, absent de %v", module, fallback, allowed)
-		}
+	mods := Modules{"quelconque": {Enabled: true, Driver: "memory"}}
+
+	problems := mods.validate(ModuleCatalog{})
+	if len(problems) == 0 {
+		t.Fatal("un catalogue vide doit tout refuser")
 	}
-	for module := range defaultDrivers {
-		if _, found := knownDrivers[module]; !found {
-			t.Errorf("module %q a un pilote par défaut mais n'est pas déclaré connu", module)
-		}
+	if !strings.Contains(problems[0].Error(), "quelconque") {
+		t.Errorf("le message doit nommer le module refusé: %v", problems[0])
 	}
 }
 
-// TestEveryDefaultDriverNeedsNoInfrastructure est le test qui tient la promesse
-// centrale de l'ADR 012.
-//
-// Tous les modules activés d'un coup, tous sur leur pilote par défaut : le résultat
-// doit n'exiger NI base, NI cache. Le jour où quelqu'un fait de `postgres` le défaut
-// d'un module — par commodité, parce que c'est le pilote le plus complet — ce test
-// échoue, et c'est le seul endroit qui s'en apercevra avant les utilisateurs.
-func TestEveryDefaultDriverNeedsNoInfrastructure(t *testing.T) {
+// TestADriverAbsentFromTheCatalogIsRefused : une faute de frappe dans un nom de
+// pilote ne se résout jamais en « le plus proche ».
+func TestADriverAbsentFromTheCatalogIsRefused(t *testing.T) {
 	t.Parallel()
 
-	all := Modules{}
-	for module := range knownDrivers {
-		all[module] = Module{Enabled: true}
+	catalog := ModuleCatalog{
+		"facturation": {Default: "memory", Drivers: map[string]Resources{"memory": {}}},
 	}
+	mods := Modules{"facturation": {Enabled: true, Driver: "memry"}}
 
-	if all.RequiresSQL() {
-		t.Error("les pilotes par défaut ne doivent exiger aucune base SQL")
+	problems := mods.validate(catalog)
+	if len(problems) != 1 {
+		t.Fatalf("un pilote inconnu doit produire exactement un refus, obtenu %d", len(problems))
 	}
-	if all.RequiresCache() {
-		t.Error("les pilotes par défaut ne doivent exiger aucun cache")
+	if !strings.Contains(problems[0].Error(), "memry") {
+		t.Errorf("le message doit citer le pilote fautif: %v", problems[0])
 	}
-	if problems := all.validate(); len(problems) > 0 {
-		t.Errorf("les pilotes par défaut doivent tous être admis: %v", problems)
+}
+
+// TestADisabledModuleIsNotValidated : on ne refuse pas le démarrage pour le
+// pilote d'un module que personne n'a activé.
+//
+// Sans ça, une configuration d'exemple laissée en place — module désactivé,
+// pilote `postgres` — empêcherait de démarrer sans base, ce qui contredirait
+// frontalement l'ADR 012.
+func TestADisabledModuleIsNotValidated(t *testing.T) {
+	t.Parallel()
+
+	catalog := ModuleCatalog{
+		"facturation": {Default: "memory", Drivers: map[string]Resources{"memory": {}}},
+	}
+	mods := Modules{"facturation": {Enabled: false, Driver: "un-pilote-qui-n-existe-pas"}}
+
+	if problems := mods.validate(catalog); len(problems) != 0 {
+		t.Errorf("un module désactivé ne doit pas être validé: %v", problems)
+	}
+}
+
+// TestResolveDoesNotMutateItsInput : Resolve est une fonction PURE.
+//
+// Elle rend une copie où les défauts sont posés. Si elle modifiait son entrée,
+// « appliquer les défauts » redeviendrait un effet caché — exactement ce que
+// l'ADR 014 déplace hors des accesseurs.
+func TestResolveDoesNotMutateItsInput(t *testing.T) {
+	t.Parallel()
+
+	catalog := ModuleCatalog{
+		"facturation": {Default: "memory", Drivers: map[string]Resources{"memory": {}}},
+	}
+	origine := Modules{"facturation": {Enabled: true}}
+
+	resolved := origine.Resolve(catalog)
+
+	if got := origine["facturation"].Driver; got != "" {
+		t.Errorf("Resolve a modifié son entrée: pilote devenu %q", got)
+	}
+	if got := resolved["facturation"].Driver; got != "memory" {
+		t.Errorf("le défaut du catalogue n'a pas été posé: %q", got)
+	}
+}
+
+// TestMergeCatalogsRefusesACollision : deux modules ne peuvent pas porter le
+// même nom.
+//
+// Le mode de défaillance évité est silencieux : l'un des deux se retrouverait
+// configuré par les pilotes de l'autre, et le premier symptôme serait un pilote
+// « inconnu » pour un module qui le déclare pourtant.
+func TestMergeCatalogsRefusesACollision(t *testing.T) {
+	t.Parallel()
+
+	un := ModuleCatalog{"facturation": {Default: "memory"}}
+	deux := ModuleCatalog{"facturation": {Default: "postgres"}}
+
+	if _, err := MergeCatalogs(un, deux); err == nil {
+		t.Fatal("un nom de module déclaré deux fois doit être refusé")
 	}
 }
 
@@ -193,40 +238,6 @@ func TestDeepMergeMergesNestedTables(t *testing.T) {
 	}
 	if db["dsn"] != "a" {
 		t.Errorf("dsn perdu lors de la fusion: %v", db["dsn"])
-	}
-}
-
-// TestModulesValidateRefusesUnknownDriver : deny par défaut jusque dans la
-// lecture de la configuration. Une faute de frappe ne se résout jamais en
-// « le pilote le plus proche ».
-func TestModulesValidateRefusesUnknownDriver(t *testing.T) {
-	t.Parallel()
-
-	problems := Modules{"outbox": {Enabled: true, Driver: "postgresql"}}.validate()
-	if len(problems) != 1 {
-		t.Fatalf("%d problème(s) signalé(s), attendu 1", len(problems))
-	}
-	if !strings.Contains(problems[0].Error(), "postgresql") {
-		t.Errorf("le message doit nommer le pilote fautif: %v", problems[0])
-	}
-}
-
-func TestModulesValidateRefusesUnknownModule(t *testing.T) {
-	t.Parallel()
-
-	if problems := (Modules{"blockchain": {Enabled: true}}).validate(); len(problems) != 1 {
-		t.Fatalf("%d problème(s), attendu 1", len(problems))
-	}
-}
-
-// TestModulesValidateIgnoresDisabledModules : on ne bloque pas un démarrage sur
-// la configuration d'une capacité qu'on n'utilise pas.
-func TestModulesValidateIgnoresDisabledModules(t *testing.T) {
-	t.Parallel()
-
-	problems := Modules{"outbox": {Enabled: false, Driver: "n-importe-quoi"}}.validate()
-	if len(problems) != 0 {
-		t.Errorf("un module désactivé ne doit rien signaler: %v", problems)
 	}
 }
 

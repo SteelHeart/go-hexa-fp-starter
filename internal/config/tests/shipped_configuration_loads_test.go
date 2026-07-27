@@ -11,7 +11,7 @@ import (
 func TestShippedConfigurationLoads(t *testing.T) {
 	withShippedConfig(t)
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
 		t.Fatalf("la configuration livrée doit charger: %v", err)
 	}

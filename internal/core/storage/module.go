@@ -26,6 +26,19 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "storage"
 
+// Noms des pilotes de ce module.
+//
+// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
+// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
+// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
+// une constante qui n'existe pas, un littéral mal orthographié passe.
+//
+// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
+// Il avait raison, et pour une raison plus forte que la sienne.
+const (
+	driverDisk = "disk"
+)
+
 // Valeurs par défaut du pilote disk.
 const (
 	defaultBaseDir = "var/storage"
@@ -58,7 +71,7 @@ func New(cfg config.Module, _ Deps) (Module, error) {
 	}
 
 	switch cfg.Driver {
-	case "disk":
+	case driverDisk:
 		return fromDisk(cfg)
 	default:
 		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)

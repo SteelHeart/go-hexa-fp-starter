@@ -22,6 +22,20 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "audit"
 
+// Noms des pilotes de ce module.
+//
+// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
+// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
+// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
+// une constante qui n'existe pas, un littéral mal orthographié passe.
+//
+// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
+// Il avait raison, et pour une raison plus forte que la sienne.
+const (
+	driverLog      = "log"
+	driverPostgres = "postgres"
+)
+
 // Module expose le port d'audit.
 type Module struct{ Record ports.Record }
 
@@ -55,9 +69,9 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 
 	switch cfg.Driver {
-	case "log":
+	case driverLog:
 		return newLog(deps)
-	case "postgres":
+	case driverPostgres:
 		return newPostgres(deps)
 	default:
 		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)

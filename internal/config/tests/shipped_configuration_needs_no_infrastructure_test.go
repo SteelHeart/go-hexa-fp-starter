@@ -12,14 +12,14 @@ import (
 func TestShippedConfigurationNeedsNoInfrastructure(t *testing.T) {
 	withShippedConfig(t)
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
 		t.Fatalf("chargement: %v", err)
 	}
-	if cfg.Modules.RequiresSQL() {
+	if cfg.Modules.RequiresSQL(shippedCatalog(t)) {
 		t.Error("la configuration livrée exige une base SQL : la promesse « zéro prérequis » est rompue")
 	}
-	if cfg.Modules.RequiresCache() {
+	if cfg.Modules.RequiresCache(shippedCatalog(t)) {
 		t.Error("la configuration livrée exige un cache : la promesse « zéro prérequis » est rompue")
 	}
 }

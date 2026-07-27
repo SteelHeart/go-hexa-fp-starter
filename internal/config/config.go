@@ -102,12 +102,12 @@ func (c *Config) applyDefaults() {
 
 // validate rassemble TOUTES les invalidités plutôt que de s'arrêter à la
 // première : corriger la configuration en six redémarrages est inacceptable.
-func (c Config) validate() error {
+func (c Config) validate(catalog ModuleCatalog) error {
 	problems := make([]error, 0, 4)
 	problems = append(problems, c.validateCore()...)
 	problems = append(problems, c.validateHardening()...)
 	problems = append(problems, c.Observability.validate()...)
-	problems = append(problems, c.Modules.validate()...)
+	problems = append(problems, c.Modules.validate(catalog)...)
 	problems = append(problems, c.Interop.validate()...)
 
 	if len(problems) > 0 {
