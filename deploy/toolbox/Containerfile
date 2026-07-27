@@ -1,0 +1,99 @@
+# syntax=docker/dockerfile:1.7
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Toolbox de développement — TOUT l'outillage, ZÉRO installation sur le poste
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Cette image n'est PAS l'application : `Dockerfile` à la racine produit le
+# binaire livré, distroless et non-root. Celle-ci produit l'ENVIRONNEMENT DE
+# TRAVAIL, et elle n'est jamais déployée.
+#
+# Ce qu'elle résout, concrètement : `rules/toolchain.md` §3 exige Go et Task sur
+# le poste, et `task tools` fait quatre `go install` dans le `GOPATH` de
+# l'utilisateur. Sur un poste où l'on ne veut RIEN installer, cette exigence
+# devient un blocage complet — pas une gêne : sans Go, aucune des six étapes de
+# `task check` ne démarre.
+#
+# La toolbox déplace l'installation dans une image. Le dépôt est monté, les
+# caches Go vivent dans des volumes, et le poste ne reçoit rien.
+#
+# ── Ce que l'image contient, et pourquoi chaque ligne y est ──────────────────
+#
+#   go 1.25.12   `golang:1.25-alpine` porte EXACTEMENT la version épinglée par
+#                go.mod. `GOTOOLCHAIN=auto` n'a donc rien à télécharger, ni au
+#                build ni à l'exécution — la friction F007 ne peut pas revenir
+#                par la bande.
+#
+#   gcc musl-dev CGO, donc `-race`. C'est la friction F005 : le détecteur de
+#                courses ne tournait qu'en CI faute de compilateur C sur le
+#                poste de référence Windows. Ici il tourne en local.
+#
+#   docker-cli   La toolbox PILOTE le moteur de conteneurs de l'HÔTE par sa
+#   + compose    socket, elle n'en embarque pas un second. C'est ce qui permet à
+#                `task up`, `task down` et `task logs` de fonctionner tels quels
+#                depuis l'intérieur, SANS modifier le Taskfile : la sous-commande
+#                `compose` est identique chez Docker et chez Podman, et Podman
+#                expose une API compatible Docker.
+#
+#   psql         `task db:provision` et `task db:verify` sont du psql pur. Sans
+#                lui, les invariants d'isolation de l'ADR 011 restent invérifiés
+#                en local, ce qui était précisément la friction F001.
+#
+#   git          `go build -buildvcs` et `task rename` (qui fait `git ls-files`).
+#
+# ── Reproductibilité — ce qui n'est PAS résolu ici ───────────────────────────
+#
+# Les quatre outils Go sont en `latest`, comme dans `Taskfile.yml`. C'est la
+# friction F004, et cette image ne la corrige pas : elle la DÉPLACE d'un poste
+# vers une image, ce qui la rend au moins reproductible entre deux postes ayant
+# le même identifiant d'image. Les `ARG` ci-dessous existent pour que le jour du
+# gel (première release, `rules/dependances.md` §5) soit un changement d'une
+# ligne, pas une réécriture.
+
+FROM docker.io/library/golang:1.25-alpine
+
+# Versions de l'outillage. `latest` tant que le socle n'a pas publié sa première
+# version — voir le paragraphe « Reproductibilité » ci-dessus.
+ARG TASK_VERSION=latest
+ARG GOLANGCI_LINT_VERSION=latest
+ARG ARCH_GO_VERSION=latest
+ARG GOOSE_VERSION=latest
+ARG GOVULNCHECK_VERSION=latest
+
+# `postgresql17-client` et non `postgresql-client` : la version suit celle de
+# l'image Postgres de `docker-compose.yml`. Un psql plus ancien que le serveur
+# refuse certaines commandes de méta-données, et l'erreur ne nomme pas la cause.
+RUN apk add --no-cache \
+        bash \
+        ca-certificates \
+        curl \
+        docker-cli \
+        docker-cli-compose \
+        gcc \
+        git \
+        musl-dev \
+        openssl \
+        postgresql17-client
+
+# Un seul `RUN` : chaque `go install` télécharge son propre graphe de modules, et
+# les empiler en couches distinctes conserverait quatre fois les sources.
+RUN go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION} \
+ && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} \
+ && go install github.com/arch-go/arch-go@${ARCH_GO_VERSION} \
+ && go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION} \
+ && go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} \
+ && rm -rf /root/.cache/go-build
+
+# Le dépôt est MONTÉ ici, jamais copié : une image qui embarquerait le code
+# obligerait à la reconstruire à chaque édition.
+WORKDIR /src
+
+# `git` refuse d'opérer sur un dépôt dont le propriétaire diffère de l'appelant.
+# En rootless, l'UID 0 du conteneur est l'utilisateur de l'hôte, donc la
+# propriété est correcte — mais git ne peut pas le savoir depuis l'intérieur.
+RUN git config --global --add safe.directory /src
+
+# La socket du moteur de l'hôte est montée ici par `tb`.
+ENV DOCKER_HOST=unix:///var/run/docker.sock
+
+CMD ["bash"]
