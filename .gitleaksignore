@@ -1,0 +1,27 @@
+# Exceptions gitleaks — CHACUNE porte son motif écrit. Sans motif, l'exception
+# suivante s'ajoutera sans justification et le garde cessera de garder.
+#
+# Une entrée ici ne dit PAS « ce secret est acceptable ». Elle dit « ceci n'est
+# pas un secret, et voici pourquoi on peut le vérifier ».
+#
+# Format : une empreinte par ligne — {commit}:{fichier}:{règle}:{ligne}
+
+# ── Clé de chiffrement figée dans l'ancien bloc `env` du job e2e ─────────────
+#
+# Ce n'EST PAS un secret. La valeur décode en 32 octets de `0123456789abcdef`
+# répété : une clé de remplissage manifestement fausse, exactement ce que
+# rules/securite.md §3 exige d'un exemple. gitleaks la classe en
+# `generic-api-key` par ENTROPIE, sans pouvoir constater qu'elle est factice.
+#
+# Elle ne chiffrait que des données créées et détruites dans le même job, et
+# n'était référencée nulle part ailleurs — vérifié sur l'ensemble des fichiers
+# suivis. Aucune rotation n'est requise, et il n'y a rien à révoquer.
+#
+# Elle a été RETIRÉE de HEAD : le job la génère désormais par
+# `openssl rand -base64 32`. L'exception ne couvre donc que l'occurrence
+# HISTORIQUE, dans un commit déjà public — la réécrire coûterait une réécriture
+# d'historique partagé pour une valeur qui n'a aucune valeur.
+#
+# Le jour où cette empreinte ne correspond plus à rien, la retirer : une
+# exception qui ne protège plus rien masque la suivante.
+e80f567782dd525aa2a7689d5f8897a394f7d108:.github/workflows/ci.yml:generic-api-key:326
