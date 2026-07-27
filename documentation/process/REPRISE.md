@@ -65,6 +65,30 @@ task check                              # fmt · vet · lint · arch · test · 
 La chaîne d'outils Go **n'est pas à installer** : `go.mod` épingle `go 1.25.12` et `GOTOOLCHAIN=auto`
 la télécharge. La correction vit dans le dépôt, donc elle vaut pour chaque poste et pour la CI.
 
+### Poste où l'on ne veut RIEN installer — la toolbox
+
+Ces cinq commandes supposent Go et Task présents. Sur un poste qui n'en a aucun — et qui ne doit
+rien recevoir — tout passe par [`deploy/toolbox/`](../../deploy/toolbox/README.md) :
+
+```bash
+git config core.hooksPath .githooks
+systemctl --user enable --now podman.socket   # une fois, pour `task up`
+cp .env.example .env                          # puis la clé, voir ci-dessous
+./deploy/toolbox/tb task check                # construit l'image au premier appel
+```
+
+`tb` est le **seul** script qui s'exécute sur la machine. Go, Task, les linters, goose et psql
+vivent dans une image ; le dépôt y est monté. Le `Taskfile` n'a pas été modifié pour autant : la
+toolbox pilote le moteur de conteneurs de l'hôte par sa socket, et `docker compose` y désigne
+Podman.
+
+**Vérifié de bout en bout sous WSL + Podman rootless le 2026-07-27**, code de retour 0 à chaque
+étape : `task check` (les six), `task test:race`, `task up` (pile, rôles, migrations, invariants
+ADR 011), `task run` puis le `curl` du §1.
+
+C'est ce qui referme **F001** (Docker absent) et **F005** (`-race` hors CI). Et **F008** ne se pose
+plus : sous WSL, il n'y a pas de dossier protégé par Windows Defender.
+
 ### Une seule variable est obligatoire
 
 `SECURITY_ENCRYPTION_KEY` — 32 octets en base64, exactement. Le socle impose AES-256 et **refuse de
