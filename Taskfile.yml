@@ -133,6 +133,170 @@ tasks:
       - task: test
       - task: vuln
 
+  # ── La barrière complète, hors GitHub ───────────────────────────────────────
+  #
+  # `task check` couvre 4 des 12 jobs de la CI. L'écart — migrations, e2e,
+  # compilation croisée, secrets, images — est PRÉCISÉMENT là où tous les défauts
+  # récents se sont logés, parce que rien ne les exécutait.
+  #
+  # `task ci` referme cet écart. Elle rejoue 10 jobs sur 12 dans la toolbox.
+  #
+  # ⚠️ CE N'EST PAS UNE GARDE. Elle s'exécute sur la machine de l'auteur, et
+  # l'auteur peut ne pas la lancer. C'est un INSTRUMENT DE MESURE reproductible,
+  # pas un contrôle — la même distinction que `rules/toolchain.md` §4 fait entre
+  # le crochet local et le ruleset serveur. Tant que la CI ne démarre pas (#47),
+  # fusionner reste une décision DOCUMENTÉE, jamais un gate franchi.
+  #
+  # Ce qu'elle ne couvre pas, et pourquoi :
+  #   pr-title  le titre n'existe qu'au niveau de la PR — `task ci:pr-title -- "…"`
+  #   inertia   exige les SHA base/head de la PR — `task ci:inertia -- <base>`
+  ci:
+    desc: "Rejoue hors GitHub la barrière de la CI — 10 jobs sur 12"
+    cmds:
+      - task: check
+      - task: ci:build
+      - task: ci:secrets
+      - task: ci:migrations
+      - task: ci:e2e
+      - task: ci:images
+      - cmd: |
+          echo ""
+          echo "  task ci : toutes les étapes ont rendu 0."
+          echo "  NON couverts : pr-title, inertia (contexte de PR) — voir task --list-all"
+
+  ci:build:
+    desc: "Compilation croisée — la matrice exacte du job build"
+    cmds:
+      - cmd: |
+          set -e
+          for pair in linux/amd64 linux/arm64 darwin/arm64 windows/amd64; do
+            os=${pair%/*}; arch=${pair#*/}
+            printf '  build %-14s' "$pair"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags="-s -w" -o "{{.BIN}}/$os-$arch/" ./cmd/...
+            echo " ok"
+          done
+
+  ci:secrets:
+    desc: "gitleaks sur l'historique complet — le job « Fuite de secrets »"
+    cmds:
+      # --exit-code 1 est explicite : le défaut de gitleaks a déjà changé, et un
+      # scanner qui rend 0 sur une fuite est pire que pas de scanner.
+      - gitleaks detect --source=. --redact --no-banner --exit-code 1
+
+  ci:migrations:
+    desc: "Le job « Migrations & isolation » en entier, Down et refus compris"
+    cmds:
+      - task: up
+      # Un Down faux est PIRE que pas de Down : il rassure au moment précis où
+      # l'on en a besoin. La seule façon de savoir qu'il marche est de l'exécuter.
+      - task: migrate:down
+      - task: migrate:up
+      - task: db:verify
+      # Les deux refus de l'ADR 011 se CONSTATENT. Un test qui vérifie qu'une
+      # chose est interdite doit voir le refus, pas l'absence de tentative.
+      - cmd: |
+          set -e
+          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+               -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
+            echo "  ADR 011 violée : le rôle applicatif a pu créer une table" >&2; exit 1
+          fi
+          echo "  refus confirmé : pas de DDL pour le rôle applicatif"
+          psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q -c \
+            "INSERT INTO platform.audit_log (actor, action, entity_type, entity_id, occurred_at)
+             VALUES ('ci-local', 'test.executed', 'run', '1', now());"
+          for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" "DELETE FROM platform.audit_log"; do
+            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+                 -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
+              echo "  ADR 011 violée : le journal d'audit a accepté « $sql »" >&2; exit 1
+            fi
+          done
+          echo "  refus confirmé : journal d'audit en ajout seul"
+
+  ci:e2e:
+    desc: "Le job e2e — serveur démarré, tag e2e, et les tests COMPTÉS"
+    env:
+      E2E_BASE_URL: http://localhost:8080
+    cmds:
+      - cmd: |
+          set -e
+          go run ./cmd/server > /tmp/hexa-e2e-server.log 2>&1 &
+          srv=$!
+          trap 'kill $srv 2>/dev/null || true' EXIT
+          if ! curl --retry 60 --retry-delay 1 --retry-connrefused -fsS "$E2E_BASE_URL/healthz" >/dev/null; then
+            echo "  le serveur n'a pas démarré :" >&2; cat /tmp/hexa-e2e-server.log >&2; exit 1
+          fi
+          go test -tags=e2e -count=1 -v -timeout=5m ./tests/e2e/... > /tmp/hexa-e2e.log 2>&1
+          code=$?
+          # LE piège de ce dépôt : sans le tag, zéro test compile et `ok` s'affiche.
+          # Un compte nul doit donc échouer, pas passer.
+          runs=$(grep -c '^=== RUN' /tmp/hexa-e2e.log || true)
+          grep -E '^(--- PASS|--- FAIL|ok|FAIL)' /tmp/hexa-e2e.log | sed 's/^/  /'
+          echo "  tests réellement exécutés : $runs"
+          if [ "$runs" -eq 0 ]; then
+            echo "  FAUX VERT : aucun test e2e exécuté" >&2; exit 1
+          fi
+          exit $code
+
+  ci:images:
+    desc: "Construit les deux images livrées — le job docker"
+    cmds:
+      # Le contexte est `.`, et c'est bien le chemin vu par le CONTENEUR — pas
+      # celui de l'hôte. La distinction n'est pas intuitive et coûte un
+      # diagnostic si on la prend à l'envers :
+      #
+      #   docker build <ctx>   le CLIENT empaquette le répertoire et le transmet
+      #                        → chemin côté client, donc /src
+      #   docker run -v a:b    le MOTEUR résout le montage
+      #                        → chemin côté hôte, donc $HEXA_HOST_ROOT
+      #
+      # Pris à l'envers, le message est « path not found » sur un chemin qui
+      # existe pourtant — sous les yeux, mais pas dans le bon espace de noms.
+      - cmd: |
+          set -e
+          for c in server worker; do
+            printf '  image %-8s' "$c"
+            docker build -q --build-arg CMD="$c" -t "localhost/hexa-$c:ci" . >/dev/null
+            echo " ok"
+          done
+
+  ci:pr-title:
+    desc: 'Le job pr-title : task ci:pr-title -- "feat(scope): description"'
+    cmds:
+      - cmd: |
+          titre='{{.CLI_ARGS}}'
+          if echo "$titre" | grep -Eq '^(feat|fix|sec|refactor|test|docs|perf|ci|chore|build)(\([a-z0-9_-]+\))?!?: .+'; then
+            echo "  titre conforme : $titre"
+          else
+            echo "  titre NON conforme : $titre" >&2
+            echo "  attendu : {type}({scope}): {description}" >&2
+            exit 1
+          fi
+
+  ci:inertia:
+    desc: 'Le job inertia : task ci:inertia -- <ref-de-base>'
+    cmds:
+      - cmd: |
+          base='{{.CLI_ARGS}}'
+          [ -n "$base" ] || { echo "  usage : task ci:inertia -- <ref-de-base>" >&2; exit 1; }
+          motif='Co-Authored-By:.*(claude|copilot|cursor|gpt|gemini|codex)|Generated with|Co-authored-by:.*noreply@anthropic'
+          fail=0
+          if git log --format='%B' "$base..HEAD" | grep -Eiq "$motif"; then
+            echo "  mention d'outillage d'assistance dans un message de commit" >&2; fail=1
+          fi
+          if git diff "$base" HEAD -- . | grep -E '^\+' | grep -Eiq "$motif"; then
+            echo "  mention d'outillage d'assistance dans le diff" >&2; fail=1
+          fi
+          [ "$fail" -eq 0 ] && echo "  aucune mention d'outillage d'assistance"
+          zones=$(git diff --name-only "$base" HEAD | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
+          if [ -n "$zones" ]; then
+            echo "  zones à haute inertie touchées — ADR ou label inertia:justified exigé :"
+            echo "$zones" | sed 's/^/    /'
+          else
+            echo "  aucune zone à haute inertie touchée"
+          fi
+          exit "$fail"
+
   fmt:
     desc: Formate le code
     cmds:

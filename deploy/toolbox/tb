@@ -75,8 +75,18 @@ fi
 # En rootless, l'UID 0 du conteneur EST l'utilisateur de l'hôte : les fichiers
 #   produits dans le dépôt (coverage.out, bin/) lui appartiennent normalement.
 # shellcheck disable=SC2086
+# HEXA_HOST_ROOT : le chemin du dépôt vu par l'HÔTE, pas par le conteneur.
+#   Nécessaire pour tout `docker run -v` lancé DEPUIS la toolbox : c'est le
+#   MOTEUR qui résout un montage, donc côté hôte. `$PWD` vaudrait /src, un
+#   chemin qui n'existe pas là-bas, et l'erreur ne dirait pas pourquoi.
+#
+#   ⚠️ L'inverse vaut pour `docker build <contexte>` : c'est le CLIENT qui
+#   empaquette le répertoire et le transmet, donc le chemin est celui du
+#   CONTENEUR. Confondre les deux donne un « path not found » sur un chemin
+#   qui existe — mais dans l'autre espace de noms.
 exec "$ENGINE" run --rm $TTY \
     --network host \
+    -e HEXA_HOST_ROOT="$ROOT" \
     -v "$ROOT:/src" \
     -v hexa-toolbox-gomod:/go/pkg/mod \
     -v hexa-toolbox-gobuild:/root/.cache/go-build \
