@@ -44,7 +44,7 @@ func TestRequiresSQL(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := tc.modules.RequiresSQL(); got != tc.want {
+			if got := tc.modules.RequiresSQL(shippedCatalog(t)); got != tc.want {
 				t.Errorf("RequiresSQL() = %v, attendu %v", got, tc.want)
 			}
 		})

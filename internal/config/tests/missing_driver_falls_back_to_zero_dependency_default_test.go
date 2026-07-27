@@ -24,7 +24,7 @@ func TestMissingDriverFallsBackToZeroDependencyDefault(t *testing.T) {
 		t.Run(module, func(t *testing.T) {
 			t.Parallel()
 			modules := config.Modules{module: {Enabled: true}}
-			if got := modules.DriverOf(module); got != want {
+			if got := modules.Resolve(shippedCatalog(t)).DriverOf(module); got != want {
 				t.Errorf("pilote par défaut de %s = %q, attendu %q", module, got, want)
 			}
 		})

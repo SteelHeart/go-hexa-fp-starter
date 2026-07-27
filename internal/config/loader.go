@@ -66,7 +66,16 @@ func Dir() string {
 //  4. ${VAR} dans les valeurs secrets, depuis l'environnement d'exécution
 //
 // Les secrets ne sont dans AUCUN fichier : seulement référencés.
-func Load() (Config, error) {
+// Load lit la configuration et la valide CONTRE LE CATALOGUE reçu.
+//
+// Le catalogue vient du composition root, qui fusionne celui de chaque module
+// monté — noyau comme métier (ADR 014). Il n'y a aucune table de modules dans ce
+// paquet : ce qui n'est pas monté n'est pas configurable.
+//
+// Passer un catalogue vide fait refuser toute déclaration de module. C'est le
+// comportement voulu, et c'est ce qui rend l'oubli du catalogue bruyant plutôt
+// que permissif.
+func Load(catalog ModuleCatalog) (Config, error) {
 	dir := Dir()
 	env := os.Getenv(EnvVarAppEnv)
 	if env == "" {
@@ -97,7 +106,10 @@ func Load() (Config, error) {
 	}
 
 	cfg.applyDefaults()
-	if err := cfg.validate(); err != nil {
+	// Les défauts de pilote sont résolus AVANT la validation, pour que le message
+	// d'erreur nomme le pilote réellement retenu et non une chaîne vide.
+	cfg.Modules = cfg.Modules.Resolve(catalog)
+	if err := cfg.validate(catalog); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil

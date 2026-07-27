@@ -25,6 +25,21 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "idempotency"
 
+// Noms des pilotes de ce module.
+//
+// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
+// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
+// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
+// une constante qui n'existe pas, un littéral mal orthographié passe.
+//
+// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
+// Il avait raison, et pour une raison plus forte que la sienne.
+const (
+	driverMemory   = "memory"
+	driverPostgres = "postgres"
+	driverRedis    = "redis"
+)
+
 // defaultTTL est la fenêtre pendant laquelle un rejeu est reconnu.
 //
 // Vingt-quatre heures couvre le cas qui motive le module : un mobile hors réseau
@@ -84,14 +99,14 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 
 	switch cfg.Driver {
-	case "memory":
+	case driverMemory:
 		return fromMemory(memory.New(ttl, deps.Now)), nil
-	case "postgres":
+	case driverPostgres:
 		if deps.Pool == nil {
 			return Module{}, ErrPoolRequired
 		}
 		return fromPostgres(postgres.New(deps.Pool, ttl)), nil
-	case "redis":
+	case driverRedis:
 		return withRedis(cfg, deps, ttl)
 	default:
 		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)

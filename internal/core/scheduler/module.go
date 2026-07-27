@@ -33,6 +33,20 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "scheduler"
 
+// Noms des pilotes de ce module.
+//
+// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
+// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
+// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
+// une constante qui n'existe pas, un littéral mal orthographié passe.
+//
+// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
+// Il avait raison, et pour une raison plus forte que la sienne.
+const (
+	driverCronInproc   = "cron-inproc"
+	driverAdvisoryLock = "advisory-lock"
+)
+
 // Run lance l'ordonnanceur jusqu'à l'annulation du contexte.
 //
 // Déclaré ici et non dans `ports/` parce qu'il nomme `application.Scheduled` : les
@@ -116,10 +130,10 @@ type election struct {
 // elector choisit le mécanisme d'élection.
 func elector(cfg config.Module, deps Deps) (election, error) {
 	switch cfg.Driver {
-	case "cron-inproc":
+	case driverCronInproc:
 		local := inproc.New()
 		return election{acquire: local.Acquire, release: local.Release}, nil
-	case "advisory-lock":
+	case driverAdvisoryLock:
 		if deps.Pool == nil {
 			return election{}, ErrPoolRequired
 		}

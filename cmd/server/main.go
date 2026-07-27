@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/core"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
@@ -65,7 +66,16 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.Load()
+	// Le catalogue AVANT la configuration : c'est lui qui dit ce que la
+	// configuration a le droit de nommer (ADR 014). Aucune table de modules ne
+	// vit dans `internal/config` — elle y nommerait des modules, ce que la
+	// règle 7 d'`arch-go` lui interdit.
+	catalog, err := moduleCatalog()
+	if err != nil {
+		return fmt.Errorf("catalogue des modules: %w", err)
+	}
+
+	cfg, err := config.Load(catalog)
 	if err != nil {
 		return fmt.Errorf("configuration: %w", err)
 	}
@@ -199,4 +209,24 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// moduleCatalog assemble ce que la configuration a le droit de nommer.
+//
+// Le noyau apporte le sien ; ce binaire y ajoute celui de chaque module métier
+// qu'il embarque. Aucun fichier du framework ne nomme un module métier — c'est
+// très exactement la friction que l'ADR 014 supprime.
+func moduleCatalog() (config.ModuleCatalog, error) {
+	coreCatalog, err := core.Catalog()
+	if err != nil {
+		return nil, fmt.Errorf("catalogue du noyau: %w", err)
+	}
+	merged, err := config.MergeCatalogs(
+		coreCatalog,
+		userregistration.Catalog(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("fusion des catalogues: %w", err)
+	}
+	return merged, nil
 }

@@ -22,6 +22,20 @@ import (
 // Name est le nom du module dans config/modules.yaml.
 const Name = "dynconf"
 
+// Noms des pilotes de ce module.
+//
+// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
+// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
+// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
+// une constante qui n'existe pas, un littéral mal orthographié passe.
+//
+// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
+// Il avait raison, et pour une raison plus forte que la sienne.
+const (
+	driverFile     = "file"
+	driverPostgres = "postgres"
+)
+
 // defaultTTL borne la fraîcheur du cache du pilote postgres.
 //
 // Trente secondes est le compromis : assez court pour qu'un drapeau éteint en
@@ -68,9 +82,9 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 
 	switch cfg.Driver {
-	case "file":
+	case driverFile:
 		return fromFile(cfg)
-	case "postgres":
+	case driverPostgres:
 		return fromPostgres(cfg, deps)
 	default:
 		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, cfg.Driver)

@@ -115,6 +115,23 @@ modules:
 #
 # Passer un module de `inproc` à `http`, c'est l'extraire en service sans
 # changer une ligne de code. C'est le premier pas vers les microservices.
+  # ── Modules MÉTIER ──────────────────────────────────────────────────────────
+  #
+  # Ils se déclarent ici exactement comme les modules noyau, et c'est le sens de
+  # l'ADR 014. Avant elle, ce bloc faisait REFUSER le démarrage avec
+  # `modules.user_registration : module inconnu` : la seule table de modules
+  # vivait dans `internal/config/modules.go`, un fichier du framework.
+  #
+  # Écrire son propre module `billing` demande la même chose : un `catalog.go`
+  # chez soi, une ligne dans le composition root, ce bloc ici. Aucun fichier du
+  # socle à modifier.
+
+  # Inscription d'un compte. TRANCHE DE RÉFÉRENCE du socle, pas « l'application ».
+  # memory : perdu au redémarrage, local au processus
+  user_registration:
+    enabled: true
+    driver: memory
+
 interop:
   default_transport: inproc
   call_timeout: 5s

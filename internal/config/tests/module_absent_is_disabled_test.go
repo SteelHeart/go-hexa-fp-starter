@@ -11,7 +11,9 @@ import (
 func TestModuleAbsentIsDisabled(t *testing.T) {
 	t.Parallel()
 
-	got := config.Modules{}.Get("outbox")
+	// Resolve est l'étape qui pose les défauts, et elle est EXPLICITE depuis
+	// l'ADR 014 : le catalogue vient du composition root, pas d'une table cachée.
+	got := config.Modules{}.Resolve(shippedCatalog(t)).Get("outbox")
 	if got.Enabled {
 		t.Error("un module absent de la configuration doit être désactivé")
 	}
