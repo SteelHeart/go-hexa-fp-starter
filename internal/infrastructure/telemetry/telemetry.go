@@ -105,7 +105,7 @@ func (h *traceHandler) WithGroup(name string) slog.Handler {
 
 // Setup installe les fournisseurs de traces et de métriques.
 //
-// Désactivée, la fonction retourne un arrêt inerte : le code appelant n'a pas Ã
+// Désactivée, la fonction retourne un arrêt inerte : le code appelant n'a pas à
 // savoir si la télémétrie est active, et les no-op providers d'OpenTelemetry
 // rendent tout appel gratuit.
 func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {

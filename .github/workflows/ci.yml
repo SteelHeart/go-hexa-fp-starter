@@ -225,6 +225,30 @@ jobs:
           fi
           echo "refus confirmé sur tools/testdata/isolation-violation"
 
+      # ── Hygiène des déclarations de build (#66) ─────────────────────────────
+      # Deux propriétés que rien ne tenait, et dont la violation ne produit
+      # AUCUN message : la version de Go déclarée à trois endroits, et
+      # l'encodage des fichiers suivis.
+      - name: Version de Go cohérente aux trois déclarations
+        run: ./tools/verifie-version-de-go.sh
+
+      - name: Ce garde-là sait échouer
+        run: |
+          t=tools/testdata/version-de-go-divergente
+          if ./tools/verifie-version-de-go.sh \
+               "$t/go.mod.temoin" "$t/Dockerfile.temoin" "$t/Containerfile.temoin" \
+               >/dev/null 2>&1; then
+            echo "::error::le témoin de divergence est passé — le garde ne garde plus"
+            exit 1
+          fi
+          echo "refus confirmé sur $t"
+
+      - name: Encodage — ni BOM, ni accent doublement encodé
+        run: ./tools/verifie-encodage.sh
+
+      - name: Celui-là aussi sait échouer
+        run: ./tools/verifie-encodage.sh --temoin
+
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
   # ───────────────────────────────────────────────────────────────────────────

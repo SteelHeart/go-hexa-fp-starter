@@ -1,4 +1,4 @@
-﻿# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Build : cache des modules séparé du cache de compilation pour que la
@@ -13,7 +13,7 @@ ARG TARGETARCH=amd64
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
-# Binaire Ã  produire : server (défaut) ou worker.
+# Binaire à produire : server (défaut) ou worker.
 ARG CMD=server
 
 WORKDIR /src
