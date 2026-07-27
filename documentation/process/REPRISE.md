@@ -138,41 +138,71 @@ Attendu, et constaté depuis un clone neuf : **201**, identifiant **UUID v7**, a
 mot de passe trop court rend **422** portant le message du **domaine**, en français. `/healthz` et
 `/readyz` rendent 200. Aucun service externe n'a été lancé.
 
-## 2. Où en est le travail
+## 2. Où en est le travail — état du 2026-07-27
+
+### La CI a tourné pour la PREMIÈRE fois, et elle est verte
+
+**13 jobs, tous verts.** C'était la 67ᵉ exécution du dépôt : les 66 précédentes rendaient
+`startup_failure` en 0 seconde, depuis le tout premier commit. Cause : un verrou de facturation sur
+le compte, levé depuis. Issue #47, close.
+
+```
+✓ Format, vet & lint   ✓ Guardrails d'architecture   ✓ Tests unitaires
+✓ Migrations & isolation   ✓ Tests end-to-end   ✓ Fuite de secrets
+✓ 4 builds croisés   ✓ 2 images   ✓ govulncheck   ✓ CI (gate)
+```
+
+> ⚠️ **La CI ne garde pas encore les PR de la pile.** `ci.yml` se déclenche sur
+> `pull_request: branches: [main]`, or nos PR visent `refactor/21-modules-a-pilotes` :
+> `no checks reported`. Vérifié. À corriger avant de compter dessus.
 
 ### Branche courante
 
-`refactor/21-modules-a-pilotes`, poussée. Base : `refactor/19-module-noyau-metier`
-(PR [#20](https://github.com/SteelHeart/go-hexa-fp-starter/pull/20), **non fusionnée**).
+`refactor/21-modules-a-pilotes`, poussée, **9 commits ajoutés le 2026-07-27** :
 
-`main` ne contient donc **ni** le renommage `features` → `modules`, **ni** la configuration par
-fichiers. **Fusionner #20 avant tout travail parti de `main`.**
+| Commit | Sujet |
+|---|---|
+| `fix(ci)` | garde d'isolation des schémas — il rendait 9 faux positifs (#40) |
+| `docs(adr)` | ADR 013 : un garde est livré avec le cas qui le fait échouer (#41) |
+| `docs(tech)` | `parite-frameworks.md` remis en accord avec le réel (#42) |
+| `fix(ci)` | clé de chiffrement figée dans `ci.yml` (#50) |
+| `chore(ci)` | `task ci` — la barrière hors GitHub, 10 jobs sur 12 (#51) |
+| `fix(ci)` | `task rename` laissait le chemin de module derrière lui (#48) |
+| `fix(data)` | **la chaîne de migration ne s'exécutait nulle part** (#39) |
+| `chore(toolbox)` | l'outillage en conteneur, rien sur le poste (#38) |
+| `fix(ci)` | crochets git rendus exécutables, donc actifs (#43) |
 
-### 🔴 Quatre commits poussés portent de mauvais numéros d'issue
+Base : `refactor/19-module-noyau-metier` (PR #20, **non fusionnée**). `main` ne contient toujours
+ni le renommage `features` → `modules`, ni la configuration par fichiers.
 
-Ils fermeraient des issues **non terminées** à la fusion. L'historique n'a pas été réécrit — il est
-poussé — donc la correction se fait dans le **corps de la PR**, ou en écrasant à la fusion.
+### Ce que ces neuf commits ont réparé
 
-| Commit | Écrit | Devrait être | Conséquence si rien n'est fait |
-|---|---|---|---|
-| `1c1e4d6` migrations, schéma `platform` | `Closes #2` | `Closes #5` | **ferme la porte de sortie de phase 0**, qui est ouverte |
-| `2180e67` dépileur d'outbox | `Closes #10` | `Closes #9` | ferme « composition root des **trois** binaires » alors que `cmd/cli` n'existe pas |
-| `24d9038` tranche verticale | `Refs #5 #8` | `Refs #7 #10` | pointe l'adaptateur **CLI**, qui n'existe pas |
-| `3c8b350` surface HTTP | `Refs #5` | `Refs #7` | trace fausse, sans effet mécanique |
+Huit gardes existaient **et aucun ne fonctionnait**. La liste complète et datée est dans l'ADR 013 ;
+les plus coûteux :
 
-Une table de traçabilité est publiée en commentaire sur #2 et #10.
+- la **chaîne de migration** échouait dès sa première commande, en local comme en CI. Quatre
+  défauts en cascade, chacun masqué par le précédent ;
+- les **crochets git** étaient versionnés en `100644`, donc ignorés par git sur toutes les machines ;
+- le **niveau `e2e`** exécutait zéro test en affichant `ok`.
 
-### Ce qui vient d'être fait
+### 🔴 Quatre commits poussés portent toujours de mauvais numéros d'issue
 
-- **Un fichier par fonction publique**, appliqué au code : `middleware` (1→8), `security` (1→4),
-  `config` (1→9), `messaging` (2→7). L'API ne change pas. Le fichier qui garde le nom du paquet
-  porte le **langage** du paquet et une **carte des fichiers** en tête.
-- **58 tests ajoutés** sur `middleware`, `messaging`, `modulebus`, `httpserver`, `telemetry`.
-- **Trois défauts trouvés en les écrivant**, chacun un incident évité : le limiteur de débit ne
-  limitait rien ; `/readyz` pouvait publier la chaîne de connexion de la base ; un arrêt de
-  télémétrie réussi remontait une erreur.
-- **Les cliquets de couverture sont réparés** — voir § 4, c'est le point le plus facile à mal
-  relire.
+Inchangé. Ils fermeraient des issues **non terminées** à la fusion. L'historique est poussé : la
+correction se fait dans le **corps de la PR**, ou en écrasant à la fusion.
+
+| Commit | Écrit | Devrait être |
+|---|---|---|
+| `1c1e4d6` migrations, schéma `platform` | `Closes #2` | `Closes #5` |
+| `2180e67` dépileur d'outbox | `Closes #10` | `Closes #9` |
+| `24d9038` tranche verticale | `Refs #5 #8` | `Refs #7 #10` |
+| `3c8b350` surface HTTP | `Refs #5` | `Refs #7` |
+
+### Deux PR ouvertes
+
+| PR | État |
+|---|---|
+| **#60** `docs(produit)` personas, périmètre, matrice par version | **En attente de validation** — elle grave qui on sert et ce qu'on ne fera jamais. À ne pas fusionner seul |
+| **#20** `refactor(cadre)` features → modules | Non fusionnée, `main` très en retard |
 
 ## 3. Comment lire un garde — la seule habitude qui compte
 
@@ -223,33 +253,42 @@ code jusque-là non couvert.
 
 ## 5. Prochaines actions techniques, dans l'ordre
 
-1. **#2 — tag `v0.1.0`.** `task check` est vert de bout en bout, code de retour 0, cliquets compris.
-   **Plus rien ne bloque dans le dépôt** : le seul obstacle était F008, environnemental, et un poste
-   neuf hors dossier protégé le supprime.
-2. **Fusionner PR #20**, puis cette branche — en traitant d'abord les mauvais numéros d'issue (§ 2).
-3. **#37 — niveau de test `integration`.** Huit paquets de pilotes plus `cache` ont **zéro test, à
-   aucun niveau** : le tag `integration` n'est porté par **aucun fichier** du dépôt et la CI n'a pas
-   de job `integration`. Le pilote `memory` d'`idempotency` a 24 tests prouvant l'exclusivité ; le
-   pilote `postgres`, celui qui tournera en production, en a zéro. Exige Docker (F001), donc CI ou
-   WSL.
-4. **Trancher la déclaration des pilotes d'un module métier** avant d'écrire `hexa new` — voir
-   [`CLAUDE.md`](../../CLAUDE.md) § « Point de conception OUVERT ». Faire modifier un fichier du
-   framework pour déclarer le pilote de son propre module est exactement la friction qu'un framework
-   ne doit pas avoir.
-5. **#13** — brancher les sinks d'observabilité. `telemetry.Setup` n'est appelée **nulle part** : la
-   configuration existe, le câblage non.
+1. **#58 — le garde `inertia` signale `.githooks/commit-msg`**, le fichier qui *porte* la règle.
+   **Bloquera la fusion vers `main`** — mesuré, pas supposé. Il lui faut une liste d'exclusion
+   nommée et motivée (ADR 013 § modalité 4).
+2. **Faire déclencher la CI sur les PR de la pile** — `branches: [main]` les exclut aujourd'hui.
+3. **Classer les 75 paquets en public / interne.** Préalable à #16, **ne déplace aucun fichier**,
+   et irréversible une fois publié : extraire 530 identifiants exportés sans les classer publierait
+   une API par accident.
+4. **#8 — deuxième surface CLI.** Prouve la promesse « N frontends », qui n'a qu'**une** instance,
+   et livre l'équivalent d'`artisan`.
+5. **#37 — tests d'intégration** des 8 paquets de pilotes, débloqué par la toolbox.
+6. **#13 — brancher `telemetry.Setup`**, appelée nulle part : l'observabilité n'existe pas.
 
 ## 6. Ce qui attend une décision — et qui ne se prend pas seul
 
-Ces points ne sont pas des tâches en attente d'exécution : ce sont des **arbitrages**. Les trancher
-sans les poser reviendrait à graver une décision de produit dans du code.
+Le **cadrage produit** existe désormais : [`documentation/produit/personas.md`](../produit/personas.md),
+en PR #60. Cinq personas, dont **P1 primaire — l'équipe produit d'ImpactOne, confirmée** — et une
+persona **refusée**. Une grille de 16 questions sourcée : **10 verdicts rouges sur 16**. Une matrice
+persona × version.
 
-| Réf | Question |
+Deux conclusions à ne pas reperdre :
+
+- **`v1.0` se définit par trois mots : « sans le modifier ».** Tant qu'ajouter un module métier
+  exige de toucher `internal/config/config.go` et `internal/config/modules.go`, il n'y a pas de
+  version 1, quel que soit le nombre de modules livrés.
+- **P1 est bloquée sur trois points** : créer un module, brancher un module, configurer un module.
+
+| Réf | Question ouverte |
 |---|---|
-| **#11** `auth` | Session cookie ou jeton porteur, par surface ? Fournisseur externe (Keycloak, Zitadel, Auth0) ou magasin interne ? `rbac`, `permissions`, `abac`, ou ReBAC ? |
-| **#23** `tenancy` | Quel modèle de multi-locataire ? Il **bloque** #6, car aucune table ne peut porter de `tenant_id` avant. |
-| **#18** F002 | Dépôt public, GitHub Pro, ou assumer l'absence de protection de branche serveur ? |
-| **#34** | Langue du **code** : recommandation posée — anglais pour `godoc` et les identifiants, français pour `rules/` jusqu'à la PR de traduction. |
+| **PR #60** | Validation du périmètre produit — personas, matrice, ligne « ⛔ jamais » |
+| **#61** | **Licence.** Le `Dockerfile` déclare MIT, aucun `LICENSE` n'existe. MIT confirmée ou Apache-2.0 ? Quel titulaire ? Bloquant **avant publication**, plus urgent depuis le retour en privé |
+| **H1** | P1 évolue-t-elle en contexte mobile-first / paiement mobile (XOF) ? Change l'ordre de `notification` et `ratelimit` |
+| **H3** | `v0.1.0` : jalon interne ou annonce publique ? |
+| **#18** | Protection de branche — **rouvre** : dépôt repassé privé, rulesets en `403` |
+| **#11** `auth` | Session cookie ou jeton porteur, par surface ? Fournisseur externe ou magasin interne ? `rbac`, `abac`, ou ReBAC ? |
+| **#23** `tenancy` | Quel modèle de multi-locataire ? **Bloque #6** |
+| **#34** | Traduction : **pas une rupture d'API** — les 530 identifiants exportés sont déjà en anglais. Seuls le godoc et `rules/` sont en français |
 | **#36** | SQLite comme pilote SQL par défaut ? |
 
 ## 7. Les invariants qu'il ne faut pas rouvrir
