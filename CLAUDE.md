@@ -134,7 +134,12 @@ tools/covergate/              cliquets de couverture — LA source unique des se
                               lancée à l'identique par `task test` et par la CI
 ```
 
-Six modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`.
+Sept modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`,
+`auth`. Ce dernier est le **seul module noyau à porter une surface primaire** — trois routes de
+session, montées dans `cmd/server`. ⚠️ Elles répondent, mais **aucun compte ne peut être créé à
+l'exécution** : les opérations d'administration ne sont pas exposées, faute d'un premier
+administrateur (#99). Un serveur neuf rend donc **401 à tout le monde**, sans exception.
+
 Un seul module métier, `user_registration` : cœur couvert (18 tests de domaine, 13 de cas d'usage),
 plus 4 tests de module en boîte noire et **une surface HTTP** de 3 tests. La phrase précédente
 affirmait qu'« il n'a encore aucun adaptateur, donc aucune surface ne l'appelle » — faux depuis la
@@ -171,7 +176,7 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **285 tests de premier niveau**. La table ci-dessous en détaille
+- `go test -shuffle=on ./...` vert — **363 tests de premier niveau**. La table ci-dessous en détaille
   227 ; les 58 suivants sont dans `internal/pkg/middleware/tests` (12),
   `internal/infrastructure/messaging/tests` (13), `internal/infrastructure/modulebus/tests` (10),
   `internal/infrastructure/httpserver` (3 internes) + `…/httpserver/tests` (11), et
@@ -187,6 +192,8 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
 | `internal/core/dynconf/tests` | 14 | Deny par défaut d'un drapeau, options non scalaires refusées, lecture seule |
 | `internal/core/storage/tests` | 13 | Traversée de répertoire refusée à l'écriture **et** à la lecture, clés réparties |
 | `internal/core/scheduler/tests` | 15 | Aucune exécution sans élection, libération même après échec, tâches homonymes refusées |
+| `internal/core/auth/tests` | 39 | **Une permission révoquée est refusée à l'appel suivant**, sujet inconnu et secret faux indiscernables, compte fermé sans effet sur les trois portes, condensé masqué sous `%v` ET `%#v` |
+| `…/auth/adapters/primary/http/tests` | 11 | Tous les refus d'une même route rendent le **même corps**, 204 sans corps à la révocation, aucune permission dans une réponse de connexion, module éteint → 503 |
 | `internal/pkg/result/tests` | 16 | **Lois de foncteur et de monade** — c'est ce qui rend sûr de réorganiser un pipeline |
 | `internal/pkg/fp/tests` | 14 | Valeur zéro = `None`, `Some("")` ≠ `None`, aucune mutation de l'entrée, ordre préservé |
 | `internal/pkg/pagination/tests` | 11 | Aller-retour du curseur, limite toujours bornée, la ligne témoin ne fuite jamais |
@@ -197,6 +204,22 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
 | `internal/infrastructure/relay/tests` | 2 | Le mappage message → enveloppe ne perd aucun champ, et un échec de publication **remonte intact** au dépileur au lieu d'être avalé |
 | `…/adapters/primary/http/tests` (en processus) | 3 | 201 et **aucune fuite du condensé dans le corps brut**, 409 ≠ 422 sur adresse prise, chaque erreur de domaine sur son statut avec le message du domaine |
 
+- **Trois défauts trouvés en écrivant les tests d'`auth`**, tous les trois du même type — *le code se
+  documentait comme fermant une faille qu'il laissait ouverte*, et aucun n'aurait été vu en
+  relecture :
+  1. **L'oracle d'existence de comptes était rouvert PAR LE MESSAGE.** Un sujet inconnu remontait
+     `authentification: identifiants invalides`, un secret faux `identifiants invalides`.
+     `errors.Is` reconnaît les deux, donc toute vérification de taxonomie restait verte ; mais une
+     surface qui renvoie `err.Error()` distingue les cas. **Une enveloppe `%w` posée par réflexe
+     suffisait à annuler la décision.**
+  2. **La casse d'un rôle faisait perdre une permission EN SILENCE.** Rôle défini `Comptable`,
+     retenu `comptable`, affecté `Comptable`, n'accordant rien. Aucune erreur nulle part :
+     l'administrateur voit le rôle affecté, la personne reçoit un 403, aucun journal ne mentionne
+     une casse.
+  3. **Un jeton bien formé mais inconnu répondait autrement qu'un jeton mal formé**, sur la même
+     route — l'attaquant apprenait que sa chaîne avait la bonne FORME.
+  Plus **trois branches mortes** : `Identity.Active` était consulté à trois endroits et aucun port
+  ne pouvait le mettre à `false`. Ports `Deactivate` / `Reactivate` ajoutés.
 - **Deux défauts LATENTS trouvés en écrivant les tests de `telemetry`**, tous deux dans la fonction
   d'arrêt : (1) `fmt.Errorf("…: %w", nil)` **ne rend pas nil** — il rend une erreur portant
   `%!w(<nil>)`, donc un arrêt réussi remontait une erreur et chaque déploiement aurait été compté en
@@ -274,13 +297,13 @@ propre au répertoire web de XAMPP (antivirus ou accès contrôlé aux dossiers)
 ### Couverture — trois cliquets, un seul programme
 
 `tools/covergate` applique les cliquets ; `task test` et la CI lancent la **même** commande, donc
-ils ne peuvent plus diverger. Mesuré le 2026-07-26 :
+ils ne peuvent plus diverger. Mesuré le 2026-07-28 :
 
 | Cliquet | Valeur | Seuil | État |
 |---|---|---|---|
-| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **74,3 %** | 70 % | ✅ |
-| **Cœur** `domain/` + `application/`, pondéré par instruction | **95,2 %** | 90 % | ✅ |
-| **Code produit** — tout, pilotes compris | **60,2 %** | cliquet 59 % | ✅ |
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **77,3 %** | 70 % | ✅ |
+| **Cœur** `domain/` + `application/`, pondéré par instruction | **92,9 %** | 90 % | ✅ |
+| **Code produit** — tout, pilotes compris | **62,9 %** | cliquet 59 % | ✅ |
 
 **Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
 tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
@@ -461,21 +484,27 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-**Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), et la
-campagne de signalements. F001, F005, F006, F007 sont **résolues**. Ce ne sont plus des actions.
+**Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
+#93, et la campagne de signalements. F001, F005, F006, F007 sont **résolues**.
 
-1. **#75** : `Deploy UAT` échoue **à chaque poussée sur `main`**, sur son garde « CI verte », en
-   0,4 s, sans jamais interroger la CI. Un rouge permanent apprend à ignorer le rouge — c'est le
-   coût réel, pas le job lui-même
-2. **Tag `v0.1.0`** : la barrière est verte et l'amorçage fonctionne sur un volume neuf (#84). Ce
-   qui reste avant de graver, ce sont les deux rouges permanents ci-dessus et #72
-3. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
+1. **#99 — l'amorçage du premier administrateur.** `auth` répond, mais aucun compte ne peut être
+   créé sur un serveur en marche : un serveur neuf rend **401 à tout le monde**. Le délai avant
+   premier succès du module est donc *infini*, très exactement le défaut que la tranche verticale
+   avait supprimé pour `user_registration`. Quatre options chiffrées dans l'issue, **arbitrage
+   requis**
+2. **Le garde d'autorisation** : `Authorize` n'est exposé par aucune surface. Il est prouvé par 39
+   tests et inutilisable depuis l'extérieur. Volontairement non écrit — un garde sans route à
+   protéger serait du code mort, la faute que ce lot vient justement de fermer trois fois. Il vient
+   avec la première route protégée
+3. **Tag `v0.1.0`** : la barrière est verte et l'amorçage de la base fonctionne sur un volume neuf
+   (#84). Restent #72 et la ligne v0.1 des personas — #8, #9, et #11 réellement démontrable
+4. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
-   ⚠️ Douze des treize règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
+   ⚠️ Douze des quatorze règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
    déplacement doit porter son témoin, sinon elle rend 100 % de conformité en ne gardant plus rien
-4. **#11 `auth`** et **#23 `tenancy`** : les deux « non » que reçoit tout évaluateur produit, avant
-   d'avoir pu découvrir que l'outbox est excellente
+5. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
+   d'être levé à moitié
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
