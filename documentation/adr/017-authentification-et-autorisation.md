@@ -52,6 +52,26 @@ C'est la propriété n°2 du socle — *le nombre de frontends est un non-sujet*
 elle est le plus souvent trahie. Ajouter une surface n'ajoute pas un mode d'authentification : elle
 choisit un **transport** pour le même jeton.
 
+### 2 bis. Le jeton est OPAQUE, pas signé
+
+Une chaîne aléatoire de 32 octets, retenue par le pilote. Pas de JWT, pas de clé
+de signature, pas de rotation de clé.
+
+Ce point a d'abord été écrit à l'envers dans cette ADR — « jeton signé » — par
+réflexe. La décision 1 le rend pourtant sans objet : le seul avantage réel d'un
+jeton signé est de **valider sans toucher au magasin**, or `Authorize` y va de
+toute façon, à chaque appel. On paierait donc la gestion de clés pour un gain
+déjà abandonné.
+
+Ce qu'on évite, en plus, n'est pas mince : la famille de failles propre aux
+jetons signés — algorithme `none` accepté, confusion HMAC/RSA, clé de
+vérification devinée, expiration non vérifiée — n'existe pas sur une chaîne
+aléatoire comparée à un enregistrement. Le meilleur code de sécurité reste celui
+qu'on n'écrit pas.
+
+Le prix est nommé : **chaque validation touche le magasin**. C'est le même prix
+que la décision 1, pas un second.
+
 ### 3. La source d'identité est un PILOTE
 
 `auth` suit l'anatomie de l'ADR 012 comme les six modules noyau existants :
@@ -95,7 +115,7 @@ surtout elle rend **invisible** le fait qu'une décision métier dépend de qui 
 | stratégie `password` (Argon2id, via `internal/infrastructure/security`) | `oauth2`, `oidc`, `saml_sso`, `apikey` |
 | magasin `memory` (défaut) et `postgres` | fédération d'identités, liaison de comptes |
 | RBAC → permissions | ABAC, ReBAC |
-| jeton signé, cookie web et porteur ailleurs | TOTP — il appartient à `notification`, pas à `auth` |
+| jeton **opaque**, cookie web et porteur ailleurs | TOTP — il appartient à `notification`, pas à `auth` |
 
 **Pourquoi ne pas écrire les autres pilotes tout de suite** : ce dépôt a déjà payé cette faute. Huit
 paquets de pilotes ont vécu des mois avec **zéro test, à aucun niveau** (#37), et deux défauts de
@@ -141,7 +161,7 @@ démontrable d'un `go run` en local.
 |---|---|
 | **Permissions dans les revendications du jeton** | Plus rapide, et crée une fenêtre pendant laquelle un accès révoqué fonctionne encore. Le jour où l'on révoque, on est pressé |
 | **Jeton porteur pour toutes les surfaces, cookie compris** | Une seule mécanique, plus simple à écrire — et le jeton devient lisible par du JavaScript sur le web, donc volable par une seule faille XSS |
-| **Session serveur opaque partout** | Révocation gratuite, mais chaque requête touche un magasin partagé : plus aucun démarrage sans infrastructure, ce qui contredit l'ADR 012 |
+| **Jeton signé (JWT)** | Valide sans toucher au magasin — un gain que la décision 1 a déjà abandonné, puisque `Authorize` y va à chaque appel. On paierait la gestion de clés, leur rotation, et toute la famille de failles propre aux jetons signés, pour rien |
 | **Déléguer entièrement à un fournisseur OIDC** | Sort du périmètre le sujet le plus risqué du produit — et supprime tout démarrage sans infrastructure, plus la raison d'être de `user_registration` |
 | **ReBAC façon Zanzibar** | Ce qu'il faut pour du partage fin de documents. Un service de relations à part entière, hors de proportion pour une v0.1 |
 
