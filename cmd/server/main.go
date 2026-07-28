@@ -125,6 +125,12 @@ func servir(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 
+	// L'amorçage AVANT le montage des routes : un compte annoncé sur un serveur
+	// qui n'écoute pas encore ne peut pas être utilisé entre-temps.
+	if err := amorcerAuthentification(ctx, mounted.auth, cfg.App.Env, logger); err != nil {
+		return err
+	}
+
 	router := httpserver.NewRouter(cfg, logger, probes(mounted))
 	authhttp.Mount(router.API, mounted.auth)
 	userhttp.Mount(router.API, mounted.users)
@@ -208,7 +214,11 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 
 	logger.Info("modules montés",
 		slog.String("outbox", cfg.Modules[outbox.Name].Driver),
-		slog.String("auth", cfg.Modules[auth.Name].Driver),
+		// Le pilote OU « désactivé » : annoncer `auth=memory` sur un module
+		// éteint enverrait chercher un défaut d'authentification du côté du
+		// magasin, alors que la surface rend 503 parce que personne ne l'a
+		// activée.
+		slog.String("auth", driverOrDisabled(cfg.Modules[auth.Name])),
 		slog.String("user_registration", orDefault(driver, userregistration.DriverMemory)),
 	)
 	return assembled{outbox: outboxMod, auth: authMod, users: users}, nil
@@ -256,6 +266,19 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// driverOrDisabled rend le pilote d'un module, ou son état d'inactivité.
+//
+// Un journal qui nomme un pilote pour un module éteint est un journal qui ment
+// utilement : il répond à la question qu'on n'a pas posée, et cache celle qui
+// compte. C'est mesuré — un démarrage en production annonçait `auth=memory`
+// alors que la surface rendait 503.
+func driverOrDisabled(mod config.Module) string {
+	if !mod.Enabled {
+		return "désactivé"
+	}
+	return mod.Driver
 }
 
 // moduleCatalog assemble ce que la configuration a le droit de nommer.

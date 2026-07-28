@@ -86,16 +86,22 @@ modules:
   # Le jeton AUTHENTIFIE, il n'autorise pas : `Authorize` interroge l'état
   # persisté à chaque appel, donc un droit retiré cesse d'accorder immédiatement.
   #
-  # ⚠️ Activé ne veut pas dire ouvert. Sans rôle défini, le module n'accorde RIEN
-  # à personne — deny par défaut. Ce qui est activé, c'est la CAPACITÉ.
+  # ⚠️ DÉSACTIVÉ ICI, activé dans config/env/development.yaml — la même forme
+  # que la télémétrie, et c'est l'ADR 017 qui l'impose. Deny par défaut en
+  # production ; démontrable d'un `go run` en local.
   #
-  # memory : perdu au redémarrage, donc REDÉMARRER EFFACE LES COMPTES, et local
-  # au processus — derrière un répartiteur, une requête sur deux échoue en 401.
-  # Convient au développement et à rien d'autre. Le pilote `postgres` est
-  # annoncé par l'ADR 017 et n'est PAS écrit : le déclarer ici décrirait une
-  # intention que rien n'exécute.
+  # La raison n'est pas cosmétique : le SEUL pilote écrit est `memory`, et il
+  # EFFACE LES COMPTES au redémarrage. Livrer `enabled: true` par défaut ferait
+  # partir une production avec une authentification qui se réinitialise à chaque
+  # déploiement — et rien ne le signalerait avant le premier redéploiement.
+  #
+  # Activé ne veut pas dire ouvert : sans rôle défini, le module n'accorde RIEN
+  # à personne. Ce qui s'active, c'est la CAPACITÉ.
+  #
+  # Le pilote `postgres` est annoncé par l'ADR 017 et n'est PAS écrit : le
+  # déclarer ici décrirait une intention que rien n'exécute.
   auth:
-    enabled: true
+    enabled: false
     driver: memory
     options:
       # Durée d'une session. Assez pour une journée de travail sans reconnexion,
