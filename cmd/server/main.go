@@ -32,6 +32,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/ressources"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
@@ -107,7 +108,18 @@ func run() error {
 		slog.String("build_date", buildDate),
 	)
 
-	return servir(ctx, cfg, logger)
+	// Les connexions AVANT les surfaces : un pilote `postgres` reçoit un pool ou
+	// refuse le démarrage, il ne tombe jamais en panne à la première requête.
+	//
+	// Rien n'est ouvert si aucun module activé n'en réclame — c'est la promesse
+	// de l'ADR 012, et corriger #103 ne devait pas la coûter.
+	conn, err := ressources.Open(ctx, cfg, catalog)
+	if err != nil {
+		return fmt.Errorf("ouverture des connexions: %w", err)
+	}
+	defer conn.Close()
+
+	return servir(ctx, cfg, conn, logger)
 }
 
 // servir monte les surfaces et tient le serveur jusqu'à l'annulation.
@@ -119,8 +131,8 @@ func run() error {
 // La coupure n'est pas arbitraire : `run` porte désormais l'AMORÇAGE — signaux,
 // catalogue, configuration, journal, observabilité — et `servir` porte les
 // SURFACES. Deux responsabilités, deux fonctions.
-func servir(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	mounted, err := compose(cfg, logger)
+func servir(ctx context.Context, cfg config.Config, conn ressources.Connexions, logger *slog.Logger) error {
+	mounted, err := compose(cfg, conn, logger)
 	if err != nil {
 		return err
 	}
@@ -165,11 +177,16 @@ type assembled struct {
 //
 // L'ordre n'est pas arbitraire : un module métier consomme les ports du noyau,
 // jamais l'inverse (ADR 012).
-func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
-	// Le pool est nil : aucun pilote par défaut n'en a besoin. Un pilote
-	// `postgres` activé sans base REFUSE le démarrage plutôt que de tomber en
-	// panne à la première requête.
-	outboxMod, err := outbox.New(cfg.Modules[outbox.Name], outbox.Deps{Now: time.Now})
+func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger) (assembled, error) {
+	// Le pool peut être nil, légitimement : il l'est dès qu'aucun module activé
+	// ne réclame de base, ce qui est le cas de la configuration livrée. Un pilote
+	// `postgres` activé sans base REFUSE alors le démarrage plutôt que de tomber
+	// en panne à la première requête.
+	//
+	// ⚠️ Ce commentaire disait « le pool est nil », au présent et sans condition.
+	// C'était exact, et c'était le défaut : AUCUN binaire n'ouvrait de connexion,
+	// donc aucun pilote `postgres` du dépôt n'était atteignable (#103).
+	outboxMod, err := outbox.New(cfg.Modules[outbox.Name], outbox.Deps{Pool: conn.Pool, Now: time.Now})
 	if err != nil {
 		return assembled{}, fmt.Errorf("module outbox: %w", err)
 	}
@@ -180,17 +197,9 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 		Threads:    cfg.Security.Argon2.Threads,
 	})
 
-	// Le hachage vient d'ICI et non du module : il est coûteux, paramétré, et son
-	// réglage appartient à la configuration de sécurité de l'application. Un
-	// module qui choisirait ses propres paramètres Argon2 les figerait pour tout
-	// le monde — et le socle a précisément un endroit où ce réglage se décide.
-	authMod, err := auth.New(cfg.Modules[auth.Name], auth.Deps{
-		HashSecret:   hasher.Hash,
-		VerifySecret: hasher.Verify,
-		Now:          time.Now,
-	})
+	authMod, err := monterAuth(cfg, hasher)
 	if err != nil {
-		return assembled{}, fmt.Errorf("module auth: %w", err)
+		return assembled{}, err
 	}
 
 	// Le pilote vient de la configuration, qui le porte enfin.
@@ -222,6 +231,30 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 		slog.String("user_registration", orDefault(driver, userregistration.DriverMemory)),
 	)
 	return assembled{outbox: outboxMod, auth: authMod, users: users}, nil
+}
+
+// monterAuth branche l'authentification sur le hachage de l'application.
+//
+// # Pourquoi le hachage vient d'ICI et non du module
+//
+// Argon2id est coûteux et paramétré, et son réglage appartient à la
+// configuration de sécurité de l'application. Un module qui choisirait ses
+// propres paramètres les figerait pour tout le monde — et le socle a précisément
+// un endroit où cette décision se prend.
+//
+// Extraite de `compose` parce que celle-ci dépassait le seuil de lignes
+// d'`arch-go` en y branchant l'ouverture du pool. Le garde a attrapé la
+// régression avant la relecture, pour la deuxième fois sur ce fichier.
+func monterAuth(cfg config.Config, hasher security.Hasher) (auth.Module, error) {
+	mod, err := auth.New(cfg.Modules[auth.Name], auth.Deps{
+		HashSecret:   hasher.Hash,
+		VerifySecret: hasher.Verify,
+		Now:          time.Now,
+	})
+	if err != nil {
+		return auth.Module{}, fmt.Errorf("module auth: %w", err)
+	}
+	return mod, nil
 }
 
 // generateUserID produit un identifiant ordonné dans le temps.

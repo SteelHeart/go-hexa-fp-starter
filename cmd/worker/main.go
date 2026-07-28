@@ -34,6 +34,7 @@ import (
 	outboxapp "github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/application"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/relay"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/ressources"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
 )
@@ -91,7 +92,32 @@ func run() error {
 		slog.String("build_date", buildDate),
 	)
 
-	w, err := compose(cfg, logger)
+	return depiler(ctx, cfg, catalog, logger)
+}
+
+// depiler ouvre les connexions, monte le dépileur et le tient jusqu'à l'arrêt.
+//
+// Extraite de `run` parce que celle-ci dépassait le seuil de lignes d'`arch-go`
+// en y branchant l'ouverture du pool. Le garde a attrapé la régression avant la
+// relecture — c'est exactement ce qu'on lui demande, et c'est la deuxième fois.
+//
+// La coupure n'est pas arbitraire : `run` porte l'AMORÇAGE — signaux, catalogue,
+// configuration, journal, observabilité — et `depiler` porte le TRAVAIL.
+func depiler(
+	ctx context.Context, cfg config.Config, catalog config.ModuleCatalog, logger *slog.Logger,
+) error {
+	// Les connexions AVANT les modules : un pilote `postgres` reçoit un pool ou
+	// refuse le démarrage, il ne tombe jamais en panne à la première requête.
+	//
+	// Rien n'est ouvert si aucun module activé n'en réclame — c'est la promesse
+	// de l'ADR 012, et corriger #103 ne devait pas la coûter.
+	conn, err := ressources.Open(ctx, cfg, catalog)
+	if err != nil {
+		return fmt.Errorf("ouverture des connexions: %w", err)
+	}
+	defer conn.Close()
+
+	w, err := compose(cfg, conn, logger)
 	if err != nil {
 		return err
 	}
@@ -130,7 +156,7 @@ type worker struct {
 //
 // Rend le libérateur du courtier plutôt que de le fermer lui-même : la durée de
 // vie du courtier est celle du processus, pas celle de cette fonction.
-func compose(cfg config.Config, logger *slog.Logger) (worker, error) {
+func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger) (worker, error) {
 	outboxCfg := cfg.Modules[outbox.Name]
 	if !outboxCfg.Enabled {
 		return worker{}, fmt.Errorf("%w: modules.outbox.enabled est false", outbox.ErrDisabled)
@@ -159,7 +185,10 @@ func compose(cfg config.Config, logger *slog.Logger) (worker, error) {
 		return worker{}, erreurAbonnement
 	}
 
-	mod, err := outbox.New(outboxCfg, outbox.Deps{Now: time.Now})
+	// Le pool peut être nil, légitimement : il l'est dès qu'aucun module activé
+	// ne réclame de base. Un pilote qui en a besoin refuse alors le démarrage en
+	// le disant — c'est le garde qui existait déjà et que personne n'atteignait.
+	mod, err := outbox.New(outboxCfg, outbox.Deps{Pool: conn.Pool, Now: time.Now})
 	if err != nil {
 		return worker{}, fmt.Errorf("module outbox: %w", err)
 	}

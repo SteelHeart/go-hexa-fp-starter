@@ -678,6 +678,32 @@ jobs:
             echo "::error::le worker a échoué, mais pas pour la bonne raison"; cat worker.log; exit 1; }
           echo "refus confirmé, avec son motif"
 
+      # Le chemin NOMINAL du dépileur, celui qui n'avait JAMAIS tourné (#103).
+      #
+      # Jusqu'ici ce job ne vérifiait que le refus ci-dessus. C'était une bonne
+      # garde, et il en résultait que le seul chemin jamais exercé était celui de
+      # l'échec : `cmd/worker` n'a démarré pour la première fois qu'après #103.
+      #
+      # `config/local.yaml` est la couche appliquée en dernier et non versionnée
+      # (.gitignore) : elle bascule l'outbox sur `postgres` SANS toucher la
+      # configuration livrée, qui doit rester démarrable sans aucune base.
+      - name: Le dépileur démarre sur une outbox PARTAGÉE
+        run: |
+          printf 'modules:\n  outbox:\n    driver: postgres\n' > config/local.yaml
+          ./bin/worker > worker-nominal.log 2>&1 &
+          echo $! > worker.pid
+          for i in $(seq 1 30); do
+            grep -q "dépilage en cours" worker-nominal.log && break
+            sleep 0.5
+          done
+          if ! kill -0 "$(cat worker.pid)" 2>/dev/null; then
+            echo "::error::le dépileur s'est arrêté au démarrage"; cat worker-nominal.log; exit 1
+          fi
+          grep -q "abonnement monté" worker-nominal.log || {
+            echo "::error::aucun abonnement monté : les événements ne seraient consommés par personne"
+            cat worker-nominal.log; exit 1; }
+          echo "dépileur en marche, abonnement monté"
+
       # `-v` puis comptage des `=== RUN` : sans tag, ce paquet compile ZÉRO test
       # et `go test` affiche `ok`. Vérifier le code de retour ne suffit donc pas —
       # c'est le piège du faux vert documenté dans CLAUDE.md, et il a déjà eu
@@ -693,11 +719,36 @@ jobs:
             exit 1
           fi
 
+      # La CHAÎNE, de bout en bout : l'inscription faite par les tests e2e
+      # ci-dessus doit avoir produit un effet chez le consommateur.
+      #
+      # Sans cette étape, tout ce qui précède resterait vert avec un consommateur
+      # débranché : le dépileur marquerait les messages publiés, l'outbox se
+      # viderait, et aucun effet n'aurait lieu. Un dépileur qui publie vers
+      # personne ressemble EN TOUT POINT à un dépileur qui fonctionne.
+      - name: L'événement a produit son effet
+        run: |
+          for i in $(seq 1 40); do
+            grep -q 'msg=notification\|"msg":"notification"' worker-nominal.log && break
+            sleep 0.5
+          done
+          grep -q 'msg=notification\|"msg":"notification"' worker-nominal.log || {
+            echo "::error::aucune notification : la chaîne inscription → outbox → relais → notification est coupée"
+            cat worker-nominal.log; exit 1; }
+
+          # L'adresse ne doit JAMAIS sortir en clair dans un journal, et le corps
+          # non plus : un lien de confirmation est un identifiant au porteur.
+          if grep -q 'to=[^*]*@' worker-nominal.log; then
+            echo "::error::une adresse en clair figure dans le journal du dépileur"; exit 1
+          fi
+          echo "chaîne complète confirmée, adresse masquée"
+
       - name: Logs des services (en cas d'échec)
         if: failure()
         run: |
           echo "── server.log ──"; cat server.log || true
           echo "── worker.log ──"; cat worker.log || true
+          echo "── worker-nominal.log ──"; cat worker-nominal.log || true
 
   # ───────────────────────────────────────────────────────────────────────────
   # 6. Compilation multi-plateforme
