@@ -117,6 +117,28 @@ dependenciesRules:
       internal: []
       external: []
 
+  # ── 9. Le GÉNÉRATEUR ne connaît rien de l'application ────────────────────────
+  # `internal/generator` manipule des FICHIERS, pas des modules. Il recopie le
+  # socle, réécrit un chemin de module, rend un gabarit. Rien de tout cela
+  # n'exige de connaître `outbox`, `user_registration` ni un serveur HTTP.
+  #
+  # La règle n'est pas décorative : sans elle, un générateur qui importerait un
+  # module pour « lire son catalogue » lierait l'outil au code qu'il génère. Le
+  # jour où le socle deviendra une bibliothèque importable (ADR 015), c'est cette
+  # règle qui aura gardé le générateur extractible.
+  #
+  # Elle est aussi ce qui rend `internal/generator` COUVERT au sens d'`arch-go` :
+  # l'outil mesure la part des paquets visés par au moins une règle, et un paquet
+  # neuf sans règle fait tomber la couverture sous 100 % — donc échouer
+  # `task check`. C'est déjà arrivé en ajoutant `tools/covergate`.
+  - package: "**.internal.generator.**"
+    shouldNotDependsOn:
+      internal:
+        - "**.internal.modules.**"
+        - "**.internal.core.**"
+        - "**.internal.infrastructure.**"
+        - "**.internal.config.**"
+
 contentsRules:
   # Le domaine ne contient pas d'interfaces : les contrats sont des types
   # fonction déclarés dans ports/.

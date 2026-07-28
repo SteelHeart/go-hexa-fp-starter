@@ -26,6 +26,7 @@ refonte.
 | [013](013-un-garde-doit-savoir-echouer.md) | Un garde est livré avec le cas qui le fait échouer | Accepté |
 | [014](014-catalogue-de-modules-passe-au-chargeur.md) | Le catalogue des modules est une valeur passée au chargeur, pas une table du framework | Accepté |
 | [015](015-la-frontiere-publique-est-derivee-d-un-usage-mesure.md) | La frontière publique est dérivée d'un usage mesuré, pas décidée d'avance | Accepté |
+| [016](016-le-generateur-est-une-bibliotheque-pas-un-composition-root.md) | Le générateur est une bibliothèque, pas un composition root | Accepté |
 
 > ⚠️ **010 n'existe pas encore, et du code le référence déjà** — `internal/infrastructure/messaging`
 > et `internal/infrastructure/modulebus`. Le numéro est réservé pour que rien d'autre ne le prenne.
