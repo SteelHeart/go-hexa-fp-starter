@@ -114,6 +114,7 @@ internal/config/              lecture, fusion, validation — refuse le démarra
 internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
 internal/infrastructure/      socle technique sans métier : db, cache, http, telemetry, security
 internal/contracts/           langage publié — ce que les modules s'échangent sans s'importer
+internal/generator/           la logique de `hexa` — cmd/hexa n'est qu'une coquille (ADR 016)
 internal/core/{nom}/          MODULE NOYAU — fourni par le socle
 internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   ├── domain/                 pur : ni I/O, ni time.Now(), ni logger
