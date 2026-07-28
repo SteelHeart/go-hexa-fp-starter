@@ -165,7 +165,7 @@ tasks:
   #   pr-title  le titre n'existe qu'au niveau de la PR — `task ci:pr-title -- "…"`
   #   inertia   exige les SHA base/head de la PR — `task ci:inertia -- <base>`
   ci:
-    desc: "Rejoue hors GitHub la barrière de la CI — 12 jobs sur 14"
+    desc: "Rejoue hors GitHub la barrière — 12 jobs de ci.yml sur 14, plus le garde de déploiement"
     cmds:
       - task: check
       - task: ci:schemas
@@ -177,10 +177,21 @@ tasks:
       - task: ci:integration
       - task: ci:generateur
       - task: ci:images
+      - task: ci:deploiement
       - cmd: |
           echo ""
           echo "  task ci : toutes les étapes ont rendu 0."
           echo "  NON couverts : pr-title, inertia (contexte de PR) — voir task --list-all"
+
+  ci:deploiement:
+    desc: "Le garde « aucun déploiement sans CI verte » — et le cas qui le fait refuser"
+    silent: true
+    cmds:
+      # Seule la moitié TÉMOIN est rejouable hors GitHub : l'autre interroge
+      # l'API des exécutions. C'est justement la moitié qui manquait, et son
+      # absence a laissé le garde annoncer « CI en échec » sur une CI verte
+      # pendant des semaines (#75).
+      - ./tools/attend-la-ci.sh --temoin
 
   ci:build:
     desc: "Compilation croisée — la matrice exacte du job build"

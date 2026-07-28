@@ -26,6 +26,13 @@ jobs:
   guard:
     name: CI verte sur le commit taggé
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Voir deploy-uat.yml : sans `actions: read`, `gh run list` reçoit un 403
+      # et le garde annonce « CI en échec » sur une CI verte (#75). Ce workflow
+      # n'a JAMAIS tourné, donc le défaut n'y était pas visible — il attendait
+      # la première mise en production pour se manifester.
+      actions: read
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       version: ${{ steps.resolve.outputs.version }}
@@ -51,23 +58,15 @@ jobs:
             exit 1
           fi
 
+      # UNE seule définition, partagée avec deploy-uat.yml : le script.
       - name: Conclusion du workflow CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          SHA="${{ steps.resolve.outputs.sha }}"
-          for i in $(seq 1 90); do
-            STATUS=$(gh run list --commit "$SHA" --workflow CI --json status,conclusion \
-              --jq '[.[] | select(.status=="completed")] | first | .conclusion // "pending"')
-            case "$STATUS" in
-              success) echo "CI verte sur $SHA."; exit 0 ;;
-              pending) echo "CI en cours ($i/90)…"; sleep 20 ;;
-              *)       echo "::error::CI en échec ($STATUS) — déploiement refusé"; exit 1 ;;
-            esac
-          done
-          echo "::error::timeout en attendant la CI"; exit 1
+        run: ./tools/attend-la-ci.sh "${{ steps.resolve.outputs.sha }}"
+
+      - name: Ce garde-là sait refuser
+        run: ./tools/attend-la-ci.sh --temoin
 
   images:
     name: Image ${{ matrix.cmd }}
