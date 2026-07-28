@@ -39,6 +39,15 @@ const (
 	driverDisk = "disk"
 )
 
+// Clés d'options lues par le pilote disque.
+//
+// Déclarées ici, RÉFÉRENCÉES par le catalogue : deux listes séparées finiraient
+// par diverger, et une option admise que personne ne lit ne se remarque jamais.
+const (
+	OptionBaseDir = "base_dir"
+	OptionBaseURL = "base_url"
+)
+
 // Valeurs par défaut du pilote disk.
 const (
 	defaultBaseDir = "var/storage"
@@ -80,11 +89,11 @@ func New(cfg config.Module, _ Deps) (Module, error) {
 
 // fromDisk construit le pilote local.
 func fromDisk(cfg config.Module) (Module, error) {
-	baseDir, err := cfg.StringOption("base_dir", defaultBaseDir)
+	baseDir, err := cfg.StringOption(OptionBaseDir, defaultBaseDir)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
-	baseURL, err := cfg.StringOption("base_url", defaultBaseURL)
+	baseURL, err := cfg.StringOption(OptionBaseURL, defaultBaseURL)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}

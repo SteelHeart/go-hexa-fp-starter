@@ -50,6 +50,12 @@ const defaultTTL = 24 * time.Hour
 // defaultNamespace préfixe les clés du pilote redis.
 const defaultNamespace = "idempotency"
 
+// Clés d'options du module, partagées avec le catalogue (ADR 014, #93).
+const (
+	OptionTTL       = "ttl"
+	OptionNamespace = "namespace"
+)
+
 // Module expose les ports de l'idempotence.
 type Module struct {
 	Reserve  ports.Reserve
@@ -93,7 +99,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 		return disabled(), nil
 	}
 
-	ttl, err := cfg.DurationOption("ttl", defaultTTL)
+	ttl, err := cfg.DurationOption(OptionTTL, defaultTTL)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
@@ -118,7 +124,7 @@ func withRedis(cfg config.Module, deps Deps, ttl time.Duration) (Module, error) 
 	if deps.Cache == nil {
 		return Module{}, ErrCacheRequired
 	}
-	namespace, err := cfg.StringOption("namespace", defaultNamespace)
+	namespace, err := cfg.StringOption(OptionNamespace, defaultNamespace)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}

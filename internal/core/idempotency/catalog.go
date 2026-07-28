@@ -25,12 +25,18 @@ func Catalog() config.ModuleCatalog {
 			// sans base, sans cache, sans conteneur (ADR 012).
 			Default: driverMemory,
 			Drivers: map[string]config.Resources{
+				// `ttl` est lue AVANT le `switch` de `New`, donc par les trois
+				// pilotes. `namespace` ne l'est que par redis, où elle préfixe les
+				// clés : l'écrire ailleurs n'aurait aucun effet, et c'est
+				// précisément le genre de réglage sans effet qu'on ne découvre
+				// jamais (#93).
+				//
 				// Par instance : AUCUNE exclusivité derrière plusieurs répliques.
-				driverMemory: {},
+				driverMemory: {Options: []string{OptionTTL}},
 				// Exclusivité entre répliques.
-				driverPostgres: {SQL: true},
+				driverPostgres: {SQL: true, Options: []string{OptionTTL}},
 				// Exclusivité entre répliques, expiration passive.
-				driverRedis: {Cache: true},
+				driverRedis: {Cache: true, Options: []string{OptionTTL, OptionNamespace}},
 			},
 		},
 	}

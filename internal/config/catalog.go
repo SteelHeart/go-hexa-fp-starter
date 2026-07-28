@@ -24,6 +24,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 )
 
@@ -42,6 +43,20 @@ type Resources struct {
 	SQL bool
 	// Cache : un cache réseau partagé entre répliques.
 	Cache bool
+	// Options énumère les clés que ce pilote LIT dans `modules.<nom>.options`.
+	//
+	// Toute autre clé refuse le démarrage. Sans cette liste, « absente » et « mal
+	// orthographiée » sont indiscernables : les accesseurs d'options rendent la
+	// valeur par défaut dans les deux cas, et le pilote démarre avec un réglage
+	// que personne n'a demandé.
+	//
+	// Mesuré avant d'être corrigé (#93) : `bath_size` au lieu de `batch_size`
+	// laissait le serveur démarrer, monter le module et n'en rien dire.
+	//
+	// La valeur zéro n'admet AUCUNE option, et c'est le bon défaut : un pilote
+	// qui oublie de déclarer les siennes voit sa configuration refusée, ce qui se
+	// remarque. L'inverse rouvrirait le trou pour tous les pilotes à la fois.
+	Options []string
 }
 
 // DriverSet déclare les pilotes d'UN module.
@@ -87,6 +102,17 @@ func (c ModuleCatalog) AllowedDrivers(module string) []string {
 
 // DefaultDriver rend le pilote par défaut d'un module, ou la chaîne vide.
 func (c ModuleCatalog) DefaultDriver(module string) string { return c[module].Default }
+
+// AllowedOptions rend les clés d'options admises par un pilote, triées.
+//
+// Triées pour la même raison qu'AllowedDrivers : cette liste compose un message
+// d'erreur, et un ordre de map change à chaque exécution — ce qui empêche de
+// comparer deux traces.
+func (c ModuleCatalog) AllowedOptions(module, driver string) []string {
+	admises := slices.Clone(c.Requires(module, driver).Options)
+	slices.Sort(admises)
+	return admises
+}
 
 // Requires rend les besoins d'un pilote d'un module.
 //

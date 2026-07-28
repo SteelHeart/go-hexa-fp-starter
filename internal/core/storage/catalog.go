@@ -26,7 +26,11 @@ func Catalog() config.ModuleCatalog {
 			Default: driverDisk,
 			Drivers: map[string]config.Resources{
 				// Local au processus : rien n’est partagé entre répliques.
-				driverDisk: {},
+				//
+				// Les clés sont RÉFÉRENCÉES depuis le code qui les lit, jamais
+				// réécrites ici : une divergence entre les deux listes rendrait une
+				// option admise que personne ne lit, ou l'inverse (#93).
+				driverDisk: {Options: []string{OptionBaseDir, OptionBaseURL}},
 			},
 		},
 	}

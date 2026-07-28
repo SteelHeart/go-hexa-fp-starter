@@ -17,6 +17,15 @@ import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 // mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
 // devient improbable.
 //
+// optionsDuDepileur énumère les clés lues par `policyFrom`.
+//
+// Une fonction plutôt qu'une variable de paquet : `gochecknoglobals` refuse un
+// état global, et il a raison — une tranche partagée est modifiable par
+// n'importe quel appelant, y compris par accident.
+func optionsDuDepileur() []string {
+	return []string{OptionBatchSize, OptionMaxAttempts, OptionBaseBackoff, OptionInterval}
+}
+
 // Publication garantie d’événements.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
@@ -25,10 +34,18 @@ func Catalog() config.ModuleCatalog {
 			// sans base, sans cache, sans conteneur (ADR 012).
 			Default: driverMemory,
 			Drivers: map[string]config.Resources{
+				// Les deux pilotes lisent la MÊME politique de dépilage : elle
+				// décrit le comportement du dépileur, pas le stockage.
+				//
+				// Les clés sont référencées, jamais réécrites. Une clé admise que
+				// personne ne lit — ou lue sans être admise — serait une
+				// divergence entre deux listes ; le partage de constante la rend
+				// impossible (#93).
+				//
 				// Perdu au redémarrage : le processus EST le stockage.
-				driverMemory: {},
+				driverMemory: {Options: optionsDuDepileur()},
 				// Durable et transactionnel — la seule forme qui tient la promesse de l’ADR 006.
-				driverPostgres: {SQL: true},
+				driverPostgres: {SQL: true, Options: optionsDuDepileur()},
 			},
 		},
 	}

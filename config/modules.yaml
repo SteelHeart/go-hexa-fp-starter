@@ -8,9 +8,19 @@
 # Docker. C'est la promesse de l'ADR 012, et elle est vérifiée par un test
 # (Modules.RequiresSQL).
 #
-# `options` porte le paramétrage propre au pilote. Il n'est pas typé ici : chaque
-# pilote valide ses options à sa construction, et une option illisible REFUSE le
-# démarrage plutôt que de se rabattre sur une valeur par défaut surprise.
+# `options` porte le paramétrage propre au pilote. Les VALEURS ne sont pas typées
+# ici : chaque pilote les interprète à sa construction, et une valeur illisible
+# REFUSE le démarrage plutôt que de se rabattre sur un défaut surprise.
+#
+# Les CLÉS, elles, sont déclarées par chaque module dans son `catalog.go`, à côté
+# du code qui les lit. Une clé inconnue du pilote retenu refuse le démarrage, en
+# nommant les clés admises. C'était le trou de l'issue #93 : `bath_size` au lieu
+# de `batch_size` laissait le serveur démarrer et n'en rien dire.
+#
+# ⚠️ Les options sont déclarées PAR PILOTE, pas par module. `flags` et `settings`
+# n'ont de sens que pour le pilote `file` de dynconf — sous `postgres`, les
+# valeurs vivent en base, et les écrire ici décrirait une intention que rien
+# n'exécute.
 #
 # Un module ABSENT de ce fichier est DÉSACTIVÉ. On n'active jamais une capacité
 # que personne n'a demandée — deny par défaut jusque dans la configuration.
