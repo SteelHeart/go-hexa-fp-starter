@@ -656,18 +656,16 @@ jobs:
           psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
           goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
 
-      - name: Démarre l'API
-        run: |
-          go build -o bin/server ./cmd/server
-          ./bin/server > server.log 2>&1 &
-          for i in $(seq 1 40); do
-            if curl -fsS "$E2E_BASE_URL/healthz" > /dev/null 2>&1; then
-              echo "API prête après ${i} tentative(s)"; exit 0
-            fi
-            sleep 0.5
-          done
-          echo "::error::l'API n'a pas démarré"; cat server.log; exit 1
-
+      # ⚠️ L'ORDRE de ces étapes est la décision, et il a déjà été faux une fois.
+      #
+      # Le refus se vérifie sur la configuration LIVRÉE, donc avant toute
+      # bascule. L'API démarre ENSUITE, une fois l'outbox basculée sur
+      # `postgres` — sinon le serveur écrit dans un magasin en mémoire pendant
+      # que le dépileur interroge Postgres, et ce dernier dépile un magasin vide.
+      #
+      # C'est très exactement le scénario que le refus ci-dessous existe pour
+      # empêcher, reproduit par un mauvais séquencement du job lui-même.
+      #
       # Le dépileur n'est PAS lancé ici, et ce n'est pas un oubli : la
       # configuration livrée met l'outbox sur le pilote `memory`, qui vit dans le
       # processus. Le worker refuse alors de démarrer, délibérément — il
@@ -696,7 +694,7 @@ jobs:
       # `config/local.yaml` est la couche appliquée en dernier et non versionnée
       # (.gitignore) : elle bascule l'outbox sur `postgres` SANS toucher la
       # configuration livrée, qui doit rester démarrable sans aucune base.
-      - name: Le dépileur démarre sur une outbox PARTAGÉE
+      - name: Bascule l'outbox sur un pilote PARTAGÉ
         run: |
           # `notification` est désactivée par défaut ET dans la couche `test` :
           # son seul pilote écrit dans un journal sans rien envoyer. Ce job
@@ -715,6 +713,21 @@ jobs:
               enabled: true
               driver: log
           YAML
+
+      - name: Démarre l'API sur l'outbox partagée
+        run: |
+          go build -o bin/server ./cmd/server
+          ./bin/server > server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS "$E2E_BASE_URL/healthz" > /dev/null 2>&1; then
+              echo "API prête après ${i} tentative(s)"; exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::l'API n'a pas démarré"; cat server.log; exit 1
+
+      - name: Le dépileur démarre sur une outbox PARTAGÉE
+        run: |
           ./bin/worker > worker-nominal.log 2>&1 &
           echo $! > worker.pid
           for i in $(seq 1 30); do
