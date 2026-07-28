@@ -1,0 +1,48 @@
+// Package tests éprouve le module {{.Dir}} en BOÎTE NOIRE, par sa composition
+// root, exactement comme le fera le composition root du binaire.
+//
+// Ces tests sont le dernier filet : ils vérifient ce qu'aucun test de domaine ni
+// de cas d'usage ne peut voir, à savoir que le MONTAGE lui-même est correct.
+package tests
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	{{.Package}} "{{.Module}}/internal/modules/{{.Dir}}"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestDefaultDriverNeedsNoInfrastructure : le module se monte et fonctionne sans
+// base, sans cache, sans conteneur.
+//
+// C'est la promesse centrale du socle, et elle ne vaut que si elle est vérifiée
+// à CHAQUE module : il suffit d'un module dont le pilote par défaut exigerait
+// PostgreSQL pour que `hexa new` puis `go run` cesse de démarrer — et cela se
+// découvrirait chez l'utilisateur, pas ici.
+func TestDefaultDriverNeedsNoInfrastructure(t *testing.T) {
+	t.Parallel()
+
+	module, err := {{.Package}}.New("", {{.Package}}.Deps{
+		GenerateID: func() domain.RecordID { return "id-1" },
+		Now:        func() time.Time { return time.Unix(0, 0).UTC() },
+	})
+	if err != nil {
+		t.Fatalf("le pilote par défaut doit se monter sans infrastructure: %v", err)
+	}
+
+	record, echec, ok := module.Create(context.Background(), "abc-123").Get()
+	if !ok {
+		t.Fatalf("création refusée: %v", echec)
+	}
+	if record.Reference.String() != "ABC-123" {
+		t.Errorf("référence = %q, attendu la forme normalisée", record.Reference)
+	}
+
+	// Le second appel sur la même référence doit être refusé par le PILOTE :
+	// c'est lui qui détient le verrou, donc lui seul peut trancher.
+	if _, _, ok := module.Create(context.Background(), "ABC-123").Get(); ok {
+		t.Error("un doublon de référence devait être refusé")
+	}
+}

@@ -1,9 +1,27 @@
 package main
 
 import (
+	"flag"
+	"io"
 	"slices"
 	"testing"
 )
+
+// optionsDe construit le jeu d'options à partir d'une commande RÉELLE.
+//
+// Le test ne redéclare donc pas la liste des options : il la dérive comme le
+// fait le code. Une liste écrite ici finirait par diverger de celle des
+// commandes — c'est exactement ce qui s'est produit avec la table figée que
+// `flagsAValeur` remplace.
+func optionsDe(t *testing.T, nom string, noms ...string) map[string]bool {
+	t.Helper()
+	jeu := flag.NewFlagSet(nom, flag.ContinueOnError)
+	jeu.SetOutput(io.Discard)
+	for _, n := range noms {
+		jeu.String(n, "", "")
+	}
+	return flagsAValeur(jeu)
+}
 
 // TestSepererArguments : le paquet `flag` s'arrête au PREMIER argument
 // non-option.
@@ -51,10 +69,12 @@ func TestSepererArguments(t *testing.T) {
 		},
 	}
 
+	aValeur := optionsDe(t, "new", "module", "depuis")
+
 	for nom, tc := range cas {
 		t.Run(nom, func(t *testing.T) {
 			t.Parallel()
-			options, positionnels := separerArguments(tc.args)
+			options, positionnels := separerArguments(tc.args, aValeur)
 			if !slices.Equal(options, tc.voulOptions) {
 				t.Errorf("options = %v, attendu %v", options, tc.voulOptions)
 			}

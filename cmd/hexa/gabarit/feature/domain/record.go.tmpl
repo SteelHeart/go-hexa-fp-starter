@@ -1,0 +1,59 @@
+package domain
+
+import "time"
+
+// RecordID identifie un enregistrement de façon opaque.
+//
+// Un type nommé plutôt qu'une chaîne : c'est ce qui empêche de passer une
+// référence là où un identifiant est attendu, une confusion que le compilateur
+// ne verrait jamais entre deux `string`.
+type RecordID string
+
+// Status énumère les états d'un enregistrement.
+//
+// Ensemble FERMÉ, comme ErrorCode : ajouter un état force à traiter sa
+// traduction partout où l'on en décide.
+type Status string
+
+// Les états d'un enregistrement.
+const (
+	StatusPending  Status = "pending"
+	StatusActive   Status = "active"
+	StatusArchived Status = "archived"
+)
+
+// Record est l'agrégat de démonstration du gabarit.
+//
+// Tous ses champs sont exportés et il se manipule PAR VALEUR : une méthode ne
+// mute jamais son receveur, elle rend une copie modifiée. C'est ce qui rend
+// impossible qu'un appelant observe un agrégat à moitié transformé.
+type Record struct {
+	ID        RecordID
+	Reference Reference
+	Status    Status
+	CreatedAt time.Time
+}
+
+// NewRecord construit un enregistrement neuf.
+//
+// L'instant vient de l'appelant, pas de `time.Now()` : le domaine ne lit jamais
+// l'horloge (règle d'or du socle), et un test qui la lirait échouerait un jour,
+// sans raison.
+//
+// L'état initial est TOUJOURS `pending`, jamais `active`. Un agrégat qui naîtrait
+// actif court-circuiterait toute étape de validation ultérieure — et ce genre de
+// défaut ne se voit pas en relecture, seulement en production.
+func NewRecord(id RecordID, reference Reference, now time.Time) Record {
+	return Record{
+		ID:        id,
+		Reference: reference,
+		Status:    StatusPending,
+		CreatedAt: now.UTC(),
+	}
+}
+
+// WithStatus retourne une COPIE portant le nouvel état.
+func (r Record) WithStatus(status Status) Record {
+	r.Status = status
+	return r
+}

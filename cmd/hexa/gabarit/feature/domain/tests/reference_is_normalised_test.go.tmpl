@@ -1,0 +1,30 @@
+package tests
+
+import "testing"
+
+// TestReferenceIsNormalised : la référence est mise en majuscules et débarrassée
+// de ses espaces de bordure.
+//
+// Sans normalisation, `abc ` et `ABC` seraient DEUX enregistrements distincts.
+// L'utilisateur ne comprendrait pas pourquoi sa recherche échoue, et l'index
+// d'unicité en base porterait sur des variantes plutôt que sur une forme
+// canonique — donc ne garantirait plus rien.
+func TestReferenceIsNormalised(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"minuscules":         "abc-123",
+		"espaces de bordure": "  ABC-123  ",
+		"les deux":           "\tabc-123 \n",
+		"déjà normalisée":    "ABC-123",
+	}
+
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := referenceValide(t, raw).String(); got != "ABC-123" {
+				t.Errorf("NewReference(%q) = %q, attendu la forme canonique", raw, got)
+			}
+		})
+	}
+}

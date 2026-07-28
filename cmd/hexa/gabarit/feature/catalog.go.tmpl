@@ -1,0 +1,26 @@
+package {{.Package}}
+
+import "{{.Module}}/internal/config"
+
+// Catalog déclare les pilotes de ce module — ADR 014.
+//
+// Aucun fichier du framework ne nomme {{.Dir}} : le catalogue est construit ici,
+// à côté de la fabrique `New`, et il PARTAGE ses constantes avec le `switch` de
+// celle-ci. La divergence entre ce qui est déclarable et ce qui est
+// constructible devient donc impossible, là où deux tables séparées ne la
+// rendaient qu'improbable.
+//
+// Ce fichier part avec le module en cas de `rm -rf`.
+func Catalog() config.ModuleCatalog {
+	return config.ModuleCatalog{
+		Name: {
+			// Le défaut DOIT être le pilote qui n'exige rien : c'est ce qui rend
+			// vraie la promesse « `hexa new` puis `go run`, ça démarre ».
+			Default: DriverMemory,
+			Drivers: map[string]config.Resources{
+				// Perdu au redémarrage, et local au processus.
+				DriverMemory: {},
+			},
+		},
+	}
+}

@@ -382,7 +382,19 @@ tasks:
           go build -o "$bac/hexa" ./cmd/hexa
           echo "  génération :"
           "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere | sed 's/^/    /'
-          echo "  barrière dans le projet généré :"
+          echo "  création d'un module métier :"
+          "$bac/hexa" make:feature order_tracking --dans "$bac/projet" | head -1 | sed 's/^/    /'
+          # La règle d'étanchéité NOMME chaque module en dur dans arch-go.yml.
+          # Sans elle, le module neuf n'est couvert par AUCUNE règle et l'outil
+          # afficherait 100 % de conformité — parce qu'il n'a rien à dire sur un
+          # module dont personne ne lui a parlé. Ce constat est le seul qui
+          # distingue « gardé » de « pas encore rencontré ».
+          grep -q 'internal.modules.order_tracking' "$bac/projet/arch-go.yml" || {
+            echo "  le module généré n'a PAS de règle d'étanchéité — il serait hors garde" >&2
+            exit 1
+          }
+          echo "    règle d'étanchéité arch-go : présente"
+          echo "  barrière dans le projet généré, module compris :"
           cp .env.example "$bac/projet/.env"
           ( cd "$bac/projet" && task check ) > "$bac/check.log" 2>&1 || {
             echo "  LE PROJET GÉNÉRÉ NE PASSE PAS LA BARRIÈRE :" >&2

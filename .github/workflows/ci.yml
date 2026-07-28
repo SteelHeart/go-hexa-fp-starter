@@ -472,12 +472,28 @@ jobs:
           go install github.com/arch-go/arch-go@${ARCHGO_VERSION}
           go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      - name: hexa new, puis task check DANS le projet généré
+      - name: hexa new, hexa make:feature, puis task check DANS le projet généré
         run: |
           set -euo pipefail
           bac=$(mktemp -d)
           go build -o "$bac/hexa" ./cmd/hexa
           "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere
+          "$bac/hexa" make:feature order_tracking --dans "$bac/projet"
+
+          # ⚠️ La règle d'étanchéité d'arch-go NOMME chaque module en dur. Un
+          # module créé sans elle n'est couvert par AUCUNE règle : il pourrait
+          # importer n'importe quel autre module, et l'outil afficherait « 100 %
+          # de conformité » — parce qu'il n'a rien à dire sur un module dont
+          # personne ne lui a parlé.
+          #
+          # C'est ce constat, et lui seul, qui distingue « gardé » de « jamais
+          # rencontré ». Sans lui, ce job resterait vert le jour où le générateur
+          # cesserait d'écrire la règle.
+          grep -q 'internal.modules.order_tracking' "$bac/projet/arch-go.yml" || {
+            echo "::error::le module généré n'a pas de règle d'étanchéité — il serait hors garde"
+            exit 1
+          }
+
           cp .env.example "$bac/projet/.env"
           cd "$bac/projet"
           task check

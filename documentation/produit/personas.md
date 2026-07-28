@@ -42,13 +42,17 @@ la forme du socle se dégrade au bout de trois mois.
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
 | Fichiers du **framework** à modifier pour ajouter un module métier | **0** | **0** ✅ — ADR 014. Mesuré : aucun fichier de `internal/config/`, `internal/pkg/` ni `internal/infrastructure/` ne nomme un module métier. Ajouter `billing` demande son dossier, **une ligne** dans `internal/modules/catalog.go` et son montage dans le composition root — trois emplacements qui appartiennent tous à l'**application** |
-| Commandes qui **créent** un module | ≥ 1 | **0** 🔴 — `hexa new` crée un **projet**, pas un module. `hexa make:feature` reste à écrire (#17) |
+| Commandes qui **créent** un module | ≥ 1 | **1** ✅ — `hexa make:feature <nom>` écrit l'anatomie complète, la teste, et déclare la règle d'étanchéité `arch-go` du module neuf |
 | Délai avant premier succès depuis un clone nu | < 10 min | ~5 min ✅ — et vrai **avec une base** depuis #84 : `task init && task up` échouait jusque-là sur un volume neuf |
 | Modules métier livrables sans authentification | 0 | tous 🔴 — `auth` n'existe pas (#11) |
 
-> **Deux blocages sur trois subsistent.** P1 était bloquée sur *créer*, *brancher*, *configurer* un
-> module. **Brancher** est levé (ADR 014). **Créer** et **configurer** ne le sont pas : `Config` reste
-> une struct fermée, de 16 champs à l'origine, **19 aujourd'hui** — elle s'est refermée un peu plus.
+> **Un blocage sur trois subsiste.** P1 était bloquée sur *créer*, *brancher*, *configurer* un
+> module. **Brancher** est levé (ADR 014), **créer** l'est par `hexa make:feature` (#17).
+> **Configurer** ne l'est pas : `Config` reste une struct fermée, de 16 champs à l'origine,
+> **19 aujourd'hui** — elle s'est refermée un peu plus.
+>
+> Reste, hors de cette liste, le blocage qui n'est pas technique : **`auth` n'existe pas**, et il
+> attend des arbitrages produit, pas du code.
 
 **Ce qu'elle tue** : la parité pour la parité. `search`, `document`, `workflow` ne l'intéressent pas
 tant que `auth`, `notification` et `payment` manquent.
@@ -167,7 +171,7 @@ Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 | 1 | Comment je crée mon projet ? | ✅ | `hexa new` — et la garantie est **outillée** : un job CI génère un projet et y lance `task check`, cliquets de couverture compris | P1 |
 | 2 | De quoi ai-je besoin sur ma machine ? | ✅ | `deploy/toolbox/` — rien d'installé, `go run` démarre sans service | P1 |
 | **Écriture** ||||
-| 3 | Comment je crée un module ? | 🔴 | `hexa new` crée un **projet**, pas un module. Rien ne crée un module, une surface, un port ni un test — copie manuelle de `user_registration` (#17, seconde moitié) | P1 |
+| 3 | Comment je crée un module ? | ✅ | `hexa make:feature <nom>` — domaine, ports, cas d'usage, pilote sans dépendance, catalogue, composition root et tests aux trois niveaux. Il **éprouve** le projet entier avant de rendre la main, et écrit la règle d'étanchéité `arch-go` du module neuf. ⚠️ Une **surface** reste à écrire à la main : `make:adapter` n'existe pas | P1 |
 | 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` 20 règles, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
 | 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||
@@ -187,19 +191,22 @@ Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 | **Durée** ||||
 | 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **8 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Les deux gagnés sont
-« créer mon projet » (`hexa new`) et « brancher mon module » (ADR 014).
+**Lecture d'ensemble** : **7 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Les trois gagnés servent
+tous **P1** : « créer mon projet » (`hexa new`), « brancher mon module » (ADR 014) et « créer un
+module » (`hexa make:feature`).
 
 Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
-sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher** est
-levé, **créer** et **configurer** ne le sont pas.
+sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher** et
+**créer** sont levés, **configurer** ne l'est pas.
 
-> ⚠️ **Ce que ce relevé dit du séquencement, et qui n'est pas confortable.** Les lots livrés depuis
-> le 2026-07-27 — niveau `integration`, `hexa new`, amorçage réparé, gardes de déploiement — servent
-> surtout **P5** et **P4** : *faire dire vrai à la barrière*. C'est légitime, et c'était nécessaire.
-> Mais **aucun n'a touché P2**, dont les cinq critères restent rouges, et **un seul** a levé un
-> blocage de P1. Une suite de lots individuellement justifiés peut composer un ordre de priorité que
-> personne n'a choisi.
+> ⚠️ **Ce que ce relevé dit du séquencement, et qui n'est pas confortable.** Les premiers lots
+> livrés après le 2026-07-27 — niveau `integration`, amorçage réparé, gardes de déploiement —
+> servaient surtout **P5** et **P4** : *faire dire vrai à la barrière*. C'était nécessaire, et ça ne
+> levait aucun blocage de la persona primaire. Le constat a été écrit ici avant d'être corrigé, et
+> c'est à ça que sert ce document.
+>
+> **P2 reste intouchée : cinq critères sur cinq.** Une suite de lots individuellement justifiés peut
+> composer un ordre de priorité que personne n'a choisi.
 
 ---
 

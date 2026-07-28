@@ -1,0 +1,37 @@
+package tests
+
+import (
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestNewRecordIsNeverBornActive : un enregistrement neuf naît `pending`, et son
+// instant est normalisé en UTC.
+//
+// L'état initial est une décision de sécurité, pas une convention. Un agrégat qui
+// naîtrait `active` court-circuiterait toute étape de validation ultérieure — et
+// ce défaut-là ne se voit pas en relecture, seulement en production.
+//
+// L'UTC évite l'autre classe de défaut : deux enregistrements créés à la même
+// seconde depuis deux fuseaux ne doivent pas s'ordonner différemment selon qui
+// les lit.
+func TestNewRecordIsNeverBornActive(t *testing.T) {
+	t.Parallel()
+
+	paris := time.FixedZone("CEST", 2*60*60)
+	instant := time.Date(2026, time.July, 28, 9, 30, 0, 0, paris)
+
+	record := domain.NewRecord("id-1", referenceValide(t, "ABC-123"), instant)
+
+	if record.Status != domain.StatusPending {
+		t.Errorf("status = %q, attendu %q", record.Status, domain.StatusPending)
+	}
+	if record.CreatedAt.Location() != time.UTC {
+		t.Errorf("CreatedAt en %v, attendu UTC", record.CreatedAt.Location())
+	}
+	if !record.CreatedAt.Equal(instant) {
+		t.Error("la normalisation en UTC ne doit pas déplacer l'instant")
+	}
+}

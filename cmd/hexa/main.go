@@ -28,16 +28,23 @@ var version = "dev"
 const usage = `hexa — outil du socle hexagonal
 
   hexa new <destination> --module <chemin/de/module>   crée un projet
+  hexa make:feature <nom_du_module>                    crée un module métier
   hexa version                                          affiche la version
 
-Exemple :
+Exemples :
   hexa new ./mon-projet --module github.com/impactone/facturation
+  hexa make:feature order_tracking
 
 Options de « new » :
   --module   OBLIGATOIRE. Le chemin de module Go du projet créé.
   --depuis   Racine du socle à recopier (défaut : le répertoire courant).
              Ce doit être un dépôt git : ce sont les fichiers SUIVIS qui
              définissent le socle, ce qui écarte .git/, bin/ et .env.
+
+Options de « make:feature » :
+  --dans     Racine du projet où créer le module (défaut : le répertoire
+             courant). Le nom est en snake_case : il devient un répertoire, une
+             clé de config/modules.yaml, et — sans ses tirets bas — un paquet Go.
 `
 
 func main() {
@@ -58,6 +65,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "new":
 		return commandeNew(args[1:])
+	case "make:feature":
+		return commandeFeature(args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil

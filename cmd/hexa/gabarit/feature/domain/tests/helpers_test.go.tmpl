@@ -1,0 +1,42 @@
+// Package tests contient les tests en BOÎTE NOIRE du domaine de {{.Dir}} : ils
+// n'utilisent que l'API publique, exactement comme le ferait un cas d'usage.
+//
+// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
+// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
+// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+//
+// # Pourquoi ces tests sont les plus rentables du module
+//
+// Le domaine est PUR : ni I/O, ni horloge, ni aléa. Il se teste donc en
+// microsecondes, sans conteneur, sans double, sans montage. C'est là que chaque
+// règle métier et chaque cas limite doivent être couverts — pas plus haut, où
+// chaque test coûte cent fois plus cher pour prouver la même chose.
+package tests
+
+import (
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// referenceValide construit une référence dont on sait qu'elle passe, ou fait
+// échouer le test. Évite de répéter la discrimination du Result partout.
+func referenceValide(t *testing.T, raw string) domain.Reference {
+	t.Helper()
+	value, err, ok := domain.NewReference(raw).Get()
+	if !ok {
+		t.Fatalf("NewReference(%q) devait réussir, refusée: %v", raw, err)
+	}
+	return value
+}
+
+// erreurDe extrait l'erreur complète d'un Result en échec.
+func erreurDe[T any](t *testing.T, r result.Result[T, domain.Error]) domain.Error {
+	t.Helper()
+	_, err, ok := r.Get()
+	if ok {
+		t.Fatal("un échec était attendu, reçu un succès")
+	}
+	return err
+}
