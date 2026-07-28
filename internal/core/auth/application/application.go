@@ -8,8 +8,10 @@
 //
 //	register.go       créer une identité et son secret
 //	authenticate.go   échanger un secret contre une session
-//	verify.go         résoudre un jeton en identité
+//	verify.go         résoudre un jeton en identité, et révoquer
 //	authorize.go      vérifier une permission — contre l'état PERSISTÉ
+//	roles.go          définir un rôle, l'affecter
+//	identities.go     fermer un compte, le rouvrir
 package application
 
 import (
@@ -24,15 +26,16 @@ import (
 // et aucune bibliothèque de simulacre n'est nécessaire — donc aucune n'est
 // autorisée (rules/dependances.md).
 type Deps struct {
-	SaveIdentity  ports.SaveIdentity
-	FindBySubject ports.FindBySubject
-	FindIdentity  ports.FindIdentity
-	SaveSession   ports.SaveSession
-	FindSession   ports.FindSession
-	DeleteSession ports.DeleteSession
-	Grants        ports.Grants
-	SaveRole      ports.SaveRole
-	BindRoles     ports.BindRoles
+	SaveIdentity   ports.SaveIdentity
+	FindBySubject  ports.FindBySubject
+	FindIdentity   ports.FindIdentity
+	UpdateIdentity ports.UpdateIdentity
+	SaveSession    ports.SaveSession
+	FindSession    ports.FindSession
+	DeleteSession  ports.DeleteSession
+	Grants         ports.Grants
+	SaveRole       ports.SaveRole
+	BindRoles      ports.BindRoles
 
 	HashSecret   ports.HashSecret
 	VerifySecret ports.VerifySecret

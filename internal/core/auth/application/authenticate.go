@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
@@ -36,7 +37,7 @@ func NewAuthenticate(deps Deps) ports.Authenticate {
 
 		credential, err := deps.FindBySubject(ctx, subject)
 		if err != nil {
-			return domain.Session{}, fmt.Errorf("authentification: %w", err)
+			return domain.Session{}, unmasked(err)
 		}
 		if !credential.Identity().Active {
 			return domain.Session{}, domain.ErrInvalidCredentials
@@ -52,6 +53,28 @@ func NewAuthenticate(deps Deps) ports.Authenticate {
 
 		return deps.issue(ctx, credential.Identity().ID)
 	}
+}
+
+// unmasked rend le refus NU quand c'est un refus d'identifiants.
+//
+// # Le défaut que cette fonction corrige
+//
+// Envelopper le sentinelle — `fmt.Errorf("authentification: %w", err)` — rouvre
+// l'oracle par le MESSAGE. `errors.Is` reconnaît toujours le refus, donc tous les
+// tests de taxonomie restent verts ; mais `err.Error()` rend
+// « authentification: identifiants invalides » pour un sujet inconnu et
+// « identifiants invalides » pour un secret faux. Une surface qui journalise ou
+// renvoie le message distingue alors les deux cas — exactement ce que le message
+// unique cherchait à cacher, réintroduit par une enveloppe posée par réflexe.
+//
+// Toute AUTRE erreur reste enveloppée : une panne du magasin n'est pas un refus
+// d'identifiants, et la confondre ferait dire à quelqu'un que son mot de passe
+// est faux alors que la base est tombée.
+func unmasked(err error) error {
+	if errors.Is(err, domain.ErrInvalidCredentials) {
+		return domain.ErrInvalidCredentials
+	}
+	return fmt.Errorf("authentification: %w", err)
 }
 
 // issue produit et persiste une session.

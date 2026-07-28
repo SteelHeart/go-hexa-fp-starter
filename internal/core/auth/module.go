@@ -66,6 +66,8 @@ type Module struct {
 	Revoke       ports.Revoke
 	DefineRole   ports.DefineRole
 	AssignRoles  ports.AssignRoles
+	Deactivate   ports.Deactivate
+	Reactivate   ports.Reactivate
 }
 
 // Deps porte les effets que le module ne fabrique pas lui-même.
@@ -148,6 +150,7 @@ type store interface {
 	SaveIdentity(context.Context, domain.Credential) error
 	FindBySubject(context.Context, domain.Subject) (domain.Credential, error)
 	FindIdentity(context.Context, domain.IdentityID) (domain.Identity, error)
+	UpdateIdentity(context.Context, domain.Identity) error
 	SaveSession(context.Context, domain.Session) error
 	FindSession(context.Context, domain.Token) (domain.Session, error)
 	DeleteSession(context.Context, domain.Token) error
@@ -159,21 +162,22 @@ type store interface {
 // assemble branche un pilote sur les cas d'usage.
 func assemble(s store, deps Deps, ttl time.Duration) Module {
 	wired := application.Deps{
-		SaveIdentity:  s.SaveIdentity,
-		FindBySubject: s.FindBySubject,
-		FindIdentity:  s.FindIdentity,
-		SaveSession:   s.SaveSession,
-		FindSession:   s.FindSession,
-		DeleteSession: s.DeleteSession,
-		Grants:        s.Grants,
-		SaveRole:      s.SaveRole,
-		BindRoles:     s.AssignRoles,
-		HashSecret:    deps.HashSecret,
-		VerifySecret:  deps.VerifySecret,
-		Now:           deps.Now,
-		NewToken:      randomToken,
-		NewIdentityID: randomIdentityID,
-		SessionTTL:    ttl,
+		SaveIdentity:   s.SaveIdentity,
+		FindBySubject:  s.FindBySubject,
+		FindIdentity:   s.FindIdentity,
+		UpdateIdentity: s.UpdateIdentity,
+		SaveSession:    s.SaveSession,
+		FindSession:    s.FindSession,
+		DeleteSession:  s.DeleteSession,
+		Grants:         s.Grants,
+		SaveRole:       s.SaveRole,
+		BindRoles:      s.AssignRoles,
+		HashSecret:     deps.HashSecret,
+		VerifySecret:   deps.VerifySecret,
+		Now:            deps.Now,
+		NewToken:       randomToken,
+		NewIdentityID:  randomIdentityID,
+		SessionTTL:     ttl,
 	}
 
 	return Module{
@@ -184,6 +188,8 @@ func assemble(s store, deps Deps, ttl time.Duration) Module {
 		Revoke:       application.NewRevoke(wired),
 		DefineRole:   application.NewDefineRole(wired),
 		AssignRoles:  application.NewAssignRoles(wired),
+		Deactivate:   application.NewDeactivate(wired),
+		Reactivate:   application.NewReactivate(wired),
 	}
 }
 
@@ -247,5 +253,7 @@ func Disabled() Module {
 		Revoke:      func(context.Context, domain.Token) error { return ErrDisabled },
 		DefineRole:  func(context.Context, string, []string) error { return ErrDisabled },
 		AssignRoles: func(context.Context, domain.IdentityID, []string) error { return ErrDisabled },
+		Deactivate:  func(context.Context, domain.IdentityID) error { return ErrDisabled },
+		Reactivate:  func(context.Context, domain.IdentityID) error { return ErrDisabled },
 	}
 }

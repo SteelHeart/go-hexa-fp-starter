@@ -93,6 +93,28 @@ type DefineRole = func(ctx context.Context, name string, permissions []string) e
 // Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
 type AssignRoles = func(ctx context.Context, id domain.IdentityID, roles []string) error
 
+// Deactivate ferme un compte, IMMÉDIATEMENT.
+//
+// C'est le geste qu'on fait quand on découvre qu'un compte est compromis, et
+// c'est donc le seul moment où la latence compte vraiment. L'identité cesse de
+// s'authentifier, ses jetons déjà émis cessent de valoir, et ses permissions
+// cessent d'être accordées — les trois au prochain appel, sans expiration.
+//
+// Idempotent : désactiver un compte déjà fermé n'est pas une erreur. Deux
+// administrateurs qui réagissent au même incident ne doivent pas s'annuler.
+//
+// Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+type Deactivate = func(ctx context.Context, id domain.IdentityID) error
+
+// Reactivate rouvre un compte fermé.
+//
+// Existe parce que la désactivation est parfois une erreur, et qu'un module qui
+// ne saurait que fermer ferait réparer cela à la main dans le magasin — donc mal,
+// et sans trace.
+//
+// Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+type Reactivate = func(ctx context.Context, id domain.IdentityID) error
+
 // ─── Ports secondaires : ce dont le cœur a besoin du monde ───────────────────
 
 // SaveIdentity persiste une identité et le condensé de son secret.
@@ -130,6 +152,16 @@ type SaveRole = func(ctx context.Context, role domain.Role) error
 
 // BindRoles remplace les rôles d'une identité dans le magasin.
 type BindRoles = func(ctx context.Context, id domain.IdentityID, roles []string) error
+
+// UpdateIdentity remplace l'identité retenue, sans toucher au condensé du secret.
+//
+// Le condensé n'est PAS un paramètre, délibérément : une signature qui le
+// reprendrait obligerait chaque appelant à le transporter, donc à le lire, donc à
+// pouvoir le journaliser. Fermer un compte n'a aucune raison de faire circuler un
+// condensé.
+//
+// Contrat d'erreur : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+type UpdateIdentity = func(ctx context.Context, identity domain.Identity) error
 
 // Grants interroge l'état PERSISTÉ des permissions d'une identité.
 //

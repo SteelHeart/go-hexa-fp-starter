@@ -96,6 +96,40 @@ func NewIdentity(id IdentityID, subject Subject, roles []string, now time.Time) 
 		return Identity{}, fmt.Errorf("%w: le sujet est obligatoire", ErrIncomplete)
 	}
 
+	return Identity{
+		ID:        id,
+		Subject:   subject,
+		Roles:     normalizeRoles(roles),
+		Active:    true,
+		CreatedAt: now.UTC(),
+	}, nil
+}
+
+// WithRoles retourne une COPIE portant les rôles donnés, NORMALISÉS.
+//
+// # Le défaut que la normalisation ici corrige
+//
+// `NewRole` met le nom du rôle en minuscules, et `NewIdentity` faisait de même
+// pour les rôles reçus — mais cette méthode, empruntée par l'affectation, copiait
+// les noms tels quels. Un rôle défini comme `Comptable` était donc retenu sous
+// `comptable`, affecté sous `Comptable`, et n'accordait RIEN.
+//
+// La faute ne produisait aucune erreur : l'administrateur voyait le rôle affecté,
+// la personne concernée recevait un 403, et rien dans les journaux ne mentionnait
+// une casse. Normaliser aux DEUX endroits est ce qui rend les chemins
+// indiscernables — en laisser un dehors suffit à rouvrir l'écart.
+func (i Identity) WithRoles(roles []string) Identity {
+	i.Roles = normalizeRoles(roles)
+	return i
+}
+
+// normalizeRoles met les noms de rôle sous leur forme canonique.
+//
+// La même que `NewRole` applique au nom qu'elle enregistre : minuscules, sans
+// espaces de bord. Les entrées vides sont écartées plutôt que refusées — une
+// ligne blanche dans un import n'accorde rien et ne mérite pas de faire échouer
+// le reste.
+func normalizeRoles(roles []string) []string {
 	kept := make([]string, 0, len(roles))
 	for _, role := range roles {
 		trimmed := strings.ToLower(strings.TrimSpace(role))
@@ -103,20 +137,7 @@ func NewIdentity(id IdentityID, subject Subject, roles []string, now time.Time) 
 			kept = append(kept, trimmed)
 		}
 	}
-
-	return Identity{
-		ID:        id,
-		Subject:   subject,
-		Roles:     kept,
-		Active:    true,
-		CreatedAt: now.UTC(),
-	}, nil
-}
-
-// WithRoles retourne une COPIE portant les rôles donnés.
-func (i Identity) WithRoles(roles []string) Identity {
-	i.Roles = append([]string(nil), roles...)
-	return i
+	return kept
 }
 
 // Deactivated retourne une COPIE désactivée.
@@ -125,5 +146,19 @@ func (i Identity) WithRoles(roles []string) Identity {
 // c'est le pilote qui l'applique, mais la valeur le porte.
 func (i Identity) Deactivated() Identity {
 	i.Active = false
+	return i
+}
+
+// Reactivated retourne une COPIE réactivée.
+//
+// # Pourquoi deux méthodes plutôt qu'un `SetActive(bool)`
+//
+// Un paramètre booléen ne se lit pas sur l'appel : `setActive(id, false)` oblige
+// à retrouver la signature pour savoir ce qui se passe, et `setActive(id, true)`
+// se glisse dans une relecture sans qu'on le remarque. Deux méthodes nommées
+// rendent la désactivation et son annulation visibles à l'endroit où elles sont
+// écrites — la même raison qui a fait éclater `SecurityHeaders(secure bool)`.
+func (i Identity) Reactivated() Identity {
+	i.Active = true
 	return i
 }
