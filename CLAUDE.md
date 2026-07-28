@@ -134,8 +134,8 @@ tools/covergate/              cliquets de couverture — LA source unique des se
                               lancée à l'identique par `task test` et par la CI
 ```
 
-Sept modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`,
-`auth`. Ce dernier est le **seul module noyau à porter une surface primaire** — trois routes de
+Huit modules noyau existent : `outbox`, `idempotency`, `dynconf`, `audit`, `storage`, `scheduler`,
+`auth`, `notification`. `auth` est le **seul à porter une surface primaire** — trois routes de
 session, montées dans `cmd/server`. ⚠️ Elles répondent, mais **aucun compte ne peut être créé à
 l'exécution** : les opérations d'administration ne sont pas exposées, faute d'un premier
 administrateur (#99). Un serveur neuf rend donc **401 à tout le monde**, sans exception.
@@ -172,11 +172,32 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
   couverts par au moins une règle, donc **ajouter `tools/covergate` a fait tomber `task check`** à
   l'étape `arch` (98 % < 100 %). Le garde de couverture a fait échouer un autre garde — comportement
   exactement voulu, découvert parce que le code de retour a été vérifié, pas la sortie.
+- 🔵 **LA CHAÎNE ASYNCHRONE A TOURNÉ, pour la première fois.** Binaires compilés, Postgres
+  provisionné et migré, `outbox` sur son pilote `postgres` :
+
+  ```
+  msg="abonnement monté"      evenement=user.registered.v1
+  msg="dépilage en cours"     outbox_driver=postgres relais=inproc
+  POST /v1/users              → 201
+  msg=notification            channel=email to=a***@example.com subject=Bienvenue body_bytes=77
+  msg="dépilage de l'outbox"  event=published message_type=user.registered.v1
+  ```
+
+  `inscription → outbox → dépileur → relais → garde d'idempotence → notification`, avec l'adresse
+  **masquée** et le corps **non journalisé**. Le job CI `e2e` exerce désormais ce chemin nominal en
+  plus du refus qu'il vérifiait déjà, et échoue si aucune notification n'apparaît ou si une adresse
+  sort en clair.
+
+  ⚠️ **`cmd/worker` n'avait jamais démarré avant #103** : `database.New` n'était appelée par AUCUN
+  binaire, donc le dépileur refusait `memory` par conception et ne pouvait pas utiliser `postgres`
+  faute de pool. Aucun pilote `postgres` du dépôt n'était atteignable. Le seul chemin jamais exercé
+  était celui du REFUS — que le job CI vérifiait consciencieusement.
+
 - **`go run ./cmd/worker` REFUSE de démarrer sur le pilote `memory`**, avec un code de retour non
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **363 tests de premier niveau**. La table ci-dessous en détaille
+- `go test -shuffle=on ./...` vert — **393 tests de premier niveau**. La table ci-dessous en détaille
   227 ; les 58 suivants sont dans `internal/pkg/middleware/tests` (12),
   `internal/infrastructure/messaging/tests` (13), `internal/infrastructure/modulebus/tests` (10),
   `internal/infrastructure/httpserver` (3 internes) + `…/httpserver/tests` (11), et
@@ -302,8 +323,8 @@ ils ne peuvent plus diverger. Mesuré le 2026-07-28 :
 | Cliquet | Valeur | Seuil | État |
 |---|---|---|---|
 | **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **77,3 %** | 70 % | ✅ |
-| **Cœur** `domain/` + `application/`, pondéré par instruction | **92,9 %** | 90 % | ✅ |
-| **Code produit** — tout, pilotes compris | **62,9 %** | cliquet 59 % | ✅ |
+| **Cœur** `domain/` + `application/`, pondéré par instruction | **92,4 %** | 90 % | ✅ |
+| **Code produit** — tout, pilotes compris | **62,5 %** | cliquet 59 % | ✅ |
 
 **Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
 tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
@@ -334,8 +355,9 @@ périmètre **en le disant**.
 
 ### Absent
 
-- **Aucun consommateur d'événement** : `user.registered.v1` est publié vers le relais, et personne
-  ne s'y abonne. Il faudra le module `notification` (🔴) pour que le courriel de bienvenue parte
+- ~~Aucun consommateur d'événement~~ — **RÉSOLU**. `user.registered.v1` a son consommateur, et la
+  chaîne complète `inscription → outbox → dépileur → relais → garde d'idempotence → notification`
+  a tourné sur les binaires réels (#9, #103)
 - **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire, donc pas
   de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
 - **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
@@ -463,6 +485,7 @@ est écrite à côté :
 | Écriture PowerShell mal encodée | 408 séquences d'accents doublement encodées dans 8 fichiers | Réparé. Toujours écrire en UTF-8 sans BOM |
 | Fichier verrouillé par l'éditeur | `golangci-lint fmt` échoue sur « Accès refusé » | Fermer l'éditeur, relancer |
 | **Un binaire Go ne peut pas écrire sous `htdocs`** | `go test -coverprofile` et `go get` échouent sur « fichier introuvable » — sur une CRÉATION, ce qui n'a aucun sens et envoie chercher ailleurs | Programme témoin de 10 lignes pour trancher : si `os.Create` échoue dans le dépôt et réussit ailleurs, c'est la MACHINE. Sortir de `htdocs` ou passer sous WSL (F008) |
+| Un garde qui vérifie un REFUS ne prouve rien sur le chemin NOMINAL | Le job `e2e` vérifiait que le dépileur refuse une outbox non partagée — correctement. Il en résultait que le seul chemin jamais exercé était celui de l'échec, et `cmd/worker` n'a démarré pour la première fois qu'après #103 | Un garde de refus se livre avec le garde du succès. Quatrième occurrence : `tests/e2e` vide, `arch-go.yml` jamais lu, `telemetry.Setup` jamais appelée, #103 |
 | `go run` ne relaie pas `SIGTERM` au binaire | L'arrêt propre ne s'exécute jamais : connexions coupées net, et **spans en tampon perdus**. Mesuré — 0 ligne « arrêt du serveur HTTP », et aucune trace reçue par le collecteur | Compiler puis lancer le binaire pour tout ce qui vérifie un ARRÊT. `Ctrl+C` reste correct : le signal va à tout le groupe de processus |
 | `psql -c "…"` n'**interpole pas** ses variables `-v` | La commande part littéralement et le serveur répond `syntax error at or near ":"` — un message qui accuse la syntaxe SQL, jamais l'interpolation | Passer le SQL par l'**entrée standard** (`<<'SQL'`). C'est là que `:'litteral'` et `:"identifiant"` sont substitués — et c'est la seule façon sûre d'injecter un mot de passe |
 | Un environnement **déjà amorcé** ne prouve rien sur l'amorçage | `task up` était réputé vert : il l'était sur un cluster où les rôles avaient été fabriqués à la main. Sur un volume neuf, quatre échecs en cascade (#84) | Mesurer depuis `task reset`, volume détruit. Même forme que le faux vert d'un garde : le succès observé portait sur autre chose que ce qu'on croyait mesurer |
@@ -487,17 +510,16 @@ est écrite à côté :
 **Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
 #93, et la campagne de signalements. F001, F005, F006, F007 sont **résolues**.
 
-1. **#99 — l'amorçage du premier administrateur.** `auth` répond, mais aucun compte ne peut être
-   créé sur un serveur en marche : un serveur neuf rend **401 à tout le monde**. Le délai avant
-   premier succès du module est donc *infini*, très exactement le défaut que la tranche verticale
-   avait supprimé pour `user_registration`. Quatre options chiffrées dans l'issue, **arbitrage
-   requis**
+1. **#8 — la surface CLI**, dernière ligne v0.1 des personas. C'est aussi ce qui rend vraie la
+   promesse « le nombre de frontends est un non-sujet » : avec une seule surface HTTP, elle est
+   énoncée, pas démontrée. Le consommateur d'événements (#9) en est déjà la deuxième instance —
+   mais un adaptateur primaire *interactif* reste à écrire
 2. **Le garde d'autorisation** : `Authorize` n'est exposé par aucune surface. Il est prouvé par 39
    tests et inutilisable depuis l'extérieur. Volontairement non écrit — un garde sans route à
    protéger serait du code mort, la faute que ce lot vient justement de fermer trois fois. Il vient
    avec la première route protégée
-3. **Tag `v0.1.0`** : la barrière est verte et l'amorçage de la base fonctionne sur un volume neuf
-   (#84). Restent #72 et la ligne v0.1 des personas — #8, #9, et #11 réellement démontrable
+3. **Tag `v0.1.0`** : la barrière est verte, l'amorçage de la base fonctionne sur un volume neuf
+   (#84), et la chaîne asynchrone a enfin tourné (#103). Restent #72 et #8
 4. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
