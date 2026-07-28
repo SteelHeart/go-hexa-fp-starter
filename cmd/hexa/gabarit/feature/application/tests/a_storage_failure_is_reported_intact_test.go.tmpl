@@ -1,0 +1,43 @@
+package tests
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/application"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// TestAStorageFailureIsReportedIntact : un échec de stockage remonte tel quel,
+// sans être avalé ni retraduit.
+//
+// C'est la faute la plus coûteuse d'un pipeline : une étape qui rattrape une
+// erreur et rend un succès dégradé. L'appelant reçoit alors 201, l'utilisateur
+// croit son enregistrement créé, et personne ne découvre le contraire avant
+// l'inventaire suivant.
+//
+// La cause technique doit survivre au passage — c'est elle qui permettra de
+// diagnostiquer — sans jamais entrer dans le message rendu.
+func TestAStorageFailureIsReportedIntact(t *testing.T) {
+	t.Parallel()
+
+	panne := errors.New("connexion au stockage perdue")
+	deps := depsQuiPassent()
+	deps.SaveRecord = func(context.Context, domain.Record) result.Result[domain.Record, domain.Error] {
+		return result.Err[domain.Record, domain.Error](
+			domain.NewError(domain.CodeUnavailable, "le service est momentanément indisponible").
+				WithCause(panne),
+		)
+	}
+
+	err := echec(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
+
+	if err.Code != domain.CodeUnavailable {
+		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeUnavailable)
+	}
+	if !errors.Is(err.Cause(), panne) {
+		t.Error("la cause technique doit survivre au passage dans le cas d'usage")
+	}
+}

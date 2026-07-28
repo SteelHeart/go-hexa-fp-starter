@@ -1,0 +1,40 @@
+package tests
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/application"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// TestATakenReferenceIsRefusedBeforeSaving : le refus d'unicité tombe AVANT
+// l'écriture.
+//
+// L'ordre compte pour deux raisons. La première est économique : écrire pour se
+// faire refuser par une contrainte coûte un aller-retour et une transaction
+// avortée. La seconde est plus importante — le code d'erreur rendu au client doit
+// être celui du DOMAINE, pas la traduction d'une violation de contrainte, sinon
+// deux pilotes ne rendent pas la même chose sur la même faute.
+func TestATakenReferenceIsRefusedBeforeSaving(t *testing.T) {
+	t.Parallel()
+
+	deps := depsQuiPassent()
+	deps.ReferenceIsTaken = func(context.Context, domain.Reference) result.Result[bool, domain.Error] {
+		return result.Ok[bool, domain.Error](true)
+	}
+	deps.SaveRecord = func(_ context.Context, r domain.Record) result.Result[domain.Record, domain.Error] {
+		t.Error("rien ne doit être écrit quand la référence est déjà prise")
+		return result.Ok[domain.Record, domain.Error](r)
+	}
+
+	err := echec(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
+
+	if err.Code != domain.CodeReferenceTaken {
+		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeReferenceTaken)
+	}
+	if err.Field != "reference" {
+		t.Errorf("field = %q, attendu \"reference\" — sinon la surface ne peut pas dire QUOI corriger", err.Field)
+	}
+}

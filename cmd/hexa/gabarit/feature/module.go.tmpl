@@ -1,0 +1,156 @@
+// Package {{.Package}} est la composition root du module {{.Dir}}.
+//
+// C'est le SEUL fichier du module qui connaît les pilotes (ADR 012). Le cas
+// d'usage, lui, ne voit que des types fonction : changer de pilote ne touche pas
+// une ligne de `application/` ni de `domain/`.
+//
+// Le module reste supprimable d'un seul `rm -rf` : aucun code du socle ne le
+// nomme, et les seules lignes à retirer sont celle du catalogue de l'application
+// et son montage dans le composition root.
+package {{.Package}}
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/application"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/modules/{{.Dir}}/drivers/memory"
+	"{{.Module}}/internal/modules/{{.Dir}}/ports"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// Name est le nom du module, tel qu'il apparaît dans config/modules.yaml.
+const Name = "{{.Dir}}"
+
+// Pilotes de persistance disponibles.
+//
+// `memory` est le défaut, et c'est une décision : il n'exige aucune
+// infrastructure, donc `go run` démarre. Voir les NON-garanties du paquet
+// drivers/memory avant de l'envisager ailleurs qu'en développement.
+const (
+	DriverMemory = "memory"
+)
+
+// Module expose les ports primaires.
+//
+// Une surface — HTTP, CLI, consommateur d'événements — ne reçoit QUE cette
+// structure. Elle ne peut donc pas atteindre un pilote, ni ouvrir une
+// transaction, ni contourner le cas d'usage.
+type Module struct {
+	Create ports.CreateRecord
+}
+
+// Deps porte les effets que le module ne fabrique pas lui-même.
+//
+// Tous sont des types fonction : en test, chacun est une closure de trois
+// lignes, et aucune bibliothèque de simulacre n'est nécessaire — donc aucune
+// n'est autorisée.
+type Deps struct {
+	// GenerateID et Now sont des ports pour que les tests soient déterministes.
+	GenerateID ports.GenerateID
+	Now        ports.Now
+}
+
+// Erreurs du module.
+var (
+	// ErrDisabled signale un appel à un module désactivé.
+	//
+	// Un module désactivé échoue explicitement plutôt que de se rabattre sur un
+	// comportement inerte : un effet silencieusement ignoré est le pire défaut
+	// possible, parce qu'il ne se signale jamais.
+	ErrDisabled = errors.New("module {{.Dir}} désactivé")
+
+	// ErrMissingDependency refuse un montage incomplet.
+	ErrMissingDependency = errors.New("dépendance obligatoire absente")
+
+	errUnknownDriver = errors.New("pilote {{.Dir}} inconnu")
+)
+
+// New construit le module selon le pilote demandé.
+//
+// Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
+// jamais en « le pilote le plus proche ». Deny par défaut.
+func New(driver string, deps Deps) (Module, error) {
+	if err := deps.validate(); err != nil {
+		return Module{}, err
+	}
+	if driver == "" {
+		driver = DriverMemory
+	}
+
+	switch driver {
+	case DriverMemory:
+		return assemble(memory.New(), deps), nil
+	default:
+		return Module{}, fmt.Errorf("%w: %q", errUnknownDriver, driver)
+	}
+}
+
+// validate refuse un montage incomplet AVANT toute construction.
+//
+// Sans ce refus, une dépendance oubliée produirait un panic de pointeur nil à la
+// première requête réelle — donc en production, et avec une trace qui ne dit pas
+// laquelle manquait.
+func (d Deps) validate() error {
+	missing := map[string]bool{
+		"GenerateID": d.GenerateID == nil,
+		"Now":        d.Now == nil,
+	}
+	for name, absent := range missing {
+		if absent {
+			return fmt.Errorf("%w: %s", ErrMissingDependency, name)
+		}
+	}
+	return nil
+}
+
+// store est ce que le module attend d'un pilote de persistance.
+//
+// Déclaré ici et non dans `ports/` : c'est une commodité de composition interne,
+// pas un contrat public. Les ports du module restent des types fonction, et
+// c'est `assemble` qui en extrait les méthodes.
+type store interface {
+	Save(context.Context, domain.Record) result.Result[domain.Record, domain.Error]
+	IsTaken(context.Context, domain.Reference) result.Result[bool, domain.Error]
+}
+
+// assemble branche un pilote sur les cas d'usage.
+func assemble(s store, deps Deps) Module {
+	return Module{
+		Create: application.NewCreateRecord(application.Deps{
+			ReferenceIsTaken: s.IsTaken,
+			SaveRecord:       s.Save,
+			GenerateID:       deps.GenerateID,
+			Now:              deps.Now,
+		}),
+	}
+}
+
+// Disabled rend un module qui refuse à l'appel.
+//
+// Il se monte toujours : c'est ce qui permet à une surface d'exister et de
+// répondre une erreur claire, plutôt que de faire échouer le démarrage entier du
+// serveur pour un module que personne n'a activé.
+func Disabled() Module {
+	refuse := func(context.Context, string) result.Result[domain.Record, domain.Error] {
+		return result.Err[domain.Record, domain.Error](disabledError())
+	}
+	return Module{Create: refuse}
+}
+
+func disabledError() domain.Error {
+	return domain.NewError(
+		domain.CodeUnavailable,
+		"{{.Dir}} est indisponible",
+	).WithCause(ErrDisabled)
+}
+
+// SystemClock est l'horloge réelle, à passer en production.
+//
+// Nommée plutôt qu'écrite `time.Now` au site d'appel : le composition root est
+// le SEUL endroit du dépôt autorisé à lire l'horloge, et lui donner un nom rend
+// la dérogation visible en relecture.
+func SystemClock() ports.Now { return time.Now }

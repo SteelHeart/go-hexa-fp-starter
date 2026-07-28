@@ -1,0 +1,31 @@
+package tests
+
+import (
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestWithStatusDoesNotMutateTheOriginal : `WithStatus` rend une COPIE.
+//
+// C'est l'immuabilité par valeur, et elle se vérifie plutôt qu'elle ne se
+// suppose : si `WithStatus` mutait son receveur, un appelant qui garde une
+// référence vers l'agrégat d'origine verrait son état changer sous lui — sans
+// aucune ligne de code chez lui pour l'expliquer.
+func TestWithStatusDoesNotMutateTheOriginal(t *testing.T) {
+	t.Parallel()
+
+	origine := domain.NewRecord("id-1", referenceValide(t, "ABC-123"), time.Unix(0, 0))
+	copie := origine.WithStatus(domain.StatusArchived)
+
+	if origine.Status != domain.StatusPending {
+		t.Errorf("l'original a été muté : status = %q", origine.Status)
+	}
+	if copie.Status != domain.StatusArchived {
+		t.Errorf("la copie porte %q, attendu %q", copie.Status, domain.StatusArchived)
+	}
+	if copie.ID != origine.ID || copie.Reference != origine.Reference {
+		t.Error("la copie doit conserver les autres champs à l'identique")
+	}
+}

@@ -1,0 +1,96 @@
+// Package memory implémente la persistance de {{.Dir}} en mémoire.
+//
+// # Pourquoi ce pilote existe
+//
+// Il n'est pas un bouchon de test : c'est le pilote PAR DÉFAUT du module, et
+// c'est lui qui rend vraie la promesse du socle — `hexa new` puis `go run`
+// démarre sans base, sans Docker, sans rien. Un module dont le seul pilote
+// exigerait PostgreSQL casserait cette promesse au premier module écrit.
+//
+// # GARANTIES
+//
+//   - **Unicité de la référence** : la carte est indexée par référence
+//     normalisée, et `Save` refuse un doublon avec `CodeReferenceTaken` — le même
+//     code qu'un pilote SQL rendra sur une violation de contrainte. C'est ce qui
+//     rend deux pilotes réellement substituables.
+//   - **Sûr en concurrence** : toutes les lectures et écritures passent par un
+//     RWMutex.
+//   - **Aucune mutation de l'entrée** : `domain.Record` est une valeur.
+//
+// # NON-GARANTIES
+//
+//   - **Aucune durabilité.** Tout disparaît à l'arrêt du processus.
+//   - **Aucun partage entre répliques.** Deux instances ont deux magasins, donc
+//     deux vérités. L'unicité n'est garantie QUE dans un processus.
+//   - **Aucune transaction.** Un échec après l'écriture ne l'annule pas. C'est la
+//     NON-garantie la plus coûteuse, et la raison pour laquelle ce pilote ne
+//     convient pas à la production.
+//   - **La mémoire croît sans fin.** Aucune purge, aucune borne.
+//
+// Écrire ces NON-garanties fait partie de la livraison d'un pilote : un pilote
+// dont on ignore ce qu'il ne garantit pas sera choisi pour ce qu'il ne fait pas.
+package memory
+
+import (
+	"context"
+	"sync"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// Store retient les enregistrements, indexés par référence normalisée.
+type Store struct {
+	mu           sync.RWMutex
+	byReference  map[string]domain.Record
+}
+
+// New construit un magasin vide.
+func New() *Store {
+	return &Store{byReference: make(map[string]domain.Record)}
+}
+
+// Save implémente ports.SaveRecord.
+//
+// Le refus du doublon est ICI et non dans le cas d'usage, délibérément. Le cas
+// d'usage vérifie déjà l'unicité, mais entre sa vérification et son écriture il
+// existe une fenêtre : deux créations simultanées sur la même référence la
+// franchissent toutes les deux. Seul le magasin, qui détient le verrou, peut
+// trancher — exactement comme une contrainte SQL tranche pour un pilote
+// relationnel.
+func (s *Store) Save(_ context.Context, record domain.Record) result.Result[domain.Record, domain.Error] {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := record.Reference.String()
+	if _, exists := s.byReference[key]; exists {
+		return result.Err[domain.Record, domain.Error](domain.NewError(
+			domain.CodeReferenceTaken,
+			"cette référence est déjà utilisée",
+		).WithField("reference"))
+	}
+
+	s.byReference[key] = record
+	return result.Ok[domain.Record, domain.Error](record)
+}
+
+// IsTaken implémente ports.ReferenceIsTaken.
+//
+// L'absence n'est PAS une erreur : elle vaut `false`. C'est le contrat du port.
+func (s *Store) IsTaken(_ context.Context, reference domain.Reference) result.Result[bool, domain.Error] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, exists := s.byReference[reference.String()]
+	return result.Ok[bool, domain.Error](exists)
+}
+
+// Count rend le nombre d'enregistrements retenus.
+//
+// Exposé pour l'exploitation et les sondes, pas pour les tests : ceux-ci passent
+// par les ports, comme n'importe quel appelant.
+func (s *Store) Count() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.byReference)
+}

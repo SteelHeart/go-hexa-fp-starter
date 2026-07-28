@@ -1,0 +1,63 @@
+// Package tests contient les tests en BOÎTE NOIRE des cas d'usage de {{.Dir}}.
+//
+// # Aucune bibliothèque de simulacre, et ce n'est pas une privation
+//
+// Chaque port est un TYPE FONCTION : un double est donc une closure de trois
+// lignes, écrite là où on la lit. Pas de génération, pas de `.On("Save")`, pas
+// d'assertion d'appel qui casse au premier renommage.
+//
+// C'est la contrepartie directe de la décision « un port est un type fonction »
+// (ADR 003) : elle se paie en verbosité de déclaration et se rembourse ici.
+package tests
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/application"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// instantFixe est l'horloge des tests. Fixe, donc les assertions ne dépendent
+// pas du moment où la suite tourne.
+var instantFixe = time.Date(2026, time.July, 28, 10, 0, 0, 0, time.UTC)
+
+// depsQuiPassent rend un jeu de dépendances dont toutes les étapes réussissent.
+//
+// Chaque test part de là et REMPLACE la seule étape qui l'intéresse : ce qui
+// diffère du cas nominal est alors visible dans le test lui-même, sans avoir à
+// comparer deux montages.
+func depsQuiPassent() application.Deps {
+	return application.Deps{
+		ReferenceIsTaken: func(context.Context, domain.Reference) result.Result[bool, domain.Error] {
+			return result.Ok[bool, domain.Error](false)
+		},
+		SaveRecord: func(_ context.Context, r domain.Record) result.Result[domain.Record, domain.Error] {
+			return result.Ok[domain.Record, domain.Error](r)
+		},
+		GenerateID: func() domain.RecordID { return "id-fixe" },
+		Now:        func() time.Time { return instantFixe },
+	}
+}
+
+// succes discrimine un Result attendu en succès.
+func succes(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Record {
+	t.Helper()
+	value, err, ok := r.Get()
+	if !ok {
+		t.Fatalf("un succès était attendu, refusé: %v", err)
+	}
+	return value
+}
+
+// echec discrimine un Result attendu en échec.
+func echec(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Error {
+	t.Helper()
+	_, err, ok := r.Get()
+	if ok {
+		t.Fatal("un échec était attendu, reçu un succès")
+	}
+	return err
+}

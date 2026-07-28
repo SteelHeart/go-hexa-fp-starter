@@ -1,0 +1,43 @@
+package tests
+
+import (
+	"strings"
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestAnInvalidReferenceNamesTheFaultyField : chaque refus porte son code ET le
+// champ fautif.
+//
+// Le champ n'est pas un ornement : sans lui, une surface HTTP ne peut rendre
+// qu'un « 422, quelque part ». L'utilisateur devine, et le support aussi.
+//
+// Les trois cas couvrent les trois branches de refus. Une branche non exercée
+// est une branche dont on ignore si elle refuse ou si elle laisse passer.
+func TestAnInvalidReferenceNamesTheFaultyField(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"vide":              "   ",
+		"trop longue":       strings.Repeat("X", 65),
+		"contient un espace": "ABC 123",
+	}
+
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			err := erreurDe(t, domain.NewReference(raw))
+
+			if err.Code != domain.CodeInvalidReference {
+				t.Errorf("code = %q, attendu %q", err.Code, domain.CodeInvalidReference)
+			}
+			if err.Field != "reference" {
+				t.Errorf("field = %q, attendu \"reference\"", err.Field)
+			}
+			if err.Message == "" {
+				t.Error("un refus sans message ne dit rien à l'utilisateur")
+			}
+		})
+	}
+}

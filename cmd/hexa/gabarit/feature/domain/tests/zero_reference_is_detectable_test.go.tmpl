@@ -1,0 +1,29 @@
+package tests
+
+import (
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestZeroReferenceIsDetectable : la valeur zéro se reconnaît.
+//
+// Go ne permet pas d'interdire `var r domain.Reference`. La seule protection est
+// que cet état soit DÉTECTABLE, sinon un oubli de construction se propage
+// jusqu'au stockage sans jamais se signaler — et l'enregistrement fautif est
+// écrit avant que quiconque s'en aperçoive.
+func TestZeroReferenceIsDetectable(t *testing.T) {
+	t.Parallel()
+
+	var zero domain.Reference
+	if !zero.IsZero() {
+		t.Error("la valeur zéro doit se reconnaître")
+	}
+	if zero.String() != "" {
+		t.Errorf("String() = %q, attendu la chaîne vide", zero.String())
+	}
+
+	if referenceValide(t, "ABC-123").IsZero() {
+		t.Error("une référence construite n'est pas la valeur zéro")
+	}
+}

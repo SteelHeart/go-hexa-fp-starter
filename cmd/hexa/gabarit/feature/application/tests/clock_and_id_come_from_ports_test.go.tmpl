@@ -1,0 +1,37 @@
+package tests
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/application"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// TestClockAndIDComeFromPorts : l'instant et l'identifiant viennent des ports,
+// jamais du paquet `time` ni d'un générateur caché.
+//
+// C'est ce qui rend le cas d'usage déterministe : le test fixe les deux et
+// compare des valeurs exactes, sans tolérance ni `time.Since`. Un test qui doit
+// tolérer une marge est un test qui échouera un jour sur une machine chargée.
+//
+// Et c'est la règle d'or du socle rendue vérifiable : `application/` ne lit pas
+// l'horloge.
+func TestClockAndIDComeFromPorts(t *testing.T) {
+	t.Parallel()
+
+	record := succes(t, application.NewCreateRecord(depsQuiPassent())(context.Background(), "abc-123"))
+
+	if record.ID != domain.RecordID("id-fixe") {
+		t.Errorf("ID = %q, attendu celui rendu par le port", record.ID)
+	}
+	if !record.CreatedAt.Equal(instantFixe) {
+		t.Errorf("CreatedAt = %v, attendu l'instant injecté %v", record.CreatedAt, instantFixe)
+	}
+	if record.Reference.String() != "ABC-123" {
+		t.Errorf("la référence doit être normalisée par le domaine, obtenu %q", record.Reference)
+	}
+	if record.Status != domain.StatusPending {
+		t.Errorf("status = %q, attendu %q", record.Status, domain.StatusPending)
+	}
+}

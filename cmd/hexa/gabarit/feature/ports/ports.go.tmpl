@@ -1,0 +1,68 @@
+// Package ports déclare les contrats du module {{.Dir}}.
+//
+// Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
+// ni interface (vérifié par arch-go.yml). Un port est un type fonction — la plus
+// petite interface possible, donc rien à ségréguer (ADR 003).
+//
+// Chaque port secondaire porte son CONTRAT D'ERREUR en commentaire. C'est la
+// forme opérationnelle de la substituabilité : deux pilotes qui rendraient des
+// codes différents sur la même faute ne seraient pas interchangeables, quelle
+// que soit leur signature.
+package ports
+
+import (
+	"context"
+	"time"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// ─── Ports primaires : ce que le monde extérieur peut demander ───────────────
+
+// CreateRecord enregistre un nouvel élément de {{.Dir}}.
+//
+// Toutes les surfaces appellent CETTE fonction : HTTP, CLI, consommateur
+// d'événements. Ajouter une surface n'en change pas la signature (ADR 005).
+//
+// Erreurs : CodeInvalidReference · CodeReferenceTaken · CodeUnavailable ·
+// CodeInternal.
+type CreateRecord = func(
+	ctx context.Context,
+	rawReference string,
+) result.Result[domain.Record, domain.Error]
+
+// ─── Ports secondaires : ce dont le cœur a besoin du monde ───────────────────
+
+// SaveRecord persiste un enregistrement neuf.
+//
+// Contrat d'erreur — toute implémentation DOIT respecter :
+//   - CodeReferenceTaken si la contrainte d'unicité est violée
+//   - CodeUnavailable    si le stockage est injoignable ou la requête annulée
+//   - CodeInternal       pour tout le reste, avec la cause attachée
+//
+// Aucune erreur de pilote ne doit remonter telle quelle.
+type SaveRecord = func(
+	ctx context.Context,
+	record domain.Record,
+) result.Result[domain.Record, domain.Error]
+
+// ReferenceIsTaken indique si une référence est déjà utilisée.
+//
+// Contrat d'erreur : CodeUnavailable · CodeInternal. L'absence de ligne n'est
+// PAS une erreur — elle vaut `false`.
+type ReferenceIsTaken = func(
+	ctx context.Context,
+	reference domain.Reference,
+) result.Result[bool, domain.Error]
+
+// ─── Ports d'effets purs : l'horloge et l'aléa ───────────────────────────────
+
+// Now retourne l'instant courant.
+//
+// C'est un port PRÉCISÉMENT pour que les tests soient déterministes : un test
+// qui lit l'horloge réelle est un test qui échouera un jour, sans raison.
+type Now = func() time.Time
+
+// GenerateID produit un identifiant d'enregistrement.
+type GenerateID = func() domain.RecordID

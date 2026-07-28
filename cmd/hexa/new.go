@@ -22,7 +22,7 @@ func commandeNew(args []string) error {
 	module := jeu.String("module", "", "chemin de module Go du projet créé (obligatoire)")
 	depuis := jeu.String("depuis", ".", "racine du socle à recopier")
 
-	options, positionnels := separerArguments(args)
+	options, positionnels := separerArguments(args, flagsAValeur(jeu))
 	if err := jeu.Parse(options); err != nil {
 		return fmt.Errorf("arguments: %w", err)
 	}
@@ -190,6 +190,23 @@ func initialiserGit(ctx context.Context, destination string) error {
 	return nil
 }
 
+// flagsAValeur rend les options du jeu, sous leurs deux écritures.
+//
+// Dérivé du FlagSet plutôt qu'écrit à la main, et c'est le point : la table
+// précédente énumérait `-module` et `-depuis`. L'ajout de `--dans` par
+// `make:feature` n'y figurait pas, donc sa valeur était classée comme
+// positionnelle et la commande refusait une option pourtant écrite. Une seconde
+// liste des mêmes options ne peut que diverger de la première — c'est la faute
+// que l'ADR 014 supprime ailleurs, appliquée ici.
+func flagsAValeur(jeu *flag.FlagSet) map[string]bool {
+	aValeur := map[string]bool{}
+	jeu.VisitAll(func(f *flag.Flag) {
+		aValeur["-"+f.Name] = true
+		aValeur["--"+f.Name] = true
+	})
+	return aValeur
+}
+
 // separerArguments range les options d'un côté, la destination de l'autre.
 //
 // Le paquet `flag` s'arrête au PREMIER argument non-option : sans ce tri,
@@ -198,9 +215,7 @@ func initialiserGit(ctx context.Context, destination string) error {
 //
 // Imposer l'ordre `--module x ./projet` serait une friction gratuite dans un
 // outil dont la raison d'être est d'en supprimer.
-func separerArguments(args []string) (options, positionnels []string) {
-	aValeur := map[string]bool{"-module": true, "--module": true, "-depuis": true, "--depuis": true}
-
+func separerArguments(args []string, aValeur map[string]bool) (options, positionnels []string) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {

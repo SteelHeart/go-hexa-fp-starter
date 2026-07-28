@@ -1,0 +1,74 @@
+// Package application compose les cas d'usage de {{.Dir}}.
+//
+// Il ne journalise pas et ne lit pas l'horloge : il rend compte par un port et
+// reçoit son instant. C'est ce qui le garde testable sans analyser de journaux,
+// et déterministe sans attendre.
+package application
+
+import (
+	"context"
+
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/modules/{{.Dir}}/ports"
+	"{{.Module}}/internal/pkg/result"
+)
+
+// Deps porte les ports secondaires du cas d'usage.
+//
+// Un type plutôt que quatre paramètres : au-delà de deux, des paramètres de même
+// nature s'inversent silencieusement — et la règle `arch-go` maxParameters le
+// refuserait de toute façon.
+type Deps struct {
+	ReferenceIsTaken ports.ReferenceIsTaken
+	SaveRecord       ports.SaveRecord
+	GenerateID       ports.GenerateID
+	Now              ports.Now
+}
+
+// NewCreateRecord compose le cas d'usage de création.
+//
+// L'ORDRE des étapes est la décision, et il se lit dans le code : valider, puis
+// vérifier l'unicité, puis seulement écrire. Une inversion ferait écrire avant
+// de valider — c'est-à-dire persister une saisie fautive.
+//
+// Le pipeline court-circuite : `FlatMap` n'appelle l'étape suivante que sur un
+// `Ok`. Aucun port n'est donc touché quand l'entrée est invalide, et c'est
+// vérifié par un test plutôt que supposé.
+func NewCreateRecord(deps Deps) ports.CreateRecord {
+	return func(ctx context.Context, rawReference string) result.Result[domain.Record, domain.Error] {
+		return result.FlatMap(
+			domain.NewReference(rawReference),
+			func(reference domain.Reference) result.Result[domain.Record, domain.Error] {
+				return result.FlatMap(
+					deps.ReferenceIsTaken(ctx, reference),
+					func(taken bool) result.Result[domain.Record, domain.Error] {
+						if taken {
+							return result.Err[domain.Record, domain.Error](referenceTaken())
+						}
+						return deps.SaveRecord(ctx, deps.build(reference))
+					},
+				)
+			},
+		)
+	}
+}
+
+// build fabrique l'agrégat à partir des ports d'effets purs.
+//
+// Isolée pour que `NewCreateRecord` reste sous le seuil de lignes d'`arch-go`,
+// et parce qu'elle nomme le seul endroit du module où l'identifiant et l'instant
+// entrent dans le domaine.
+func (d Deps) build(reference domain.Reference) domain.Record {
+	return domain.NewRecord(d.GenerateID(), reference, d.Now())
+}
+
+// referenceTaken nomme le refus d'unicité.
+//
+// Le champ est renseigné : une surface HTTP doit pouvoir dire QUEL champ est en
+// cause, sinon l'utilisateur reçoit « conflit » et devine.
+func referenceTaken() domain.Error {
+	return domain.NewError(
+		domain.CodeReferenceTaken,
+		"cette référence est déjà utilisée",
+	).WithField("reference")
+}
