@@ -1,7 +1,7 @@
 // Package core assemble le catalogue des modules NOYAU — ADR 014.
 //
 // Il ne contient que ça, et volontairement : c'est le seul endroit du socle qui
-// nomme ses sept modules, et il ne fait rien d'autre que les énumérer.
+// nomme ses huit modules, et il ne fait rien d'autre que les énumérer.
 //
 // # Pourquoi ce paquet existe
 //
@@ -17,9 +17,9 @@
 // # Ce que ce catalogue déclare, et ce qu'il ne déclare pas
 //
 // Il déclare ce que les binaires du socle EMBARQUENT, pas ce qu'ils montent.
-// La nuance compte : `cmd/server` ne câble aujourd'hui qu'`outbox`, tandis que
-// `config/modules.yaml` déclare les six. Restreindre le catalogue aux seuls
-// modules câblés ferait donc REFUSER la configuration livrée.
+// La nuance compte : `cmd/server` ne câble aujourd'hui qu'`outbox` et `auth`,
+// tandis que `config/modules.yaml` les déclare tous. Restreindre le catalogue
+// aux seuls modules câblés ferait donc REFUSER la configuration livrée.
 //
 // L'ADR 014 formule la règle plus étroitement — « un module qui n'est pas monté
 // n'est pas dans le catalogue ». L'écart est assumé, et écrit ici plutôt que taire :
@@ -34,6 +34,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage"
@@ -45,7 +46,7 @@ import (
 // ses pilotes. Ce fichier ne fait que les réunir : il ne contient aucun nom de
 // pilote, donc il ne peut pas diverger d'une fabrique.
 //
-// Une collision de noms est impossible ici — sept constantes distinctes — mais
+// Une collision de noms est impossible ici — huit constantes distinctes — mais
 // `MergeCatalogs` la refuserait, et c'est cette garantie-là qui compte quand
 // une application ajoutera les siens.
 func Catalog() (config.ModuleCatalog, error) {
@@ -57,6 +58,7 @@ func Catalog() (config.ModuleCatalog, error) {
 		storage.Catalog(),
 		scheduler.Catalog(),
 		auth.Catalog(),
+		notification.Catalog(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("catalogue du noyau: %w", err)

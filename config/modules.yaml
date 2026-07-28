@@ -117,6 +117,29 @@ modules:
     enabled: false
     driver: cron-inproc
 
+  # Acheminement de messages — courriel aujourd'hui.
+  #
+  # ⚠️ DÉSACTIVÉ ICI. Le seul pilote écrit est `log` : il ÉCRIT le message dans
+  # le journal et ne l'envoie à personne. Livrer `enabled: true` par défaut
+  # ferait partir une production qui croit envoyer des courriels — et le défaut
+  # ne se verrait qu'au premier client affirmant n'avoir jamais rien reçu,
+  # c'est-à-dire des semaines plus tard, sans aucune trace pour remonter.
+  #
+  # `smtp`, `mailjet`, `ses` sont décrits dans
+  # documentation/technique/modules-noyau.md et ne sont PAS écrits.
+  notification:
+    enabled: false
+    driver: log
+    options:
+      # `masked` tait le corps, `logged` l'écrit. Le défaut est `masked`, et
+      # c'est la position sûre : un corps de notification transporte
+      # régulièrement un lien de confirmation ou un code à usage unique — des
+      # identifiants AU PORTEUR, que le journal exporterait vers un tiers.
+      #
+      # Deux mots plutôt qu'un booléen : `body: false` répond à une question que
+      # ce fichier ne pose pas. Une valeur inconnue REFUSE le démarrage.
+      body: masked
+
   # ── Modules non encore implémentés ──────────────────────────────────────────
   # Volontairement ABSENTS et non « désactivés » : un module absent de
   # internal/config/modules.go REFUSE d'être activé, parce que son code n'existe
@@ -126,7 +149,6 @@ modules:
   # Feuille de route : documentation/technique/modules-noyau.md
   # Catalogue des pilotes envisagés : documentation/technique/pilotes.md
   #
-  # notification  canaux × fournisseurs (log, smtp, mailjet, ses…)
   # ratelimit     memory, redis, postgres, gateway
   # secrets       env, file, sops, vault, aws-secrets-manager…
   # i18n          embedded, file, postgres
