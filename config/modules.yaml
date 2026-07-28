@@ -81,6 +81,28 @@ modules:
     enabled: true
     driver: disk
 
+  # Authentification et autorisation — ADR 017.
+  #
+  # Le jeton AUTHENTIFIE, il n'autorise pas : `Authorize` interroge l'état
+  # persisté à chaque appel, donc un droit retiré cesse d'accorder immédiatement.
+  #
+  # ⚠️ Activé ne veut pas dire ouvert. Sans rôle défini, le module n'accorde RIEN
+  # à personne — deny par défaut. Ce qui est activé, c'est la CAPACITÉ.
+  #
+  # memory : perdu au redémarrage, donc REDÉMARRER EFFACE LES COMPTES, et local
+  # au processus — derrière un répartiteur, une requête sur deux échoue en 401.
+  # Convient au développement et à rien d'autre. Le pilote `postgres` est
+  # annoncé par l'ADR 017 et n'est PAS écrit : le déclarer ici décrirait une
+  # intention que rien n'exécute.
+  auth:
+    enabled: true
+    driver: memory
+    options:
+      # Durée d'une session. Assez pour une journée de travail sans reconnexion,
+      # assez court pour qu'un poste oublié cesse d'ouvrir la porte le lendemain.
+      # Ce n'est PAS une borne de sécurité : la révocation, elle, est immédiate.
+      session_ttl: 12h
+
   # Tâches périodiques, exécutées une seule fois quel que soit le nombre de
   # répliques. Le vrai problème n'est pas la périodicité mais l'ÉLECTION.
   # cron-inproc : aucune élection entre répliques, mais aucun recouvrement local

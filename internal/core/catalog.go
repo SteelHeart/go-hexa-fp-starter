@@ -1,7 +1,7 @@
 // Package core assemble le catalogue des modules NOYAU — ADR 014.
 //
 // Il ne contient que ça, et volontairement : c'est le seul endroit du socle qui
-// nomme ses six modules, et il ne fait rien d'autre que les énumérer.
+// nomme ses sept modules, et il ne fait rien d'autre que les énumérer.
 //
 // # Pourquoi ce paquet existe
 //
@@ -31,6 +31,7 @@ import (
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
@@ -44,7 +45,7 @@ import (
 // ses pilotes. Ce fichier ne fait que les réunir : il ne contient aucun nom de
 // pilote, donc il ne peut pas diverger d'une fabrique.
 //
-// Une collision de noms est impossible ici — six constantes distinctes — mais
+// Une collision de noms est impossible ici — sept constantes distinctes — mais
 // `MergeCatalogs` la refuserait, et c'est cette garantie-là qui compte quand
 // une application ajoutera les siens.
 func Catalog() (config.ModuleCatalog, error) {
@@ -55,6 +56,7 @@ func Catalog() (config.ModuleCatalog, error) {
 		audit.Catalog(),
 		storage.Catalog(),
 		scheduler.Catalog(),
+		auth.Catalog(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("catalogue du noyau: %w", err)

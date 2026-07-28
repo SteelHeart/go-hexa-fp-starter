@@ -29,6 +29,7 @@ import (
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
@@ -148,6 +149,7 @@ func servir(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // manquant » est une leçon déjà payée trois fois dans ce dépôt.
 type assembled struct {
 	outbox outbox.Module
+	auth   auth.Module
 	users  userregistration.Module
 }
 
@@ -170,6 +172,19 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 		Threads:    cfg.Security.Argon2.Threads,
 	})
 
+	// Le hachage vient d'ICI et non du module : il est coûteux, paramétré, et son
+	// réglage appartient à la configuration de sécurité de l'application. Un
+	// module qui choisirait ses propres paramètres Argon2 les figerait pour tout
+	// le monde — et le socle a précisément un endroit où ce réglage se décide.
+	authMod, err := auth.New(cfg.Modules[auth.Name], auth.Deps{
+		HashSecret:   hasher.Hash,
+		VerifySecret: hasher.Verify,
+		Now:          time.Now,
+	})
+	if err != nil {
+		return assembled{}, fmt.Errorf("module auth: %w", err)
+	}
+
 	// Le pilote vient de la configuration, qui le porte enfin.
 	//
 	// Ce champ restait TOUJOURS vide avant l'ADR 014 : `config/modules.yaml` ne
@@ -191,9 +206,10 @@ func compose(cfg config.Config, logger *slog.Logger) (assembled, error) {
 
 	logger.Info("modules montés",
 		slog.String("outbox", cfg.Modules[outbox.Name].Driver),
+		slog.String("auth", cfg.Modules[auth.Name].Driver),
 		slog.String("user_registration", orDefault(driver, userregistration.DriverMemory)),
 	)
-	return assembled{outbox: outboxMod, users: users}, nil
+	return assembled{outbox: outboxMod, auth: authMod, users: users}, nil
 }
 
 // generateUserID produit un identifiant ordonné dans le temps.
