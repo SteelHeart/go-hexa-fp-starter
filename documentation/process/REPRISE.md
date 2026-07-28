@@ -86,6 +86,15 @@ Podman.
 étape : `task check` (les six), `task test:race`, `task up` (pile, rôles, migrations, invariants
 ADR 011), `task run` puis le `curl` du §1.
 
+> ⚠️ **Cette ligne a été trop généreuse pour `task up`, et il faut savoir pourquoi.** Elle disait
+> vrai sur un cluster où les rôles avaient déjà été fabriqués à la main pendant la mise au point.
+> Sur un **volume neuf**, la commande échouait — quatre défauts en cascade, dont l'un où
+> `verify.sql` refusait l'état que `provision.sql` documentait en commentaire (issue #84).
+>
+> Corrigé, et re-vérifié le **2026-07-28** depuis `task reset`, c'est-à-dire volume détruit :
+> `provision → db:credentials → migrate:up → db:verify`, code de retour 0. La leçon est la même
+> que pour les gardes : **un environnement déjà amorcé ne prouve rien sur l'amorçage.**
+
 C'est ce qui referme **F001** (Docker absent) et **F005** (`-race` hors CI). Et **F008** ne se pose
 plus : sous WSL, il n'y a pas de dossier protégé par Windows Defender.
 
