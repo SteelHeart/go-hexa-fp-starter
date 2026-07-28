@@ -10,8 +10,8 @@
 > une **comparaison** avec Spring, Laravel et Symfony. Une comparaison dit quoi *avoir* ; elle ne dit
 > jamais quoi refuser, ni pour qui. C'est ce document-ci qui définit le périmètre.
 >
-> État constaté le **2026-07-27**. Chaque verdict est **sourcé** — commande ou fichier. Aucun n'est
-> écrit de mémoire.
+> État constaté le **2026-07-28**. Chaque verdict est **sourcé** — commande ou fichier. Aucun n'est
+> écrit de mémoire, et chacun a été **remesuré** à cette date plutôt que recopié.
 
 ## Les règles de l'exercice
 
@@ -41,10 +41,14 @@ la forme du socle se dégrade au bout de trois mois.
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Fichiers du **framework** à modifier pour ajouter un module métier | **0** | **≥ 2** — `internal/config/config.go`, `internal/config/modules.go` |
-| Commandes qui **créent** un module | ≥ 1 | **0** — `task migrate:new` est la seule commande de création des 40, et elle ne crée qu'un fichier de migration vide |
-| Délai avant premier succès depuis un clone nu | < 10 min | ~5 min ✅ |
-| Modules métier livrables sans authentification | 0 | tous — `auth` n'existe pas |
+| Fichiers du **framework** à modifier pour ajouter un module métier | **0** | **0** ✅ — ADR 014. Mesuré : aucun fichier de `internal/config/`, `internal/pkg/` ni `internal/infrastructure/` ne nomme un module métier. Ajouter `billing` demande son dossier, **une ligne** dans `internal/modules/catalog.go` et son montage dans le composition root — trois emplacements qui appartiennent tous à l'**application** |
+| Commandes qui **créent** un module | ≥ 1 | **0** 🔴 — `hexa new` crée un **projet**, pas un module. `hexa make:feature` reste à écrire (#17) |
+| Délai avant premier succès depuis un clone nu | < 10 min | ~5 min ✅ — et vrai **avec une base** depuis #84 : `task init && task up` échouait jusque-là sur un volume neuf |
+| Modules métier livrables sans authentification | 0 | tous 🔴 — `auth` n'existe pas (#11) |
+
+> **Deux blocages sur trois subsistent.** P1 était bloquée sur *créer*, *brancher*, *configurer* un
+> module. **Brancher** est levé (ADR 014). **Créer** et **configurer** ne le sont pas : `Config` reste
+> une struct fermée, de 16 champs à l'origine, **19 aujourd'hui** — elle s'est refermée un peu plus.
 
 **Ce qu'elle tue** : la parité pour la parité. `search`, `document`, `workflow` ne l'intéressent pas
 tant que `auth`, `notification` et `payment` manquent.
@@ -70,11 +74,17 @@ tenue, plusieurs frontends simultanés, configuration modifiable à volonté.
 | Réponse en flux possible | oui | **non** — `write_timeout: 10s` la tue |
 | Taille d'ingestion | configurable | **1 MiB en dur** (`max_body_bytes`) |
 | File de travaux longs | oui | **aucune** — `cmd/worker` ne dépile que l'outbox |
-| Benchmarks de non-régression | ≥ 1 | **0** |
+| Benchmarks de non-régression | ≥ 1 | **0** — `grep -rl "func Benchmark"` ne rend aucun fichier |
 | Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`** |
 
 **Ce qu'elle tue** : la configuration fermée et les délais HTTP en dur. Les deux sont **rédhibitoires**
 pour elle, pas gênants.
+
+> 🔴 **Cinq critères sur cinq, inchangés depuis le premier relevé.** Aucun des lots livrés depuis
+> n'a touché cette persona. Et il y a pire que « zéro benchmark » : `task test:perf` lance
+> `k6 run tests/perf/registration.js`, or **`tests/perf/` n'existe pas** — `ls tests/` ne rend que
+> `e2e` et `integration`. C'est une **commande morte**, de la même famille que les gardes qui ne
+> gardaient rien : elle a l'air d'un dispositif de mesure et n'en est pas un.
 
 ### P3 — L'équipe qui adopte de l'extérieur
 
@@ -84,10 +94,11 @@ pour elle, pas gênants.
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Paquets importables depuis l'extérieur du module | > 0 | **0** — les 75 paquets sont sous `internal/` |
+| Paquets importables depuis l'extérieur du module | > 0 | **0** — `go list ./... \| grep -v /internal/` ne rend que trois binaires et un outil de build |
 | Politique de versions et de dépréciation | écrite | **inexistante** |
-| Frontière API publique / interne | déclarée | **inexistante** |
-| Langue de l'API et du règlement | lisible par l'équipe | **français** (#34) |
+| Frontière API publique / interne | déclarée | **inexistante** — mais l'ADR 015 en fixe désormais la **méthode**, voir plus bas |
+| Licence | existe | **existe** ✅ — `LICENSE`, **tous droits réservés**. L'obstacle légal est levé au sens où plus rien n'est ambigu ; P3 ne peut toujours rien faire, et c'est une décision assumée jusqu'à la preuve sur projets réels |
+| Langue de l'API et du règlement | lisible par l'équipe | **français** pour `rules/` et le godoc ; les **530 identifiants exportés sont en anglais** (#34) |
 
 **Ce qu'elle tue** : `internal/` partout. Tant qu'il tient, ce dépôt **ne peut qu'être copié** — donc
 ce n'est pas encore un framework, quelle que soit l'intention.
@@ -101,11 +112,11 @@ qu'est-ce que je redémarre ?*
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Traces exploitables en production | oui | **non** — `telemetry.Setup` n'est appelée **nulle part** (#13) |
+| Traces exploitables en production | oui | **non** 🔴 — `telemetry.Setup` n'est appelée **nulle part**, remesuré le 2026-07-28 (#13) |
 | Sondes de vie et de disponibilité | oui | **oui** ✅ — `/healthz`, `/readyz` |
-| Publication garantie malgré un incident | oui | **oui** ✅ — outbox transactionnel |
-| Rejeu sans effet de bord | oui | **oui** ✅ — idempotence |
-| Journal inaltérable | oui | **oui** ✅ — `UPDATE`/`DELETE` révoqués, constaté |
+| Publication garantie malgré un incident | oui | **oui** ✅ — outbox transactionnel, **éprouvé contre un vrai Postgres** depuis #37 |
+| Rejeu sans effet de bord | oui | **oui** ✅ — idempotence, exclusivité sous concurrence réelle (#37) |
+| Journal inaltérable | oui | **oui** ✅ — `UPDATE`/`DELETE` révoqués, constaté. Et le constat lui-même est désormais fiable : le garde tournait sous un rôle qui n'a plus le droit d'endosser `hexa_platform`, il aurait conclu « refus confirmé » sans rien tenter (#84) |
 
 **Ce qu'elle tue** : tout ce qui n'est pas observable. Une configuration d'observabilité sans câblage
 est pire qu'aucune : elle fait croire que la question est traitée.
@@ -118,10 +129,15 @@ est pire qu'aucune : elle fait croire que la question est traitée.
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| La barrière qualité a **réellement tourné** | oui | **non** — 66 exécutions, 66 `startup_failure` (#47) |
+| La barrière qualité a **réellement tourné** | oui | **oui** ✅ — verte de bout en bout sur `main`. C'était le critère le plus lourd du document : 66 exécutions, 66 `startup_failure` (#47) |
 | Le socle dépend-il d'une personne ? | non | **non** ✅ — aucun `CODEOWNERS`, aucun pseudo dans les règles |
-| Documentation en accord avec l'état réel | oui | **oui depuis le 2026-07-27** ✅ (#42) |
-| Coût d'entrée d'un développeur | faible | **élevé** — ~70 règles, en français |
+| Documentation en accord avec l'état réel | oui | **⚠️ à surveiller** — deux affirmations fausses corrigées le 2026-07-28 : `REPRISE` déclarait `task up` vérifié alors qu'il échouait sur un volume neuf, et **ce document-ci** écrivait « le dépôt est public », faux depuis la décision du 2026-07-27. Le critère n'est pas acquis une fois pour toutes, il se re-mesure |
+| Coût d'entrée d'un développeur | faible | **élevé** 🔴 — ~70 règles, en français |
+
+> ⚠️ **Deux contrôles restent rouges en permanence, et il faut le dire à P5** avant qu'elle ne le
+> découvre : **CodeQL** (#72 — analyse indisponible en dépôt privé sur ce plan) et **Deploy UAT**
+> (#75, corrigé mais non encore constaté en conditions réelles). Un rouge permanent apprend à
+> ignorer le rouge : c'est son coût, pas le job lui-même.
 
 **Ce qu'elle tue** : le règlement s'il devient un obstacle au recrutement. C'est la tension centrale
 du projet : **la densité du règlement est à la fois la valeur et la barrière à l'entrée.**
@@ -142,39 +158,48 @@ est désormais **testable** : toute demande qui ne sert que P0 est hors périmè
 
 ## La grille — 15 questions, 7 axes
 
-Verdicts au **2026-07-27**, sur `refactor/21-modules-a-pilotes`. Vocabulaire du dépôt :
+Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 **✅ prouvé** · **⚠️ écrit non prouvé** · **🔴 absent** · **⛔ refusé assumé**.
 
 | # | Question | État | Source | Persona la plus touchée |
 |---|---|---|---|---|
 | **Amorçage** ||||
-| 1 | Comment je crée mon projet ? | 🔴 | `task rename` seul ; aucun générateur (#17) | P1 |
+| 1 | Comment je crée mon projet ? | ✅ | `hexa new` — et la garantie est **outillée** : un job CI génère un projet et y lance `task check`, cliquets de couverture compris | P1 |
 | 2 | De quoi ai-je besoin sur ma machine ? | ✅ | `deploy/toolbox/` — rien d'installé, `go run` démarre sans service | P1 |
 | **Écriture** ||||
-| 3 | Comment je crée un module ? | 🔴 | `task --list-all` : **1 seule commande de création sur 40**, `migrate:new`, qui produit une migration vide. Rien ne crée un module, une surface, un port ni un test — copie manuelle de `user_registration` | P1 |
+| 3 | Comment je crée un module ? | 🔴 | `hexa new` crée un **projet**, pas un module. Rien ne crée un module, une surface, un port ni un test — copie manuelle de `user_registration` (#17, seconde moitié) | P1 |
 | 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` 20 règles, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
-| 5 | Comment mon module se branche-t-il ? | 🔴 | `knownDrivers` dans `internal/config/modules.go` — **fichier du framework** | P1 |
+| 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||
 | 6 | Plusieurs frontends simultanés ? | ⚠️ | doctrine juste, **une seule surface** : `adapters/primary/http` ; `cmd/` = `server`, `worker` | P2 |
 | 7 | Streaming et temps réel ? | 🔴 | aucun SSE, aucun WebSocket, aucun `Flusher` ; `write_timeout: 10s` ; `max_body_bytes: 1 MiB` | P2 |
 | **Configuration** ||||
-| 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée de 16 champs** (`internal/config/config.go`) — aucun point d'extension | **P1 · P2** |
+| 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée**, **19 champs** aujourd'hui contre 16 au premier relevé (`internal/config/config.go`) — aucun point d'extension, et elle se referme | **P1 · P2** |
 | 9 | Changer de configuration à chaud ? | ⚠️ | `dynconf` existe ; pilote par défaut `file`, donc **pas à chaud** ; pilote `postgres` jamais exécuté | P1 |
 | 10 | Secrets et environnements ? | ✅ | feuilletage `config/*.yaml` → `env/{env}.yaml` → `local.yaml` → `${VAR}`, 36 tests | P1 · P4 |
 | **Charge** ||||
 | 11 | Où passent mes travaux longs ? | 🔴 | `cmd/worker` **ne dépile que l'outbox** — aucune file généraliste | P2 |
 | 12 | Comment je maîtrise la mémoire ? | 🔴 | aucun `GOMEMLIMIT`, `GOMAXPROCS`, pool ni borne de goroutines ; `limits` ne couvre que le débit | P2 |
-| 13 | Comment je vérifie que ça tient ? | 🔴 | **0 benchmark** ; `tests/perf/` **n'existe pas** alors que `task test:perf` le référence — commande morte | P2 · P5 |
+| 13 | Comment je vérifie que ça tient ? | 🔴 | **0 benchmark** ; `tests/perf/` **n'existe toujours pas** alors que `task test:perf` lance `k6 run tests/perf/registration.js` — commande morte, revérifiée le 2026-07-28 | P2 · P5 |
 | **Exploitation** ||||
 | 14 | Comment j'authentifie ? | 🔴 | `auth` : **rien** (#11) | P1 · P4 |
-| 15 | Où est passé le temps ? Comment je reprends ? | 🔴 / ✅ | traces 🔴 (`telemetry.Setup` appelée nulle part) · outbox, idempotence, audit, isolation SQL ✅ | P4 |
+| 15 | Où est passé le temps ? Comment je reprends ? | 🔴 / ✅ | traces 🔴 (`telemetry.Setup` appelée nulle part) · outbox, idempotence, audit, isolation SQL ✅, désormais **éprouvés contre de vrais services** (#37) | P4 |
 | **Durée** ||||
-| 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API | P3 |
+| 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **10 verdicts 🔴 sur 16.** Le socle est excellent sur l'axe **correction**
-(conventions, fiabilité, isolation) et quasi vide sur l'axe **débit et flux**. Les deux personas les
-plus mal servies aujourd'hui sont **P2** et **P3** ; **P1**, la primaire, est bloquée sur trois
-points : créer un module, brancher un module, configurer un module.
+**Lecture d'ensemble** : **8 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Les deux gagnés sont
+« créer mon projet » (`hexa new`) et « brancher mon module » (ADR 014).
+
+Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
+sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher** est
+levé, **créer** et **configurer** ne le sont pas.
+
+> ⚠️ **Ce que ce relevé dit du séquencement, et qui n'est pas confortable.** Les lots livrés depuis
+> le 2026-07-27 — niveau `integration`, `hexa new`, amorçage réparé, gardes de déploiement — servent
+> surtout **P5** et **P4** : *faire dire vrai à la barrière*. C'est légitime, et c'était nécessaire.
+> Mais **aucun n'a touché P2**, dont les cinq critères restent rouges, et **un seul** a levé un
+> blocage de P1. Une suite de lots individuellement justifiés peut composer un ordre de priorité que
+> personne n'a choisi.
 
 ---
 
@@ -243,28 +268,51 @@ Conséquence : **#34 n'est pas une rupture d'API**, contrairement à ce qu'on po
 périmètre réel est la **traduction du godoc et de `rules/`** — coûteux en pages, nul en compatibilité.
 La contrainte « traduire avant de figer l'API » tombe : on peut publier puis traduire.
 
-### 🔴 L'urgence : aucun fichier de licence
+### ~~🔴 L'urgence : aucun fichier de licence~~ — RÉSOLUE le 2026-07-27
 
-Le dépôt est **public**, vise l'adoption, et le `Dockerfile` déclare `MIT` — mais il n'existe
-**aucun `LICENSE`**. Sans lui, le droit d'auteur s'applique par défaut : **tous droits réservés**.
-P3 ne peut légalement rien faire, et l'image affirme une licence sans fondement. Issue #61.
+**Le texte précédent était doublement faux, et il faut dire pourquoi plutôt que l'effacer.** Il
+affirmait que le dépôt était **public** — il est **privé**, et la décision du 2026-07-27 le maintient
+**interne** jusqu'à preuve sur des projets réels. Et il s'inquiétait d'un `Dockerfile` déclarant
+`MIT` sans fondement.
+
+Les deux sont traités (#61) : `LICENSE` existe, **tous droits réservés**, avec l'intention d'ouvrir
+écrite noir sur blanc ; l'étiquette du `Dockerfile` est passée de `MIT` à `NONE`.
+
+Ce que cela ne fait pas : **P3 ne peut toujours rien faire légalement**. La différence est qu'il n'y
+a plus d'ambiguïté, et que le refus est daté et motivé au lieu d'être un silence. Le choix de la
+licence d'ouverture — `Apache-2.0` recommandé plutôt que MIT, pour sa clause de brevets — **n'est pas
+tranché**, pas plus que le titulaire du droit d'auteur.
 
 ### Ce qui devient bloquant pour `v1.0`
 
 | Sujet | Statut | Pourquoi maintenant |
 |---|---|---|
-| **Licence, `CONTRIBUTING`, `CHANGELOG`** | 🔴 #61 | Prérequis légal, le moins cher de tous |
+| **Licence** | ✅ #61 | Faite. `CONTRIBUTING` et `CHANGELOG` restent 🔴 |
 | **Sortir de `internal/`** (#16) | 🔴 | 75 paquets, **0 importable** : le dépôt ne peut qu'être **copié**. Sans ça, il n'y a pas de framework, quelle que soit l'intention |
 | **Frontière API publique / interne** | 🔴 | Extraire 530 identifiants sans les classer publierait une API par accident, et on ne la reprendrait plus |
 | **Politique de versions et de dépréciation** | 🔴 | Ce qu'un framework promet et qu'un boilerplate n'a jamais eu à promettre |
 | **Traduction du godoc et de `rules/`** (#34) | ⚠️ | Réel mais **non bloquant** : aucune rupture d'API à la clé |
 
-### Ce que ça change dans le séquencement
+### Ce que ça change dans le séquencement — RÉVISÉ par l'ADR 015
 
-La décision écrite « **stabiliser avant de restructurer** » ne tient plus telle quelle : on ne
-stabilise pas une API qu'on n'a pas le droit de publier, et rien ne distingue aujourd'hui l'API
-publique du détail interne. La **classification des 75 paquets** doit précéder #16, et #16 doit
-précéder toute promesse de compatibilité.
+Le paragraphe précédent concluait que la **classification des 75 paquets** devait précéder #16, et
+qu'elle était faisable tout de suite « sans rien restructurer ». **L'ADR 015 a renversé cette
+conclusion**, et le raisonnement mérite d'être gardé parce qu'il se reproduira :
 
-Elle reste juste sur un point : classer n'oblige à **déplacer aucun fichier**. C'est un exercice de
-décision, faisable avant `v0.1.0` sans rien restructurer.
+- **Rien n'est urgent.** Le dépôt est privé ; aucun paquet n'est importable ; donc
+  **l'irréversibilité n'a pas commencé**. Classer aujourd'hui n'achète aucune sécurité.
+- **Classer au jugé, c'est décider deux fois.** Aucune application n'a jamais été construite sur ce
+  socle. Une frontière posée sans usage mesuré serait une hypothèse — et une hypothèse qu'on ne
+  reprendrait plus une fois publiée.
+
+L'ordre retenu est donc : **`hexa new` → une application réelle → la frontière, DÉRIVÉE de sa liste
+d'imports.** Le premier maillon est livré (#17, première moitié).
+
+> ⚠️ **Le vrai coût du déplacement, sous-estimé partout ailleurs** : douze des treize règles de
+> dépendance d'`arch-go` sont indexées sur des chemins `internal.`. Les déplacer les fait toutes
+> cesser de correspondre — et le rapport afficherait **100 % de conformité en ne gardant plus rien**.
+> Toute PR de déplacement doit porter son témoin d'échec (ADR 013).
+
+La décision « **stabiliser avant de restructurer** » tient donc, mais pour une raison différente de
+celle écrite au départ : non pas parce que la stabilité précède la structure, mais parce que **la
+structure se déduit d'un usage qui n'existe pas encore**.
