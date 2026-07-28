@@ -106,8 +106,8 @@ func run() error {
 		slog.String("relais", cfg.Messaging.Driver),
 	)
 
-	if err := w.dispatch.Run(ctx); err != nil {
-		return fmt.Errorf("dépileur: %w", err)
+	if err := w.boucler(ctx); err != nil {
+		return err
 	}
 	logger.Info("dépileur arrêté proprement")
 	return nil
@@ -122,6 +122,7 @@ func run() error {
 // valeurs de retour signale toujours un type qui manque.
 type worker struct {
 	dispatch    *outboxapp.Dispatcher
+	consume     messaging.Consumer
 	closeBroker messaging.Closer
 }
 
@@ -146,6 +147,18 @@ func compose(cfg config.Config, logger *slog.Logger) (worker, error) {
 		return worker{}, fmt.Errorf("relais de messagerie: %w", err)
 	}
 
+	// Les abonnements AVANT le dépileur : `Subscribe` doit être appelé avant
+	// `Run`, et un dépileur qui publierait pendant que les abonnements se
+	// montent perdrait les premières enveloppes sans le dire.
+	//
+	// Variable NOMMÉE plutôt que `err` réutilisé : `govet shadow` et
+	// `gocritic sloppyReassign` se contredisent sur cette ligne — l'un veut `=`,
+	// l'autre `:=`. Un nom distinct sort du conflit sans faire taire ni l'un ni
+	// l'autre, et se relit mieux.
+	if erreurAbonnement := abonner(cfg, broker, logger); erreurAbonnement != nil {
+		return worker{}, erreurAbonnement
+	}
+
 	mod, err := outbox.New(outboxCfg, outbox.Deps{Now: time.Now})
 	if err != nil {
 		return worker{}, fmt.Errorf("module outbox: %w", err)
@@ -159,7 +172,7 @@ func compose(cfg config.Config, logger *slog.Logger) (worker, error) {
 	if err != nil {
 		return worker{}, fmt.Errorf("dépileur de l'outbox: %w", err)
 	}
-	return worker{dispatch: dispatch, closeBroker: broker.Close}, nil
+	return worker{dispatch: dispatch, consume: broker.Consume, closeBroker: broker.Close}, nil
 }
 
 // moduleCatalog assemble ce que la configuration a le droit de nommer.
