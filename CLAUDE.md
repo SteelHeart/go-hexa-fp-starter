@@ -220,7 +220,7 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
 | Quoi | Pourquoi ce n'est pas prouvé |
 |---|---|
 | Pilotes `postgres` des modules noyau | Le SCHÉMA est désormais appliqué et vérifié en local, mais les pilotes eux-mêmes n'ont **aucun test, à aucun niveau** (#37) |
-| ~~`migrations/postgres/` + `deploy/postgres/provision.sql`~~ | **PROUVÉ en local le 2026-07-27** : provision, `up`, `down`, rejeu, `deploy/postgres/verify.sql`, et les deux refus de l'ADR 011 — code de retour 0. ⚠️ Ils ne fonctionnaient **nulle part** avant : quatre défauts en cascade, détaillés dans [`JOURNAL_FRICTION.md`](documentation/process/JOURNAL_FRICTION.md) § « Ce que F001 a révélé ». La ligne précédente affirmait que le job CI les appliquait — **c'était faux**, il échouait sur la même commande |
+| ~~`migrations/postgres/` + `deploy/postgres/provision.sql`~~ | **PROUVÉ en local le 2026-07-28, depuis un volume DÉTRUIT** (`task reset`) : provision, mots de passe, `up`, `down`, rejeu, `verify.sql`, et les deux refus de l'ADR 011 — code de retour 0. ⚠️ La mesure du 2026-07-27 était trop généreuse : elle portait sur un cluster où les rôles avaient été fabriqués à la main. Sur un volume neuf, `task up` échouait — **quatre** défauts en cascade (#84), dont `verify.sql` refusant l'état que `provision.sql` documentait. Un environnement déjà amorcé ne prouve rien sur l'amorçage |
 | Pilote `redis` de `idempotency` | Aucun Redis sur la machine de référence |
 | Relais Kafka et RabbitMQ | Jamais exécutés contre un broker réel |
 | `cache` | Compile, **zéro test** : `New` fait un `Ping` Redis et `JSON` exige un client — donc niveau intégration (#37), pas ici. `messaging` (13), `modulebus` (10), `httpserver` (14) et `telemetry` (9) sont désormais couverts |
@@ -439,6 +439,8 @@ est écrite à côté :
 | Écriture PowerShell mal encodée | 408 séquences d'accents doublement encodées dans 8 fichiers | Réparé. Toujours écrire en UTF-8 sans BOM |
 | Fichier verrouillé par l'éditeur | `golangci-lint fmt` échoue sur « Accès refusé » | Fermer l'éditeur, relancer |
 | **Un binaire Go ne peut pas écrire sous `htdocs`** | `go test -coverprofile` et `go get` échouent sur « fichier introuvable » — sur une CRÉATION, ce qui n'a aucun sens et envoie chercher ailleurs | Programme témoin de 10 lignes pour trancher : si `os.Create` échoue dans le dépôt et réussit ailleurs, c'est la MACHINE. Sortir de `htdocs` ou passer sous WSL (F008) |
+| `psql -c "…"` n'**interpole pas** ses variables `-v` | La commande part littéralement et le serveur répond `syntax error at or near ":"` — un message qui accuse la syntaxe SQL, jamais l'interpolation | Passer le SQL par l'**entrée standard** (`<<'SQL'`). C'est là que `:'litteral'` et `:"identifiant"` sont substitués — et c'est la seule façon sûre d'injecter un mot de passe |
+| Un environnement **déjà amorcé** ne prouve rien sur l'amorçage | `task up` était réputé vert : il l'était sur un cluster où les rôles avaient été fabriqués à la main. Sur un volume neuf, quatre échecs en cascade (#84) | Mesurer depuis `task reset`, volume détruit. Même forme que le faux vert d'un garde : le succès observé portait sur autre chose que ce qu'on croyait mesurer |
 | PowerShell tronque `-flag=nom.ext` | `-coverprofile=coverage.out` arrive à Go en `-coverprofile=coverage`. L'erreur nomme un fichier qu'on n'a jamais demandé | Passer par le shell POSIX pour les commandes à arguments `=`, ou quoter |
 
 ### Frictions ouvertes (`documentation/process/JOURNAL_FRICTION.md`)
@@ -457,20 +459,21 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-F006 et F007 sont **résolues** (voir la table des frictions) : elles ne sont plus des actions.
+**Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), et la
+campagne de signalements. F001, F005, F006, F007 sont **résolues**. Ce ne sont plus des actions.
 
-1. **#2** : `task check` vert de bout en bout → tag `v0.1.0`. Vert depuis un clone **hors** de
-   `htdocs` ; les trois cliquets de couverture passent aussi. Reste F008 côté machine
-2. **Fusionner PR #20**, puis cette branche : `main` est très en retard.
-   ⚠️ Quatre messages de commit poussés portent de **mauvais numéros d'issue** (`Closes #2` et
-   `Closes #10` fermeraient des issues non terminées). Une table de traçabilité est publiée en
-   commentaire sur #2 et #10 — **fusionner en écrasant, ou corriger le corps de la PR**
-3. **#37** : niveau de test `integration` — huit paquets de pilotes n'ont aucun test. Bloqué en local
-   par F001 (Docker), donc CI ou WSL. `cache` en fait partie : `New` fait un `Ping`
-4. **#17** : `hexa new`, en mode **gabarit**. Débloqué par l'ADR 014 ; et l'ADR 015 en fait le
-   préalable à la frontière publique — il est la seule façon de produire l'application dont la
-   liste d'imports MESURERA cette frontière. **Aucun paquet n'est importable aujourd'hui** :
-   `go list ./... | grep -v /internal/` ne rend que deux binaires et un outil de build
+1. **#75** : `Deploy UAT` échoue **à chaque poussée sur `main`**, sur son garde « CI verte », en
+   0,4 s, sans jamais interroger la CI. Un rouge permanent apprend à ignorer le rouge — c'est le
+   coût réel, pas le job lui-même
+2. **Tag `v0.1.0`** : la barrière est verte et l'amorçage fonctionne sur un volume neuf (#84). Ce
+   qui reste avant de graver, ce sont les deux rouges permanents ci-dessus et #72
+3. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
+   toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
+   aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
+   ⚠️ Douze des treize règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
+   déplacement doit porter son témoin, sinon elle rend 100 % de conformité en ne gardant plus rien
+4. **#11 `auth`** et **#23 `tenancy`** : les deux « non » que reçoit tout évaluateur produit, avant
+   d'avoir pu découvrir que l'outbox est excellente
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
 
@@ -533,6 +536,14 @@ Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriét
   rôle de migration ne doit pas avoir, sinon la garde se contourne elle-même.
 - Migrations sous **`DB_MIGRATION_DSN`**, jamais `DB_DSN`. Le `Taskfile` et la CI faisaient
   l'inverse — corrigé.
+- **`hexa_migrator` est le rôle de connexion des migrations**, `NOINHERIT`, membre de `hexa_owner`
+  qu'il **endosse** par `ALTER ROLE … SET ROLE` à l'ouverture de session. Il n'existait nulle part
+  avant #84 : `.env.example` le nommait, `provision.sql` ne le créait pas, et les deux commandes
+  données en commentaire produisaient un état que `verify.sql` **refuse**. Le garde n'a pas bougé ;
+  c'est la provision qui s'y est conformée. `has_schema_privilege` respecte l'héritage, donc
+  `NOINHERIT` = privilège **endossable, non tenu**.
+- **Les mots de passe des rôles de connexion ne sont pas provisionnés.** `task db:credentials` les
+  **extrait de `.env`** — source unique — et **refuse** hors `development`/`test`.
 
 ### Arbitrages en attente côté produit
 

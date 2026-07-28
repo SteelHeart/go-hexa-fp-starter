@@ -49,10 +49,22 @@ Créer les schémas ne suffit pas : sans privilèges distincts, `billing` peut t
 
 ```
 hexa_owner        possède les schémas — DDL. JAMAIS utilisé par l'application.
+hexa_migrator     rôle de connexion des MIGRATIONS. Endosse hexa_owner, ne l'hérite pas.
 hexa_app          rôle de connexion de l'application. Aucun privilège en propre.
 hexa_m_{module}   un par module métier. USAGE sur SON schéma, DML sur SES tables.
 hexa_platform     lecture/écriture sur le schéma platform, accordé à tous les modules.
 ```
+
+**`hexa_migrator` est `NOINHERIT`, exactement comme `hexa_app`**, et ce n'est pas une symétrie
+décorative. En `INHERIT`, il porterait passivement le privilège `CREATE` de `hexa_owner` sur tous les
+schémas — ce que le §4 interdit, et que `verify.sql` signale. Il l'ENDOSSE à l'ouverture de session
+(`ALTER ROLE hexa_migrator SET ROLE hexa_owner`), ce qui laisse `session_user = hexa_migrator` dans
+les journaux et `current_user = hexa_owner` sur les objets créés.
+
+Ce rôle était **nommé par `.env.example` et créé par personne** : le dépôt documentait, en
+commentaire de `provision.sql`, deux commandes dont le résultat était refusé par son propre garde.
+Corrigé en [#84](https://github.com/SteelHeart/go-hexa-fp-starter/issues/84) ; le garde n'a pas
+bougé d'une ligne, c'est la provision qui s'y est conformée.
 
 `hexa_app` est **membre** de chaque `hexa_m_{module}` mais n'hérite d'aucun privilège
 (`NOINHERIT`). Un adaptateur secondaire prend son rôle pour la durée de sa transaction :

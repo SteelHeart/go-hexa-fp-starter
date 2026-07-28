@@ -16,11 +16,17 @@
 -- │ Idempotent : relançable sans effet de bord.                                │
 -- └────────────────────────────────────────────────────────────────────────────┘
 --
--- AUCUN MOT DE PASSE ICI. Les rôles sont créés sans secret ; celui de `hexa_app`
--- est posé hors dépôt, par le mécanisme de secrets de l'environnement
--- (rules/securite.md : aucun secret versionné, même en exemple).
+-- AUCUN MOT DE PASSE ICI. Les rôles de connexion — `hexa_app` et `hexa_migrator`
+-- — sont créés sans secret ; le leur est posé hors dépôt, par le mécanisme de
+-- secrets de l'environnement (rules/securite.md : aucun secret versionné, même
+-- en exemple).
 --
 --   ALTER ROLE hexa_app WITH PASSWORD '…';   -- hors dépôt, jamais ici
+--
+-- Un rôle LOGIN sans mot de passe ne se connecte pas : ce n'est donc pas un
+-- trou, c'est un état inachevé qui échoue bruyamment. En DÉVELOPPEMENT,
+-- `task db:credentials` lit `.env` — non versionné — et pose ces mots de passe ;
+-- il REFUSE de s'exécuter hors `development` et `test`.
 --
 -- Voir documentation/adr/011-isolation-des-donnees-par-module.md
 
@@ -34,15 +40,10 @@ BEGIN;
 -- sert jamais à l'application.
 --
 -- NOLOGIN volontairement : on ne se connecte pas « en tant que hexa_owner », on
--- l'ENDOSSE. Le rôle de connexion de DB_MIGRATION_DSN doit être membre de
--- hexa_owner, et chaque migration fait `SET LOCAL ROLE hexa_owner`. Un rôle
--- propriétaire sans mot de passe est un rôle qu'aucune fuite de secret n'ouvre.
---
---   CREATE ROLE hexa_migrator LOGIN;          -- hors dépôt
---   GRANT hexa_owner TO hexa_migrator;        -- hors dépôt
---
--- En CI, l'administrateur de la base tient ce rôle : un superutilisateur peut
--- toujours endosser n'importe quel rôle.
+-- l'ENDOSSE. Le rôle de connexion de DB_MIGRATION_DSN est `hexa_migrator`,
+-- provisionné plus bas, et chaque migration fait `SET LOCAL ROLE hexa_owner`.
+-- Un rôle propriétaire sans mot de passe est un rôle qu'aucune fuite de secret
+-- n'ouvre.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hexa_owner') THEN
@@ -66,6 +67,64 @@ BEGIN
     EXECUTE format('GRANT CREATE, CONNECT ON DATABASE %I TO hexa_owner', current_database());
 END
 $$;
+
+-- Depuis PostgreSQL 15, le schéma `public` n'accorde plus CREATE à PUBLIC, et il
+-- appartient à `pg_database_owner`. Sans la ligne ci-dessous, goose échoue avant
+-- la première migration, sur la création de sa propre table de suivi :
+--
+--   ERROR: permission denied for schema public
+--
+-- Mesuré, pas déduit. C'est le quatrième maillon de la cascade de l'issue #84 :
+-- chacun était masqué par le précédent, donc invisible tant que le premier
+-- n'était pas corrigé.
+GRANT CREATE ON SCHEMA public TO hexa_owner;
+
+-- ── hexa_migrator : le rôle de CONNEXION des migrations ──────────────────────
+--
+-- Ce rôle n'existait nulle part. `.env.example` le désignait, `provision.sql` ne
+-- le créait pas, et les deux lignes que ce fichier donnait en exemple —
+-- `CREATE ROLE hexa_migrator LOGIN` puis `GRANT hexa_owner TO hexa_migrator` —
+-- produisaient un état que `verify.sql` REFUSE. Le dépôt documentait une
+-- configuration que son propre garde rejetait (issue #84).
+--
+-- NOINHERIT, exactement pour la même raison que `hexa_app`, et c'est ce qui
+-- réconcilie le garde et la documentation : avec INHERIT, `hexa_migrator`
+-- porterait passivement le privilège CREATE de `hexa_owner` sur tous les
+-- schémas, et `verify.sql` §2 le signalerait — à raison.
+--
+--   ERROR: privilège CREATE accordé à un rôle applicatif — hexa_migrator …
+--
+-- `has_schema_privilege` respecte l'attribut d'héritage : NOINHERIT, le
+-- privilège n'est PAS tenu, il est seulement ENDOSSABLE. Le garde reste strict,
+-- et aucune exception ne lui est ajoutée — c'est le point.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hexa_migrator') THEN
+        CREATE ROLE hexa_migrator LOGIN NOINHERIT;
+    ELSE
+        ALTER ROLE hexa_migrator NOINHERIT;
+    END IF;
+END
+$$;
+
+GRANT hexa_owner TO hexa_migrator;
+
+-- Endossement AUTOMATIQUE à l'ouverture de session.
+--
+-- Sans cette ligne, il faudrait un `SET ROLE hexa_owner` avant chaque commande —
+-- ce que les migrations font déjà, mais pas goose pour sa propre table de suivi,
+-- ni `psql` pour une commande ponctuelle. Un dispositif qui exige de se souvenir
+-- d'une commande sera oublié.
+--
+-- L'effet est exactement celui voulu :
+--
+--   session_user  = hexa_migrator   ← ce que voient les journaux et pg_stat
+--   current_user  = hexa_owner      ← ce qui possède les objets créés
+--
+-- Et `RESET ROLE` en fin de migration retombe sur ce défaut de session, pas sur
+-- `session_user` : goose inscrit donc sa version en tant que propriétaire.
+-- Vérifié sur un cluster réel avant d'être écrit ici.
+ALTER ROLE hexa_migrator SET ROLE hexa_owner;
 
 -- ── hexa_platform : accès aux tables des modules NOYAU ───────────────────────
 --
