@@ -403,6 +403,47 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
   # ───────────────────────────────────────────────────────────────────────────
+  # 5b. Le générateur — un projet GÉNÉRÉ passe la même barrière que le socle.
+  #
+  #     C'est la seule garantie qui compte pour `hexa new` (#17). Tout le reste
+  #     — il compile, il écrit des fichiers — se voit en le regardant tourner.
+  #
+  #     Ce job a trouvé, à sa première exécution, que `tools/covergate` portait
+  #     le nom du socle EN DUR : dans un projet généré, aucune exclusion ne
+  #     correspondait plus, et les cliquets mesuraient un périmètre qui n'était
+  #     pas le leur. Ni `task rename` ni son garde ne pouvaient le voir — ils
+  #     cherchent le chemin de module COMPLET, la constante n'en portait que le
+  #     dernier segment.
+  # ───────────────────────────────────────────────────────────────────────────
+  generator:
+    name: Le projet généré passe la barrière
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Outillage
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}
+          go install github.com/arch-go/arch-go@${ARCHGO_VERSION}
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: hexa new, puis task check DANS le projet généré
+        run: |
+          set -euo pipefail
+          bac=$(mktemp -d)
+          go build -o "$bac/hexa" ./cmd/hexa
+          "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere
+          cp .env.example "$bac/projet/.env"
+          cd "$bac/projet"
+          task check
+
+  # ───────────────────────────────────────────────────────────────────────────
   # 6. Niveau `integration` — les PILOTES contre les services réels (#37).
   #
   #    Huit paquets de pilotes avaient zéro test, à aucun niveau. Le tag
@@ -751,7 +792,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [pr-title, inertia, quality, architecture, test, migrations, integration, e2e, build, vuln, secrets, docker]
+    needs: [pr-title, inertia, quality, architecture, test, migrations, integration, generator, e2e, build, vuln, secrets, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Tous les jobs requis ont-ils réussi ?
