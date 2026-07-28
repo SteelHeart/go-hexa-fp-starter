@@ -334,13 +334,20 @@ jobs:
           --health-interval 2s --health-timeout 3s --health-retries 20
 
     env:
-      # En CI, `hexa` est administrateur de sa base : il tient donc les deux rôles
-      # à la fois. En UAT et en production, DB_MIGRATION_DSN est un rôle
-      # `hexa_owner` distinct, et DB_DSN un rôle `hexa_app` sans aucun droit DDL
-      # (ADR 011 §4). La séparation est vérifiée par la configuration, qui refuse
-      # deux DSN identiques hors développement.
+      # ⚠️ DB_MIGRATION_DSN désigne `hexa_migrator`, PAS le superutilisateur.
+      #
+      # Ce job posait `hexa:hexa` pour les deux, donc il migrait en tant
+      # qu'administrateur du conteneur. Conséquence : le rôle de migration et
+      # toute sa chaîne de privilèges n'étaient exercés NULLE PART — ni en CI, ni
+      # en local, ni au niveau `integration`. Ils étaient cassés depuis toujours,
+      # et rien ne pouvait le dire (issue #84).
+      #
+      # Ce job emprunte désormais exactement le chemin d'un poste neuf :
+      # provision → mots de passe → migration sous `hexa_migrator`.
+      APP_ENV: test
       DB_SUPERUSER_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
-      DB_MIGRATION_DSN: postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable
+      DB_MIGRATION_DSN: postgres://hexa_migrator:migration-ci@localhost:5432/hexa?sslmode=disable
+      DB_DSN: postgres://hexa_app:applicatif-ci@localhost:5432/hexa?sslmode=disable
 
     steps:
       - uses: actions/checkout@v7
@@ -357,6 +364,16 @@ jobs:
 
       - name: Provisionne les rôles
         run: psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
+      # `provision.sql` ne pose aucun mot de passe, et c'est la décision. Cette
+      # étape est celle qui manquait entre le provisionnement et la migration.
+      - name: Pose les mots de passe des rôles de connexion
+        run: ./tools/pose-mots-de-passe-locaux.sh
+
+      # Le refus se CONSTATE : sans lui, rien ne distingue « refuse hors
+      # développement » de « n'a jamais été essayé » (ADR 013).
+      - name: Le poseur de mots de passe refuse hors development/test
+        run: ./tools/pose-mots-de-passe-locaux.sh --temoin
 
       - name: Applique les migrations
         run: goose -dir ./migrations/postgres postgres "$DB_MIGRATION_DSN" up
@@ -376,9 +393,19 @@ jobs:
       # Le rôle applicatif ne doit PAS pouvoir faire de DDL. On le prouve en
       # essayant : la commande doit échouer. Un test qui vérifie qu'une chose est
       # interdite doit constater le refus, pas l'absence de tentative.
+      #
+      # ⚠️ Sous DB_SUPERUSER_DSN, et c'est le point délicat. `hexa_migrator`
+      # n'est pas membre de `hexa_platform` : son `SET ROLE` serait refusé, psql
+      # rendrait un code non nul, et ce test conclurait « refus confirmé » sans
+      # avoir tenté la moindre écriture. Le durcissement de #84 aurait donc
+      # SILENCIEUSEMENT vidé les deux gardes qui suivent.
+      #
+      # D'où la première commande : le `SET ROLE` doit RÉUSSIR seul, sinon
+      # l'échec du second ne prouve rien.
       - name: Le rôle applicatif ne peut pas créer de table
         run: |
-          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+          psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q -c "SET ROLE hexa_platform;"
+          if psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q \
                -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
             echo "::error::hexa_platform a pu créer une table — ADR 011 §4 est violée"
             exit 1
@@ -393,13 +420,25 @@ jobs:
              VALUES ('ci', 'test.executed', 'ci_run', '1', now());"
           for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" \
                      "DELETE FROM platform.audit_log"; do
-            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+            if psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q \
                  -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
               echo "::error::le journal d'audit a accepté « $sql » — ADR 011 §5 est violée"
               exit 1
             fi
           done
           echo "refus confirmé : le journal d'audit est en ajout seul"
+
+      # Le rôle de migration est bien `hexa_migrator`, et il endosse `hexa_owner`.
+      # Sans ce constat, rien ne distinguerait ce job d'un job qui migre encore
+      # sous le superutilisateur — c'est-à-dire de l'état qu'on vient de corriger.
+      - name: Le chemin du rôle de migration est celui d'un poste neuf
+        run: |
+          observe=$(psql "$DB_MIGRATION_DSN" -tAX -c "SELECT session_user || '/' || current_user;")
+          echo "session_user/current_user = $observe"
+          if [ "$observe" != "hexa_migrator/hexa_owner" ]; then
+            echo "::error::migration attendue sous hexa_migrator endossant hexa_owner, obtenu $observe"
+            exit 1
+          fi
 
   # ───────────────────────────────────────────────────────────────────────────
   # ───────────────────────────────────────────────────────────────────────────

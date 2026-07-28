@@ -47,6 +47,10 @@ tasks:
       # Les rôles d'abord : une migration qui accorde un privilège à un rôle
       # absent échoue, et c'est le comportement voulu.
       - task: db:provision
+      # Puis leurs mots de passe LOCAUX. `provision.sql` n'en pose aucun, à juste
+      # titre — mais un rôle LOGIN sans mot de passe ne se connecte pas, et la
+      # migration suivante échouait donc sur un clone neuf (#84).
+      - task: db:credentials
       - task: migrate:up
       - task: db:verify
 
@@ -80,6 +84,16 @@ tasks:
     desc: 'Crée les rôles SQL — UNE FOIS, avec un rôle administrateur'
     cmds:
       - psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -f deploy/postgres/provision.sql
+
+  db:credentials:
+    desc: 'Pose les mots de passe locaux des rôles de connexion — development/test SEULEMENT'
+    cmds:
+      - ./tools/pose-mots-de-passe-locaux.sh
+
+  db:credentials:temoin:
+    desc: "Prouve que db:credentials REFUSE hors development/test (ADR 013)"
+    cmds:
+      - ./tools/pose-mots-de-passe-locaux.sh --temoin
 
   migrate:up:
     desc: Applique les migrations
@@ -225,9 +239,18 @@ tasks:
       - task: db:verify
       # Les deux refus de l'ADR 011 se CONSTATENT. Un test qui vérifie qu'une
       # chose est interdite doit voir le refus, pas l'absence de tentative.
+      #
+      # ⚠️ Ces refus s'exercent sous DB_SUPERUSER_DSN, pas sous DB_MIGRATION_DSN.
+      # Depuis que le rôle de migration est `hexa_migrator` et non plus un
+      # superutilisateur (#84), il n'est PAS membre de `hexa_platform` : son
+      # `SET ROLE` serait refusé, la commande échouerait, et le test conclurait
+      # « refus confirmé » sans avoir jamais tenté la moindre écriture.
+      # Un faux vert, et de la pire espèce : celui qui grandit avec le durcissement.
       - cmd: |
           set -e
-          if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+          # Le SET ROLE doit d'abord RÉUSSIR, sinon l'échec suivant ne prouve rien.
+          psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q -c "SET ROLE hexa_platform;"
+          if psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q \
                -c "SET ROLE hexa_platform; CREATE TABLE platform.intrus (x int);" 2>/dev/null; then
             echo "  ADR 011 violée : le rôle applicatif a pu créer une table" >&2; exit 1
           fi
@@ -236,12 +259,13 @@ tasks:
             "INSERT INTO platform.audit_log (actor, action, entity_type, entity_id, occurred_at)
              VALUES ('ci-local', 'test.executed', 'run', '1', now());"
           for sql in "UPDATE platform.audit_log SET actor = 'falsifie'" "DELETE FROM platform.audit_log"; do
-            if psql "$DB_MIGRATION_DSN" -v ON_ERROR_STOP=1 -q \
+            if psql "$DB_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -q \
                  -c "SET ROLE hexa_platform; $sql;" 2>/dev/null; then
               echo "  ADR 011 violée : le journal d'audit a accepté « $sql »" >&2; exit 1
             fi
           done
           echo "  refus confirmé : journal d'audit en ajout seul"
+      - task: db:credentials:temoin
 
   ci:integration:
     desc: "Le niveau `integration` — les pilotes contre les SERVICES REELS (#37)"
