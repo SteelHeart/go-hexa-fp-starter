@@ -116,7 +116,7 @@ qu'est-ce que je redémarre ?*
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Traces exploitables en production | oui | **non** 🔴 — `telemetry.Setup` n'est appelée **nulle part**, remesuré le 2026-07-28 (#13) |
+| Traces exploitables en production | oui | **oui** ✅ — `telemetry.Setup` et le serveur de métriques sont câblés dans les deux binaires (#13). Prouvé de bout en bout : `trace_id` dans chaque ligne de journal, `/metrics` en 200, et la trace **reçue par Jaeger** |
 | Sondes de vie et de disponibilité | oui | **oui** ✅ — `/healthz`, `/readyz` |
 | Publication garantie malgré un incident | oui | **oui** ✅ — outbox transactionnel, **éprouvé contre un vrai Postgres** depuis #37 |
 | Rejeu sans effet de bord | oui | **oui** ✅ — idempotence, exclusivité sous concurrence réelle (#37) |
@@ -187,13 +187,14 @@ Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 | 13 | Comment je vérifie que ça tient ? | 🔴 | **0 benchmark** ; `tests/perf/` **n'existe toujours pas** alors que `task test:perf` lance `k6 run tests/perf/registration.js` — commande morte, revérifiée le 2026-07-28 | P2 · P5 |
 | **Exploitation** ||||
 | 14 | Comment j'authentifie ? | 🔴 | `auth` : **rien** (#11) | P1 · P4 |
-| 15 | Où est passé le temps ? Comment je reprends ? | 🔴 / ✅ | traces 🔴 (`telemetry.Setup` appelée nulle part) · outbox, idempotence, audit, isolation SQL ✅, désormais **éprouvés contre de vrais services** (#37) | P4 |
+| 15 | Où est passé le temps ? Comment je reprends ? | ✅ | traces ✅ depuis #13 — `trace_id` et `span_id` dans chaque ligne de journal, `/metrics` servi, trace reçue par le collecteur · outbox, idempotence, audit, isolation SQL ✅, désormais **éprouvés contre de vrais services** (#37) | P4 |
 | **Durée** ||||
 | 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **7 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Les trois gagnés servent
-tous **P1** : « créer mon projet » (`hexa new`), « brancher mon module » (ADR 014) et « créer un
-module » (`hexa make:feature`).
+**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Trois des quatre gagnés
+servent **P1** — « créer mon projet » (`hexa new`), « brancher mon module » (ADR 014), « créer un
+module » (`hexa make:feature`) — et le quatrième sert **P4** : l'observabilité est branchée (#13),
+donc P4 n'a plus aucun critère rouge.
 
 Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
 sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher** et

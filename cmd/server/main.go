@@ -82,6 +82,21 @@ func run() error {
 	}
 
 	logger := telemetry.NewLogger(cfg)
+
+	// L'observabilité AVANT tout le reste : un défaut d'initialisation qui
+	// surviendrait après le montage des modules ne serait tracé nulle part.
+	arret, err := demarrerObservabilite(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer arreterObservabilite(ctx, arret, logger)
+
+	// Un contexte dérivé, pour que le serveur de métriques puisse couper le
+	// service : sans lui, son échec resterait un avertissement dans un journal.
+	ctx, couper := context.WithCancel(ctx)
+	defer couper()
+	servirMetriques(ctx, cfg, logger, couper)
+
 	logger.InfoContext(ctx, "démarrage",
 		slog.String("service", cfg.App.Name),
 		slog.String("env", string(cfg.App.Env)),
@@ -90,6 +105,19 @@ func run() error {
 		slog.String("build_date", buildDate),
 	)
 
+	return servir(ctx, cfg, logger)
+}
+
+// servir monte les surfaces et tient le serveur jusqu'à l'annulation.
+//
+// Extraite de `run` parce que celle-ci dépassait le seuil de lignes d'`arch-go`
+// en y branchant l'observabilité. Le garde a attrapé la régression avant la
+// relecture — c'est exactement ce qu'on lui demande.
+//
+// La coupure n'est pas arbitraire : `run` porte désormais l'AMORÇAGE — signaux,
+// catalogue, configuration, journal, observabilité — et `servir` porte les
+// SURFACES. Deux responsabilités, deux fonctions.
+func servir(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	mounted, err := compose(cfg, logger)
 	if err != nil {
 		return err

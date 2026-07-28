@@ -74,6 +74,17 @@ func run() error {
 	}
 
 	logger := telemetry.NewLogger(cfg)
+
+	arret, err := demarrerObservabilite(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer arreterObservabilite(ctx, arret, logger)
+
+	ctx, couper := context.WithCancel(ctx)
+	defer couper()
+	servirMetriques(ctx, cfg, logger, couper)
+
 	logger.InfoContext(ctx, "démarrage du dépileur",
 		slog.String("version", version),
 		slog.String("commit", commit),
