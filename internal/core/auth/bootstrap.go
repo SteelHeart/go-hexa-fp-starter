@@ -66,6 +66,10 @@ type BootstrapReport struct {
 //     `admin/admin`, et personne ne le change avant l'incident.
 //  3. **Il est idempotent.** Un sujet déjà pris n'est pas une erreur, et rien
 //     n'est recréé : redémarrer ne réinitialise pas un compte existant.
+//  4. **Il ne fait jamais échouer un démarrage.** Un module désactivé n'est pas
+//     une panne, c'est un état configuré : il n'y a rien à amorcer, et le dire
+//     par une erreur fatale empêcherait de démarrer tout environnement local où
+//     l'authentification est éteinte.
 //
 // # Pourquoi le secret est rendu plutôt que journalisé ici
 //
@@ -84,9 +88,23 @@ func Bootstrap(ctx context.Context, mod Module, env config.Environment) (Bootstr
 	}
 
 	if _, err := mod.Register(ctx, BootstrapSubject, secret); err != nil {
-		if errors.Is(err, domain.ErrSubjectTaken) {
-			// Déjà amorcé : on ne recrée pas, et on ne rend pas le secret d'un
-			// compte dont on ne connaît pas le mot de passe.
+		if errors.Is(err, domain.ErrSubjectTaken) || errors.Is(err, ErrDisabled) {
+			// Deux « rien à faire » distincts, et le même compte rendu vide :
+			//
+			//   ErrSubjectTaken — déjà amorcé. On ne recrée pas, et on ne rend
+			//   pas le secret d'un compte dont on ne connaît plus le mot de
+			//   passe.
+			//
+			//   ErrDisabled — le module est ÉTEINT. C'est un état configuré,
+			//   pas une panne : il n'y a simplement rien à amorcer.
+			//
+			// ⚠️ Le second cas remontait comme une erreur fatale, et FAISAIT
+			// ÉCHOUER LE DÉMARRAGE dès qu'`auth` était désactivé. Il l'était en
+			// `test` — `IsLocal()` couvre `development` ET `test`, alors que
+			// l'activation ne vient que de la couche `development`. Trouvé par
+			// la CI end-to-end, jamais en local : la mesure locale avait porté
+			// sur `development` et `production`, donc jamais sur la seule
+			// combinaison qui casse, environnement local ET module éteint.
 			return BootstrapReport{}, nil
 		}
 		return BootstrapReport{}, fmt.Errorf("amorçage du compte %q: %w", BootstrapSubject, err)

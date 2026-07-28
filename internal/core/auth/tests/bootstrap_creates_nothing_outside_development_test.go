@@ -134,12 +134,27 @@ func TestBootstrapIsIdempotentAndNeverResetsAnAccount(t *testing.T) {
 	}
 }
 
-// TestBootstrapCreatesNothingOnADisabledModule fait remonter le refus.
+// TestBootstrapNeverBreaksTheStartupOfADisabledModule garde le démarrage.
 //
-// Un module éteint refuse `Register`. L'amorçage doit remonter ce refus plutôt
-// que de l'avaler : un démarrage qui annonce « compte amorcé » sur un module
-// désactivé enverrait chercher la panne du côté du mot de passe.
-func TestBootstrapCreatesNothingOnADisabledModule(t *testing.T) {
+// # Ce test disait EXACTEMENT le contraire, et il avait tort
+//
+// Il exigeait que le refus d'un module éteint remonte, au motif qu'un démarrage
+// annonçant « compte amorcé » sur un module désactivé enverrait chercher la
+// panne du côté du mot de passe. Le raisonnement portait sur le mauvais risque :
+// remonter l'erreur **fait échouer le démarrage entier** dès qu'`auth` est
+// désactivé.
+//
+// C'est arrivé. `IsLocal()` couvre `development` ET `test`, alors que
+// l'activation ne vient que de la couche `development` : sous `APP_ENV=test`, le
+// serveur refusait de démarrer avec `module auth désactivé`. La CI end-to-end
+// l'a trouvé ; la mesure locale ne pouvait pas, elle avait porté sur
+// `development` et `production` — jamais sur la seule combinaison qui casse,
+// **environnement local ET module éteint**.
+//
+// Un module désactivé n'est pas une panne, c'est un état configuré. Il n'y a
+// rien à amorcer, et le dire par une erreur fatale est un fail-closed posé au
+// mauvais endroit.
+func TestBootstrapNeverBreaksTheStartupOfADisabledModule(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -148,11 +163,13 @@ func TestBootstrapCreatesNothingOnADisabledModule(t *testing.T) {
 		t.Fatalf("montage du module désactivé: %v", err)
 	}
 
-	report, err := auth.Bootstrap(ctx, disabled, config.EnvDevelopment)
-	if err == nil {
-		t.Fatal("l'amorçage d'un module désactivé doit remonter le refus")
-	}
-	if report.Created {
-		t.Fatalf("un module désactivé ne crée rien : %+v", report)
+	for _, env := range []config.Environment{config.EnvDevelopment, config.EnvTest} {
+		report, err := auth.Bootstrap(ctx, disabled, env)
+		if err != nil {
+			t.Fatalf("env %q : un module éteint ne doit pas faire échouer le démarrage — %v", env, err)
+		}
+		if report.Created || report.Secret != "" {
+			t.Fatalf("env %q : un module désactivé ne crée rien — %+v", env, report)
+		}
 	}
 }
