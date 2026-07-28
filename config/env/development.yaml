@@ -26,3 +26,18 @@ modules:
   # root crée alors un compte d'amorçage et affiche son secret UNE fois (#99).
   auth:
     enabled: true
+
+  # Notification active EN LOCAL uniquement.
+  #
+  # Le seul pilote écrit est `log` : il ÉCRIT le message et ne l'envoie à
+  # personne. C'est exactement ce qu'on veut ici — la chaîne complète
+  # `inscription → outbox → relais → notification` devient observable sans
+  # serveur SMTP ni compte chez un fournisseur — et exactement ce qu'on ne veut
+  # nulle part ailleurs, où cela ferait croire que les courriels partent.
+  #
+  # `body: masked` reste le défaut, y compris ici : un lien de confirmation est
+  # un identifiant au porteur, et l'habitude de le voir en clair en
+  # développement est celle qu'on emporte en production. Basculer sur `logged`
+  # est une décision qui se prend, pas un confort qu'on hérite.
+  notification:
+    enabled: true
