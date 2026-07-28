@@ -75,6 +75,62 @@ type IdentityResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// Permissions que la surface d'administration exige.
+//
+// # Pourquoi elles sont PUBLIÉES et non privées au module
+//
+// Une permission est une DONNÉE : elle s'accorde dans un rôle, en base, sans
+// déploiement (ADR 017 §4). Une application qui monte ce socle doit donc pouvoir
+// les nommer pour composer ses propres rôles — sans quoi elle serait obligée de
+// recopier des chaînes littérales, et une faute de frappe n'accorderait
+// silencieusement rien.
+//
+// La forme est celle qu'impose le domaine : `domaine.ressource.action`, en
+// minuscules, trois segments exactement.
+const (
+	// PermissionIdentityCreate autorise la création d'une identité.
+	PermissionIdentityCreate = "auth.identity.create"
+
+	// PermissionIdentityRoles autorise l'affectation de rôles.
+	PermissionIdentityRoles = "auth.identity.roles"
+
+	// PermissionIdentityClose autorise la fermeture et la réouverture d'un
+	// compte. UNE permission pour les deux sens : qui peut fermer peut rouvrir,
+	// et séparer les deux produirait un état où l'on ferme sans pouvoir défaire.
+	PermissionIdentityClose = "auth.identity.close"
+
+	// PermissionRoleWrite autorise la définition d'un rôle et de ses
+	// permissions.
+	//
+	// ⚠️ C'est la permission la plus puissante du module : qui la détient peut
+	// s'accorder toutes les autres. Elle est nommée à part pour que ce fait soit
+	// visible au moment de composer un rôle, et non découvert en audit.
+	PermissionRoleWrite = "auth.role.write"
+)
+
+// Formes publiées de l'administration.
+type (
+	// CreateIdentityRequest crée un compte.
+	CreateIdentityRequest struct {
+		Subject string `json:"subject"`
+		Secret  string `json:"secret"`
+	}
+
+	// DefineRoleRequest remplace un rôle et ses permissions.
+	//
+	// REMPLACE plutôt qu'ajoute : retirer une permission doit être aussi simple
+	// que d'en ajouter une. Une API qui n'offrirait que l'ajout ferait écrire le
+	// retrait à la main, donc mal.
+	DefineRoleRequest struct {
+		Permissions []string `json:"permissions"`
+	}
+
+	// AssignRolesRequest remplace les rôles d'une identité.
+	AssignRolesRequest struct {
+		Roles []string `json:"roles"`
+	}
+)
+
 // Routes exposées par la surface HTTP du module.
 //
 // Globales assumées : ce sont des constantes du langage publié, et Go n'a pas de
@@ -104,4 +160,28 @@ var (
 		Method string
 		Path   string
 	}{Method: "GET", Path: "/v1/auth/identity"}
+
+	// CreateIdentityRoute crée un compte. PROTÉGÉE.
+	CreateIdentityRoute = struct {
+		Method string
+		Path   string
+	}{Method: "POST", Path: "/v1/auth/identities"}
+
+	// DefineRoleRoute définit un rôle. PROTÉGÉE.
+	DefineRoleRoute = struct {
+		Method string
+		Path   string
+	}{Method: "PUT", Path: "/v1/auth/roles/{name}"}
+
+	// AssignRolesRoute affecte des rôles à une identité. PROTÉGÉE.
+	AssignRolesRoute = struct {
+		Method string
+		Path   string
+	}{Method: "PUT", Path: "/v1/auth/identities/{id}/roles"}
+
+	// CloseIdentityRoute ferme un compte, IMMÉDIATEMENT. PROTÉGÉE.
+	CloseIdentityRoute = struct {
+		Method string
+		Path   string
+	}{Method: "DELETE", Path: "/v1/auth/identities/{id}"}
 )

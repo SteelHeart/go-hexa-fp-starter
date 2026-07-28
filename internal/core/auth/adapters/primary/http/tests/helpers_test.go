@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,9 +42,16 @@ const (
 	// contrat : un test qui les importerait resterait vert si quelqu'un
 	// renommait une route, et un changement de chemin est cassant pour tout
 	// client déjà déployé.
-	sessionsPath = "/v1/auth/sessions"
-	currentPath  = "/v1/auth/sessions/current"
-	identityPath = "/v1/auth/identity"
+	sessionsPath   = "/v1/auth/sessions"
+	currentPath    = "/v1/auth/sessions/current"
+	identityPath   = "/v1/auth/identity"
+	identitiesPath = "/v1/auth/identities"
+	rolePath       = "/v1/auth/roles/admin"
+
+	// jetonFactice a la BONNE forme et n'a jamais été émis : 43 caractères,
+	// exactement ce que le domaine exige. C'est ce qui permet d'éprouver le
+	// refus d'un jeton bien formé mais inconnu.
+	jetonFactice = "0000000000000000000000000000000000000000000"
 )
 
 // hashSecret est un hachage FACTICE, instantané.
@@ -190,6 +198,67 @@ func consume(t *testing.T, resp *http.Response) response {
 		}
 	}
 	return response{status: resp.StatusCode, body: payload, raw: string(raw)}
+}
+
+// serveurAmorce monte la surface AVEC un compte d'amorçage administrateur.
+//
+// C'est le seul moyen d'éprouver une route protégée : sans rôle, tout rend 403,
+// et un test qui ne verrait que des 403 ne distinguerait pas un garde correct
+// d'un garde qui refuse tout.
+func serveurAmorce(t *testing.T) (server *httptest.Server, jetonAdmin string) {
+	t.Helper()
+
+	mod := newModule(t, config.Module{Enabled: true, Driver: "memory"})
+	report, err := auth.Bootstrap(context.Background(), mod, config.EnvDevelopment)
+	if err != nil {
+		t.Fatalf("amorçage: %v", err)
+	}
+	if !report.Created {
+		t.Fatal("l'amorçage devait créer le compte administrateur")
+	}
+
+	server = serve(t, mod)
+	return server, tokenOf(t, openSession(t, server, report.Subject, report.Secret))
+}
+
+// requete décrit un appel HTTP complet.
+//
+// Une structure plutôt que six paramètres : la règle de forme en autorise cinq,
+// et surtout `entete` et `corps` sont deux chaînes voisines — les inverser
+// compile, et produit une requête sans corps portant un JSON en guise
+// d'autorisation. Nommer les champs rend l'inversion visible.
+type requete struct {
+	methode string
+	chemin  string
+	entete  string
+	corps   string
+}
+
+// porteur construit l'en-tête d'autorisation d'un jeton.
+func porteur(token string) string { return "Bearer " + token }
+
+// envoyer exécute la requête et rend la réponse, corps lu et fermé.
+func envoyer(t *testing.T, server *httptest.Server, r requete) response {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		context.Background(), r.methode, server.URL+r.chemin, strings.NewReader(r.corps))
+	if err != nil {
+		t.Fatalf("construction de la requête: %v", err)
+	}
+	if r.corps != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if r.entete != "" {
+		req.Header.Set("Authorization", r.entete)
+	}
+
+	//nolint:bodyclose // le corps est lu et fermé par consume
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", r.methode, r.chemin, err)
+	}
+	return consume(t, resp)
 }
 
 // tokenOf extrait le jeton d'une réponse de connexion.
