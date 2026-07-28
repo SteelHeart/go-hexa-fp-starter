@@ -19,6 +19,19 @@ import (
 // messages par lot tiennent les verrous peu de temps, deux secondes de scrutation
 // donnent une latence acceptable sans marteler la base, et huit tentatives à
 // recul exponentiel couvrent environ quarante minutes de panne d'un consommateur.
+// Clés d'options lues par le dépileur.
+//
+// Déclarées ici et RÉFÉRENCÉES par le catalogue, dans le même paquet : une clé
+// que le catalogue admettrait sans que personne ne la lise, ou l'inverse,
+// deviendrait une divergence entre deux listes. Le partage de constante la rend
+// impossible (ADR 014, #93).
+const (
+	OptionBatchSize   = "batch_size"
+	OptionMaxAttempts = "max_attempts"
+	OptionBaseBackoff = "base_backoff"
+	OptionInterval    = "interval"
+)
+
 const (
 	defaultBatchSize   = 50
 	defaultMaxAttempts = 8
@@ -92,19 +105,19 @@ func NewDispatcher(mod Module, cfg config.Module, deps DispatcherDeps) (*applica
 
 // policyFrom lit la politique de dépilage dans les options du module.
 func policyFrom(cfg config.Module) (application.Policy, error) {
-	batchSize, err := cfg.IntOption("batch_size", defaultBatchSize)
+	batchSize, err := cfg.IntOption(OptionBatchSize, defaultBatchSize)
 	if err != nil {
 		return application.Policy{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
-	maxAttempts, err := cfg.IntOption("max_attempts", defaultMaxAttempts)
+	maxAttempts, err := cfg.IntOption(OptionMaxAttempts, defaultMaxAttempts)
 	if err != nil {
 		return application.Policy{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
-	baseBackoff, err := cfg.DurationOption("base_backoff", defaultBaseBackoff)
+	baseBackoff, err := cfg.DurationOption(OptionBaseBackoff, defaultBaseBackoff)
 	if err != nil {
 		return application.Policy{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
-	interval, err := cfg.DurationOption("interval", defaultInterval)
+	interval, err := cfg.DurationOption(OptionInterval, defaultInterval)
 	if err != nil {
 		return application.Policy{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}

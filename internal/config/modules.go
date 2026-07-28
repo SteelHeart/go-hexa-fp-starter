@@ -21,9 +21,15 @@ type Module struct {
 	Enabled bool `yaml:"enabled"`
 	// Driver nomme le pilote. Un pilote inconnu refuse le démarrage.
 	Driver string `yaml:"driver"`
-	// Options porte le paramétrage propre au pilote. Volontairement non typé :
-	// le catalogue des pilotes évolue plus vite que le socle, et chaque pilote
-	// valide ses propres options à sa construction.
+	// Options porte le paramétrage propre au pilote.
+	//
+	// Les VALEURS restent non typées — le catalogue des pilotes évolue plus vite
+	// que le socle, et chaque pilote interprète les siennes à sa construction.
+	// Les CLÉS, elles, sont déclarées par le module dans son `catalog.go`, et
+	// toute clé inconnue refuse le démarrage (#93).
+	//
+	// La nuance est le tout du sujet : sans elle, une faute de frappe rendait la
+	// valeur par défaut, sans un mot.
 	Options map[string]any `yaml:"options"`
 }
 
@@ -236,7 +242,57 @@ func (m Modules) validate(catalog ModuleCatalog) []error {
 		if !slices.Contains(allowed, driver) {
 			problems = append(problems, fmt.Errorf(
 				"modules.%s.driver=%q inconnu (attendu: %s)", name, driver, join(allowed)))
+			continue
 		}
+		problems = append(problems, mod.unknownOptions(name, driver, catalog)...)
+	}
+	return problems
+}
+
+// unknownOptions refuse toute clé d'option que le pilote ne lit pas.
+//
+// # Le trou que cette fonction ferme
+//
+// Le deny-par-défaut s'arrêtait au nom du pilote. Ses OPTIONS passaient sans
+// contrôle, parce que les accesseurs — `IntOption`, `DurationOption`… — rendent
+// la valeur par défaut quand la clé est absente. Correct pris isolément : une
+// option absente EST valide. Mais rien n'énumérait les clés connues, donc
+// « absente » et « mal orthographiée » étaient indiscernables.
+//
+// Mesuré (#93) : `bath_size` au lieu de `batch_size` laissait le serveur
+// démarrer, monter le module, et n'en rien dire. Le dépileur tournait avec un
+// réglage que personne n'avait demandé — et sur `max_attempts` ou
+// `base_backoff`, l'écart serait resté invisible et durable.
+//
+// Les clés admises sont déclarées par le module lui-même, dans son `catalog.go`,
+// à côté du code qui les lit et en partageant ses constantes (ADR 014). Aucun
+// fichier du framework ne les nomme.
+func (m Module) unknownOptions(name, driver string, catalog ModuleCatalog) []error {
+	admises := catalog.AllowedOptions(name, driver)
+
+	// Trier les clés fautives : sans cela, l'ordre de map ferait varier le
+	// message d'une exécution à l'autre, et deux traces cesseraient d'être
+	// comparables.
+	var fautives []string
+	for key := range m.Options {
+		if !slices.Contains(admises, key) {
+			fautives = append(fautives, key)
+		}
+	}
+	slices.Sort(fautives)
+
+	// Un pilote sans aucune option admise mérite sa propre phrase : « admises: »
+	// suivi du vide se lit comme un message tronqué, et envoie chercher un défaut
+	// de l'outil plutôt que la faute de frappe.
+	attendues := "ce pilote n'accepte aucune option"
+	if len(admises) > 0 {
+		attendues = "admises: " + join(admises)
+	}
+
+	problems := make([]error, 0, len(fautives))
+	for _, key := range fautives {
+		problems = append(problems, fmt.Errorf(
+			"modules.%s.options.%s inconnue du pilote %q (%s)", name, key, driver, attendues))
 	}
 	return problems
 }

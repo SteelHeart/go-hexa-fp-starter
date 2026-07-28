@@ -41,6 +41,13 @@ const (
 // Trente secondes est le compromis : assez court pour qu'un drapeau éteint en
 // urgence le soit partout vite, assez long pour qu'une évaluation en boucle ne
 // martèle pas la base.
+// Clés d'options du module, partagées avec le catalogue (ADR 014, #93).
+const (
+	OptionFlags    = "flags"
+	OptionSettings = "settings"
+	OptionTTL      = "ttl"
+)
+
 const defaultTTL = 30 * time.Second
 
 // Module expose les ports de la configuration dynamique.
@@ -93,11 +100,11 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 
 // fromFile construit le pilote des valeurs versionnées.
 func fromFile(cfg config.Module) (Module, error) {
-	flags, err := cfg.MapOption("flags")
+	flags, err := cfg.MapOption(OptionFlags)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
-	settings, err := cfg.MapOption("settings")
+	settings, err := cfg.MapOption(OptionSettings)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}
@@ -121,7 +128,7 @@ func fromPostgres(cfg config.Module, deps Deps) (Module, error) {
 	if deps.Logger == nil {
 		return Module{}, ErrLoggerRequired
 	}
-	ttl, err := cfg.DurationOption("ttl", defaultTTL)
+	ttl, err := cfg.DurationOption(OptionTTL, defaultTTL)
 	if err != nil {
 		return Module{}, fmt.Errorf("modules.%s.%w", Name, err)
 	}

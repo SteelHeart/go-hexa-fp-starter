@@ -165,3 +165,35 @@ Modalités :
   fabrique. La décision 3 rend l'écart **improbable** en les mettant dans le même paquet ; elle ne
   le rend pas impossible. C'est un aveu de faiblesse, pas une tolérance — le jour où un garde saura
   comparer les deux, il devra être écrit.
+
+## Extension du 2026-07-28 — les OPTIONS suivent le même chemin (#93)
+
+Cette ADR déclarait les **pilotes** d'un module hors du framework. Elle laissait leurs **options**
+sans schéma, et le trou était mesurable :
+
+```yaml
+outbox:
+  driver: memory
+  options:
+    bath_size: 50      # au lieu de batch_size
+```
+
+Le serveur **démarrait**, montait le module, et n'en disait rien. Les accesseurs — `IntOption`,
+`DurationOption`… — rendent la valeur par défaut quand la clé est absente, ce qui est correct pris
+isolément ; mais rien n'énumérait les clés connues, donc *absente* et *mal orthographiée* étaient
+indiscernables. Le deny-par-défaut s'arrêtait au nom du pilote.
+
+`config.Resources` porte désormais `Options []string`, déclarées par le module **à côté du code qui
+les lit**, en partageant ses constantes — exactement le dispositif de la décision 3. Une clé
+inconnue refuse le démarrage en nommant les clés admises.
+
+Trois points valent d'être notés :
+
+- **La déclaration est PAR PILOTE, pas par module.** `flags` et `settings` n'ont de sens que pour le
+  pilote `file` de `dynconf` ; `namespace` que pour le pilote `redis` d'`idempotency`. Une liste par
+  module accepterait une option sans effet — le réglage qu'on ne découvre jamais.
+- **La valeur zéro n'admet rien.** Un pilote qui oublie de déclarer ses options voit sa
+  configuration refusée, ce qui se remarque. L'inverse rouvrirait le trou pour tous les pilotes.
+- **La faiblesse [humain] ci-dessus se réduit sans disparaître.** Le partage de constante empêche
+  qu'une clé lue diffère d'une clé admise ; il n'empêche pas d'admettre une clé que plus personne ne
+  lit.
