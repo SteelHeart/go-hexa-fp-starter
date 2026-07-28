@@ -108,6 +108,40 @@ Déjà écrit, gravé ici parce que c'est la première chose qu'on abrège quand
 identité lue d'un contexte implicite rend le cas d'usage intestable sans construire un contexte, et
 surtout elle rend **invisible** le fait qu'une décision métier dépend de qui appelle.
 
+### 6. Le premier compte est AMORCÉ en développement, avec un secret engendré
+
+La surface ne publie aucune opération d'administration : les exposer sans les protéger ouvrirait la
+création de comptes à quiconque, et les protéger exige un premier administrateur. Un serveur neuf
+rendait donc **401 à tout le monde**, sans exception — le délai avant premier succès du module était
+*infini* (#99), très exactement le défaut que la tranche verticale avait supprimé pour
+`user_registration`.
+
+**Décision** : le composition root crée un compte `admin@local` **en développement et en test
+uniquement**, avec un secret tiré de `crypto/rand` et affiché **une seule fois** au journal.
+
+Trois propriétés rendent ce raccourci acceptable, et il faut les trois :
+
+1. **Aucun secret par défaut n'existe dans un artefact versionné.** C'est la faute qui compte : un
+   socle livré avec `admin/admin` est un socle qui *déploie* `admin/admin`, et personne ne le change
+   avant l'incident.
+2. **Hors `development` et `test`, rien n'est créé.** Pas une erreur — faire échouer le démarrage
+   d'une production parce qu'elle refuse un compte de démonstration serait absurde — un **refus
+   d'agir**, avec son test (ADR 013).
+3. **L'opération est idempotente.** Redémarrer ne réinitialise aucun compte existant et ne rend
+   aucun secret qu'on ne connaît pas.
+
+**Ce que ça ne résout pas** : l'amorçage d'une *production*. Il reste à faire, et il n'a rien à voir
+— il passera par une commande d'administration hors serveur (#8), pas par un raccourci de démarrage.
+Écrire l'un ne dispense pas de l'autre, et les confondre est la manière dont un compte de
+démonstration finit en production.
+
+**Pourquoi le secret est journalisé plutôt que rendu par un autre canal** : parce que toutes les
+alternatives sont pires ici. Un fichier serait versionné par accident ; une variable d'environnement
+obligerait à en définir une pour qu'un `go run` fonctionne, ce qui rouvre le délai avant premier
+succès. Le module, lui, ne journalise **pas** : il rend son compte rendu, et c'est le composition
+root qui décide d'écrire. Cette frontière est ce qui empêche un secret de partir dans un collecteur
+d'observabilité parce qu'un module a cru bien faire.
+
 ## Périmètre de la v0.1 — et ce qui est délibérément absent
 
 | Livré en v0.1 | Déclaré, non livré |
@@ -164,6 +198,9 @@ démontrable d'un `go run` en local.
 | **Jeton signé (JWT)** | Valide sans toucher au magasin — un gain que la décision 1 a déjà abandonné, puisque `Authorize` y va à chaque appel. On paierait la gestion de clés, leur rotation, et toute la famille de failles propre aux jetons signés, pour rien |
 | **Déléguer entièrement à un fournisseur OIDC** | Sort du périmètre le sujet le plus risqué du produit — et supprime tout démarrage sans infrastructure, plus la raison d'être de `user_registration` |
 | **ReBAC façon Zanzibar** | Ce qu'il faut pour du partage fin de documents. Un service de relations à part entière, hors de proportion pour une v0.1 |
+| **Compte d'amorçage à mot de passe fixe dans la configuration** | Le plus simple, et le seul vraiment dangereux : un défaut versionné est un défaut déployé. C'est `admin/admin`, et il survit à toutes les revues |
+| **Amorçage par variable d'environnement obligatoire** | Aucun secret journalisé — mais un `go run` sur une machine vierge échoue tant qu'on n'a pas deviné quelle variable définir, ce qui rouvre le délai avant premier succès que la décision 6 vient de fermer |
+| **Exposer l'inscription publiquement** | Un serveur de démonstration utilisable en trente secondes, et une création de comptes ouverte à tout le réseau. C'est la faute que la décision 6 contourne, pas celle qu'elle accepte |
 
 ## Garde
 
@@ -175,5 +212,8 @@ démontrable d'un `go run` en local.
   permissions dans le jeton (ADR 013).
 - **Un test doit constater qu'aucune vérification ne porte sur un rôle** : le port n'accepte qu'une
   permission, donc le compilateur s'en charge.
+- **Un test doit constater que l'amorçage ne crée RIEN hors développement**, et il vérifie les deux
+  moitiés : le compte rendu est vide *et* aucune identité n'existe réellement. Un compte rendu vide
+  se falsifie en une ligne ; un magasin peuplé, non. C'est le témoin de la décision 6.
 - **[humain]** Rien n'empêche mécaniquement une surface de lire l'identité d'un `context.Value`. La
   décision 5 est une règle de revue tant qu'aucun garde ne sait la vérifier.

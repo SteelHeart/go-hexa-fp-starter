@@ -13,3 +13,16 @@ telemetry:
 
 messaging:
   driver: inproc
+
+modules:
+  # Authentification active EN LOCAL uniquement — ADR 017.
+  #
+  # Le seul pilote écrit est `memory` : il efface les comptes au redémarrage et
+  # ne se partage pas entre répliques. L'activer par défaut ferait partir une
+  # production avec une authentification qui se réinitialise à chaque
+  # déploiement.
+  #
+  # Ici, en revanche, il rend `auth` démontrable d'un `go run` — le composition
+  # root crée alors un compte d'amorçage et affiche son secret UNE fois (#99).
+  auth:
+    enabled: true

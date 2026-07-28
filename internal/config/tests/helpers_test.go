@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core"
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
@@ -100,7 +102,7 @@ func withCatalogTestConfig(t *testing.T, modules string) {
 			if err != nil {
 				t.Fatalf("lecture de %s: %v", relatif, err)
 			}
-			if err := os.WriteFile(filepath.Join(dir, relatif), contenu, 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, relatif), sansModules(t, relatif, contenu), 0o600); err != nil {
 				t.Fatalf("écriture de %s: %v", relatif, err)
 			}
 			copies++
@@ -116,6 +118,37 @@ func withCatalogTestConfig(t *testing.T, modules string) {
 	t.Setenv(config.EnvVarConfigDir, dir)
 	t.Setenv(config.EnvVarAppEnv, "")
 	t.Setenv("SECURITY_ENCRYPTION_KEY", testEncryptionKey())
+}
+
+// sansModules retire la section `modules:` d'une couche recopiée.
+//
+// # Le défaut que ceci corrige
+//
+// L'aide promet que « seule la section `modules:` est celle du test », et elle
+// ne remplaçait que `modules.yaml`. Or une couche d'environnement peut elle
+// aussi déclarer des modules — `config/env/development.yaml` active `auth`
+// (ADR 017) — et cette déclaration atteignait alors le test, qui refusait un
+// module absent de SON catalogue.
+//
+// L'échec était juste : la configuration nommait un module que le catalogue de
+// ce test ne connaît pas. C'est l'aide qui mentait sur ce qu'elle isolait.
+func sansModules(t *testing.T, nom string, contenu []byte) []byte {
+	t.Helper()
+
+	var couche map[string]any
+	if err := yaml.Unmarshal(contenu, &couche); err != nil {
+		t.Fatalf("YAML invalide dans %s: %v", nom, err)
+	}
+	if _, present := couche["modules"]; !present {
+		return contenu
+	}
+
+	delete(couche, "modules")
+	nettoye, err := yaml.Marshal(couche)
+	if err != nil {
+		t.Fatalf("réassemblage de %s: %v", nom, err)
+	}
+	return nettoye
 }
 
 // applicationCatalog est le catalogue qu'une APPLICATION fournirait.
