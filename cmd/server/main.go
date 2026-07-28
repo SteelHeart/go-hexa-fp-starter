@@ -40,6 +40,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/adapters/secondary/outboxpub"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 
+	authhttp "github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/adapters/primary/http"
 	userhttp "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/adapters/primary/http"
 )
 
@@ -125,6 +126,7 @@ func servir(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 
 	router := httpserver.NewRouter(cfg, logger, probes(mounted))
+	authhttp.Mount(router.API, mounted.auth)
 	userhttp.Mount(router.API, mounted.users)
 	userhttp.MountAvailability(router.API, mounted.users)
 
