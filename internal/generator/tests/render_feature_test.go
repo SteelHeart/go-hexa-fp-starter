@@ -15,7 +15,7 @@ import (
 //
 // # Why completeness is checked, not just compilation
 //
-// `CLAUDE.md` puts it in one sentence that applies here: *any missing directory
+// `documentation/AMORCAGE.md` puts it in one sentence that applies here: *any missing directory
 // would be reproduced as "not necessary"*. A template that forgot `drivers/`
 // would produce modules without an interchangeable driver, and nobody would
 // notice until the day one had to be swapped.

@@ -47,6 +47,7 @@ formes que reprendra le prochain.
 | **É-03** | 🔴 haute | Le garde « Aucune dette dissimulée » n'a **aucun témoin** | **issue #117** |
 | **É-04** | 🟠 moyenne | `pilotes.md` compte onze pilotes ; il y en a quinze | corrigé dans ce lot |
 | **É-05** | 🟠 moyenne | La carte du dépôt omet huit chemins et en décrit un qui n'existe pas | corrigé dans ce lot |
+| **É-13** | 🔴 haute | Le fichier d'amorçage portait le nom d'un outil d'assistance | **corrigé** — #114 |
 | **É-06** | 🟠 moyenne | La langue du code n'est pas celle de la recommandation #34 | **issue #34** — arbitrage |
 | **É-07** | 🟠 moyenne | Le godoc de `config` renvoie vers du code mort et nomme un dossier inexistant | corrigé dans ce lot |
 | **É-08** | 🟡 basse | Un chemin de poste nominatif figure dans deux artefacts versionnés publics | corrigé dans ce lot |
@@ -68,6 +69,36 @@ sont passés **sans un seul écart**, et il ne faut pas conclure qu'ils n'ont pa
 - `task check` **vert, code de retour 0**, cliquets à **79,3 % · 92,4 % · 62,8 %** après ce lot.
 
 ---
+
+## É-13 🔴 Le fichier d'amorçage portait le nom d'un outil d'assistance
+
+**Ajouté après coup**, sur décision : un socle qu'une communauté adopte doit pouvoir être lu comme
+l'œuvre d'une équipe de développeurs, pas comme la sortie d'un outil. C'est la même exigence que
+« le dépôt ne dépend d'aucune personne », appliquée aux outils.
+
+Le fichier d'amorçage — le premier que voit quiconque ouvre le dépôt, à la racine, désormais
+publique — portait le nom d'un assistant. **La règle 🔴 du dépôt, violée par son propre point
+d'entrée.**
+
+**Aucun garde ne pouvait le voir.** Celui du contenu cherche son motif dans le TEXTE, et il écarte
+explicitement les en-têtes `+++ b/…` du diff — commentaire d'origine : *« éviter d'accuser un
+fichier pour son propre nom »*. La ligne était juste pour le cas qu'elle visait ; elle a rendu
+celui-ci invisible pendant toute la phase 0.
+
+**Correction, sans coquille de compatibilité.** La substance vit dans
+`documentation/AMORCAGE.md`. Aucun fichier au nom d'outil ne subsiste : garder une coquille aurait
+préservé le confort d'un outil au prix de la règle, et la règle est publique.
+
+**Outillé** — sinon c'est une préférence : `verifie-mention-outillage.sh` gagne un cinquième volet
+sur les NOMS des fichiers versionnés. **Liste énumérée, jamais un motif** : un motif accuserait
+`cursor_round_trips_test.go`, où « cursor » est le mot anglais du domaine, et un garde qui crie au
+loup sur du code légitime finit désarmé avant d'avoir servi.
+
+**Un défaut trouvé en écrivant son témoin.** Le premier cas — « un artefact interdit est refusé » —
+passait alors que la fonction de contrôle **n'existait pas** : elle rendait « commande introuvable »,
+donc un code non nul, donc « refus » aux yeux du témoin. C'est le second cas, celui du nom légitime,
+qui a révélé la panne. **Une moitié de témoin ne prouve rien** : sans le cas qui doit être ACCEPTÉ,
+un garde cassé et un garde sévère sont indiscernables.
 
 ## É-01 🔴 `internal/infrastructure/dynconf` est un paquet mort
 
@@ -110,7 +141,7 @@ L'anatomie gravée dans l'[ADR 012](../adr/012-anatomie-d-un-module-et-pilotes.m
 ```
 
 Le dépôt n'a **aucun** dossier `surfaces/`. Il a trois `adapters/primary/`, et la carte de
-`CLAUDE.md` documente `adapters/primary/` + `adapters/secondary/`.
+`documentation/AMORCAGE.md` documente `adapters/primary/` + `adapters/secondary/`.
 
 **Ce n'est pas une question de goût, c'est une question d'autorité.** La hiérarchie du dépôt est
 explicite — *en cas de contradiction avec un autre document, l'ADR gagne*. Donc, en l'état, **le
@@ -239,7 +270,7 @@ configuration**, et il envoie chercher dans un dossier qui n'existe pas.
 
 ## É-08 🟡 Un chemin de poste nominatif dans deux artefacts versionnés publics
 
-`C:\Users\MAC\` apparaît dans `CLAUDE.md` (deux fois) et dans `JOURNAL_FRICTION.md`. Le dépôt
+`C:\Users\MAC\` apparaît dans `documentation/AMORCAGE.md` (deux fois) et dans `JOURNAL_FRICTION.md`. Le dépôt
 affirme *« ne dépendre d'aucune personne : pas de `CODEOWNERS`, pas de pseudo dans les règles »*.
 
 Ce n'est pas un secret, et ce n'est pas grave — mais c'est un nom d'utilisateur de poste, dans un
@@ -312,7 +343,7 @@ paquet hors anatomie sauf un mort, zéro test hors convention, zéro marqueur de
 32 commits, zéro mention d'outillage sur tout l'historique, `task check` vert.
 
 Ce n'est pas un hasard, et ce n'est pas rassurant. **Le code est outillé, la documentation ne l'est
-pas.** Chaque règle de forme du code a son garde qui refuse ; aucune affirmation de `CLAUDE.md`,
+pas.** Chaque règle de forme du code a son garde qui refuse ; aucune affirmation de `documentation/AMORCAGE.md`,
 `pilotes.md` ou d'un ADR n'a quoi que ce soit qui la confronte au dépôt. La dérive s'installe donc
 exactement là où rien ne regarde — et c'est la partie sur laquelle tout le monde s'appuie pour
 décider.
@@ -325,7 +356,7 @@ forme vérifiable. **Cinquième et sixième occurrences.**
 La conclusion pratique n'est pas « écrire mieux ». C'est : **outiller la véracité de la
 documentation comme on a outillé la forme du code.** Trois candidats immédiats, tous mécaniques :
 
-1. la carte de `CLAUDE.md` contre `git ls-files` — É-05 aurait été impossible ;
+1. la carte de `documentation/AMORCAGE.md` contre `git ls-files` — É-05 aurait été impossible ;
 2. le tableau de `pilotes.md` contre les `catalog.go` — É-04 aurait été impossible ;
 3. l'anatomie de l'ADR 012 contre l'arborescence réelle — É-02 et É-09 auraient sauté au premier
    passage.

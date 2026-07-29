@@ -75,6 +75,73 @@ FIN
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5. Les NOMS des fichiers versionnés
+# ─────────────────────────────────────────────────────────────────────────────
+# L'angle mort qui a duré le plus longtemps : le fichier d'amorçage du dépôt a
+# porté le nom d'un outil d'assistance pendant toute la phase 0, à la racine,
+# donc en première position pour quiconque ouvrait le dépôt.
+#
+# Aucun garde ne pouvait le voir. Celui-ci cherchait son motif dans le CONTENU,
+# et il écarte explicitement les en-têtes `+++ b/…` du diff — commentaire
+# d'origine : « éviter d'accuser un fichier pour son propre nom ». La ligne était
+# juste pour le cas qu'elle visait ; elle a rendu celui-ci invisible.
+#
+# ⚠️ Une liste ÉNUMÉRÉE, pas un motif. Un motif sur les noms accuserait
+# `internal/pkg/pagination/tests/cursor_round_trips_test.go`, où « cursor » est
+# le mot anglais du domaine. Un garde qui crie au loup sur du code légitime finit
+# désarmé — et il l'aurait été avant d'avoir servi une seule fois.
+#
+# La liste grandit quand un outil impose une nouvelle convention de fichier.
+# C'est le mécanisme prévu, et il coûte une ligne.
+artefacts_outillage() {
+  cat <<'FIN'
+claude.md
+agents.md
+.cursorrules
+.windsurfrules
+.aider.conf.yml
+.github/copilot-instructions.md
+FIN
+}
+
+# fichiers_versionnes rend la liste à contrôler. Surchargeable pour le témoin :
+# sans cela, prouver que ce volet sait refuser exigerait de commettre un fichier
+# interdit — donc de violer la règle pour démontrer qu'elle tient.
+fichiers_versionnes() {
+  if [ -n "${MENTION_FICHIERS:-}" ]; then
+    printf '%s\n' "$MENTION_FICHIERS"
+    return
+  fi
+  git ls-files
+}
+
+# controle_noms rend 0 si aucun nom versionné n'est un artefact d'outillage.
+#
+# La comparaison porte sur le nom de BASE autant que sur le chemin complet :
+# déplacer un fichier interdit dans un sous-dossier ne doit pas le blanchir.
+controle_noms() {
+  noms=$(
+    fichiers_versionnes | while read -r chemin; do
+      minuscule=$(printf '%s' "$chemin" | tr '[:upper:]' '[:lower:]')
+      artefacts_outillage | while read -r interdit; do
+        [ -n "$interdit" ] || continue
+        case "$minuscule" in
+          "$interdit"|*/"$interdit") echo "$chemin" ;;
+        esac
+      done
+    done
+  )
+  if [ -n "$noms" ]; then
+    echo "  un fichier versionné porte le nom d'un artefact d'outillage d'assistance :" >&2
+    echo "$noms" | sed 's/^/    /' >&2
+    echo "  la substance vit dans documentation/AMORCAGE.md, au nom neutre." >&2
+    return 1
+  fi
+  return 0
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Mode témoin — le garde sait-il encore échouer ?
 # ─────────────────────────────────────────────────────────────────────────────
 # Rend 0 quand le garde détecte CORRECTEMENT le témoin, non nul sinon. Sans
@@ -102,12 +169,40 @@ if [ "${1:-}" = "--temoin" ]; then
     fi
   done
 
+  # Le volet 5 — les NOMS de fichiers — a son propre témoin, et il ne peut pas
+  # être un fichier : commettre un artefact interdit pour prouver qu'on le
+  # refuse reviendrait à violer la règle pour la démontrer. La liste est donc
+  # injectée.
+  #
+  # Les deux cas ensemble sont la seule preuve que ce volet DISCRIMINE : sans le
+  # second, un garde qui refuserait tous les noms passerait le premier.
+  if ! MENTION_FICHIERS="docs/CLAUDE.md" "$0" --temoin-noms >/dev/null 2>&1; then
+    echo "  noms : un artefact d'outillage est correctement refusé"
+  else
+    echo "  NON DÉTECTÉ : un nom d'artefact d'outillage est passé" >&2
+    manques=1
+  fi
+  if MENTION_FICHIERS="internal/pkg/pagination/tests/cursor_round_trips_test.go" \
+       "$0" --temoin-noms >/dev/null 2>&1; then
+    echo "  noms : un nom légitime portant « cursor » est accepté"
+  else
+    echo "  FAUX POSITIF : un nom légitime est refusé — le garde crie au loup" >&2
+    manques=1
+  fi
+
   if [ "$manques" -ne 0 ]; then
     echo "  LE GARDE NE GARDE PLUS." >&2
     exit 1
   fi
   echo "  le garde sait échouer."
   exit 0
+fi
+
+# --temoin-noms n'exécute QUE le volet 5, sur la liste injectée. Réservé au mode
+# témoin ci-dessus ; il n'a pas de sens en usage direct.
+if [ "${1:-}" = "--temoin-noms" ]; then
+  controle_noms
+  exit $?
 fi
 
 BASE="${1:-}"
@@ -188,6 +283,10 @@ if [ -n "${PR_TITLE:-}${PR_BODY:-}" ]; then
     echo "  le titre ou le corps de la PR porte une mention d'outillage d'assistance" >&2
     fail=1
   fi
+fi
+
+if ! controle_noms; then
+  fail=1
 fi
 
 if [ "$fail" -eq 0 ]; then

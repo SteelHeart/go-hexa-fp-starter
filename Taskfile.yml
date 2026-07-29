@@ -595,7 +595,7 @@ tasks:
     internal: true
     cmds:
       # EXCLUSIONS DÉCLARÉES, et non oubliées : ces fichiers citent le chemin dans
-      # des liens vers des PR et des ISSUES historiques — CLAUDE.md, REPRISE.md,
+      # des liens vers des PR et des ISSUES historiques — documentation/AMORCAGE.md, REPRISE.md,
       # et l'en-tête « Issue » de chaque ADR. Les réécrire ferait pointer
       # l'historique du socle vers un dépôt qui ne l'a jamais porté. GitHub
       # redirige les URL d'un dépôt transféré, donc ces liens restent valides.
@@ -606,7 +606,7 @@ tasks:
       # Toute AUTRE occurrence est un oubli, et fait échouer la tâche.
       - cmd: |
           restant=$(git ls-files \
-            | grep -v -e '^CLAUDE\.md$' -e '^documentation/process/REPRISE\.md$' \
+            | grep -v -e '^documentation/AMORCAGE\.md$' -e '^documentation/process/REPRISE\.md$' \
                       -e '^documentation/adr/' \
             | xargs grep -l '{{.FROM}}' 2>/dev/null || true)
           if [ -n "$restant" ]; then

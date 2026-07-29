@@ -750,7 +750,7 @@ jobs:
 
       # `-v` puis comptage des `=== RUN` : sans tag, ce paquet compile ZÉRO test
       # et `go test` affiche `ok`. Vérifier le code de retour ne suffit donc pas —
-      # c'est le piège du faux vert documenté dans CLAUDE.md, et il a déjà eu
+      # c'est le piège du faux vert documenté dans documentation/AMORCAGE.md, et il a déjà eu
       # cours ici : `tests/e2e/` est resté vide pendant toute la phase 0 pendant
       # que ce job affichait vert.
       - name: go test -tags=e2e

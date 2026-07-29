@@ -20,7 +20,7 @@
 
 1. **ADR** — tranche l'architecture. Gagne sur tout le reste.
 2. **`rules/`** — règlement d'ingénierie.
-3. **`CLAUDE.md`** — amorçage, résumé. Ne fait jamais foi contre un ADR ou une règle.
+3. **`documentation/AMORCAGE.md`** — amorçage, résumé. Ne fait jamais foi contre un ADR ou une règle.
 4. **README, commentaires de code** — indicatifs.
 
 Une contradiction découverte se corrige **dans la même PR** que celle qui l'a révélée. Une
@@ -91,6 +91,14 @@ accentué, un identifiant puisant dans une liste close de mots français, un com
 **Il ne prouve pas qu'un texte est anglais** — aucun garde bon marché ne le peut. Il attrape le
 français écrit comme le français l'est. La liste de mots **se complète à chaque faute trouvée en
 revue** : c'est le mécanisme prévu, pas un aveu.
+
+**Il ne regarde que les fichiers `.go`.** L'ADR 018 énumère ce qui doit être en anglais et ne
+mentionne jamais les scripts shell : `tools/*.sh` s'adresse à l'équipe, exactement comme `rules/`,
+et n'est jamais publié avec le code. `tools/covergate`, écrit en Go, reste dans le champ.
+
+**Il vide les chaînes littérales** avant de chercher un identifiant. Ce qui vit entre guillemets est
+une DONNÉE — un nom de document, un message destiné à l'utilisateur — et une donnée peut
+légitimement être en français.
 
 Il ne regarde que les lignes ajoutées parce que la traduction se livre en **tranches** : un garde
 rouge jusqu'à la dernière serait ignoré, donc désarmé. Il empêche la dette de croître pendant qu'on

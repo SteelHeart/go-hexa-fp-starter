@@ -22,7 +22,7 @@ détriment de la primaire doit être justifiée par écrit.
 
 ## Ce que ce dossier ne fait pas
 
-Il ne **constate** pas l'état du dépôt — c'est [`CLAUDE.md`](../../CLAUDE.md) § « État réel » qui
+Il ne **constate** pas l'état du dépôt — c'est [`documentation/AMORCAGE.md`](../../../AMORCAGE.md) § « État réel » qui
 fait foi sur les faits. Il ne **compare** pas aux autres frameworks — c'est
 [`parite-frameworks.md`](../technique/parite-frameworks.md). Il **définit le périmètre**, et il est
 le seul à le faire.

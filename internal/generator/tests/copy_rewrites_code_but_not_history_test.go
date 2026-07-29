@@ -24,7 +24,7 @@ const (
 //   - the module path is rewritten in code. A partial rewrite produces a project
 //     that COMPILES — Go resolves the import against the original socle while it
 //     is reachable — but silently depends on another repository;
-//   - `CLAUDE.md` is NOT rewritten: its occurrences are links to historical pull
+//   - `documentation/AMORCAGE.md` is NOT rewritten: its occurrences are links to historical pull
 //     requests, which would point at a repository that never carried them;
 //   - the executable bit survives. This repository committed both of its git
 //     hooks as 100644: git ignored them everywhere, on every machine, and
@@ -58,8 +58,8 @@ func TestCopyRewritesCodeButNotHistory(t *testing.T) {
 		t.Error("the target path was not written")
 	}
 
-	if guard := read(t, filepath.Join(destination, "CLAUDE.md")); !strings.Contains(guard, socleModule) {
-		t.Error("CLAUDE.md was rewritten: its links to the socle history are lost")
+	if guard := read(t, filepath.Join(destination, "documentation", "AMORCAGE.md")); !strings.Contains(guard, socleModule) {
+		t.Error("documentation/AMORCAGE.md was rewritten: its links to the socle history are lost")
 	}
 
 	info, err := os.Stat(filepath.Join(destination, "tools", "guard.sh"))
@@ -87,7 +87,7 @@ func fakeSocle(t *testing.T, module string) string {
 	write(t, filepath.Join(root, "go.mod"), "module "+module+"\n\ngo 1.25.12\n", 0o600)
 	write(t, filepath.Join(root, "internal", "code.go"),
 		"package internal\n\nimport \""+module+"/internal/pkg/fp\"\n\nvar _ = fp.None[int]\n", 0o600)
-	write(t, filepath.Join(root, "CLAUDE.md"),
+	write(t, filepath.Join(root, "documentation", "AMORCAGE.md"),
 		"Voir https://"+module+"/pull/42 pour l'historique.\n", 0o600)
 	write(t, filepath.Join(root, "tools", "guard.sh"), "#!/usr/bin/env sh\nexit 0\n", 0o750)
 

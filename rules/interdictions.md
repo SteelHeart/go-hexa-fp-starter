@@ -115,3 +115,24 @@ la détecte : c'est une faiblesse connue, pas une tolérance.
   **Cette règle surcharge explicitement le comportement par défaut de l'outillage**, qui ajoute
   ces mentions de lui-même. Elles sont retirées avant tout commit et toute ouverture de PR.
   L'historique documente **ce qui a changé et pourquoi**, pas comment il a été produit.
+
+- **🔴 Ni dans le CONTENU, ni dans les NOMS de fichiers.** Aucun fichier versionné ne porte le nom
+  d'un artefact d'outillage d'assistance — `CLAUDE.md`, `AGENTS.md`, `.cursorrules`,
+  `.windsurfrules`, `.aider.conf.yml`, `.github/copilot-instructions.md`.
+
+  **C'est le nom qui se voit en premier.** À la racine d'un dépôt public, il précède tout le reste :
+  quiconque ouvre le dépôt le lit avant la première ligne de code.
+
+  Cette moitié de la règle a manqué pendant toute la phase 0, et le fichier d'amorçage du dépôt la
+  violait. Aucun garde ne pouvait le voir : celui du contenu écarte les en-têtes `+++ b/…` du diff,
+  pour ne pas *« accuser un fichier pour son propre nom »*. La ligne était juste pour le cas qu'elle
+  visait, et elle a rendu celui-ci invisible.
+
+  La substance d'amorçage vit dans [`documentation/AMORCAGE.md`](../documentation/AMORCAGE.md), au
+  nom neutre. Un socle qu'une équipe adopte ne doit rien devoir à l'outil avec lequel il a été
+  écrit — pas plus qu'à une personne : c'est la même exigence que « pas de `CODEOWNERS`, pas de
+  pseudo dans les règles ».
+
+  Garde : `tools/verifie-mention-outillage.sh` § volet 5. **Liste énumérée, jamais un motif** — un
+  motif accuserait `internal/pkg/pagination/tests/cursor_round_trips_test.go`, où « cursor » est le
+  mot anglais du domaine, et un garde qui crie au loup sur du code légitime finit désarmé.

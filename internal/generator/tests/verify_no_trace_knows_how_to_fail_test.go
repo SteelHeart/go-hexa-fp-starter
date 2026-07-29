@@ -52,7 +52,7 @@ func TestVerifyNoTraceKnowsHowToFail(t *testing.T) {
 	if removed := os.Remove(filepath.Join(destination, "forgotten.go")); removed != nil {
 		t.Fatalf("cleanup: %v", removed)
 	}
-	write(t, filepath.Join(destination, "CLAUDE.md"), "voir https://"+socleModule+"/pull/1\n", 0o600)
+	write(t, filepath.Join(destination, "documentation", "AMORCAGE.md"), "voir https://"+socleModule+"/pull/1\n", 0o600)
 
 	remaining, err = generator.VerifyNoTrace(plan)
 	if err != nil {
