@@ -28,6 +28,7 @@ import (
 
 	{{.Package}} "{{.Module}}/internal/modules/{{.Dir}}"
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+	"{{.Module}}/internal/pkg/middleware"
 )
 
 // RoutePath is the path of the creation route.
@@ -77,6 +78,7 @@ type createOutput struct {
 func Mount(api huma.API, mod {{.Package}}.Module) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-{{.Dir}}",
+		MaxBodyBytes: middleware.NoBodyLimit,
 		Method:        http.MethodPost,
 		Path:          RoutePath,
 		Summary:       "Create a {{.Dir}} record",

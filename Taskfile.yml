@@ -487,6 +487,10 @@ tasks:
       # échouer. Sans cette moitié, « la documentation dit vrai » et « le garde
       # ne cherche plus rien » rendent exactement la même sortie.
       - ./tools/verifie-veracite-doc.sh --temoin
+      # #141 : huma impose 1 MiB à toute opération qui ne désarme pas sa borne,
+      # et cette valeur-là répond à la place de `http.max_body_bytes`.
+      - ./tools/verifie-borne-de-corps.sh
+      - ./tools/verifie-borne-de-corps.sh --temoin
 
   fmt:
     desc: Formate le code

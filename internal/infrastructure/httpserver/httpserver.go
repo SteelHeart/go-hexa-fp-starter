@@ -58,6 +58,10 @@ func NewRouter(cfg config.Config, logger *slog.Logger, readiness map[string]Prob
 	humaCfg := huma.DefaultConfig(cfg.App.Name, cfg.App.Version)
 	humaCfg.DocsPath = "/docs"
 	humaCfg.OpenAPIPath = "/openapi"
+	// ⚠️ The body bound is NOT set here, and it cannot be: huma carries it on
+	// each `huma.Operation`, not on its Config. Every registered operation must
+	// therefore disarm it explicitly — see `middleware.NoBodyLimit` and the
+	// guard `tools/verifie-borne-de-corps.sh` (#141).
 	return &Router{Mux: mux, API: humachi.New(mux, humaCfg)}
 }
 

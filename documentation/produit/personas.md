@@ -121,7 +121,7 @@ tenue, plusieurs frontends simultanés, configuration modifiable à volonté.
 | Critère | Cible | Aujourd'hui | Lot |
 |---|---|---|---|
 | Réponse en flux possible | oui | **non** — `write_timeout: 10s` la tue | #143 |
-| Taille d'ingestion | configurable | **non** — `max_body_bytes` existe, est validée, et **ne produit aucun effet** : `huma.DefaultConfig` porte sa propre borne, non reliée (mesuré sur la preuve P2) | #141 |
+| Taille d'ingestion | configurable | **oui** ✅ depuis le 2026-07-29 — la clé gouverne enfin. Elle était lue, validée, et **sans effet** : huma pose sa borne sur **chaque opération**, avec un défaut de 1 MiB, et c'est elle qui répondait | #141 |
 | File de travaux longs | oui | **aucune** — `cmd/worker` ne dépile que l'outbox | #144 |
 | Benchmarks de non-régression | ≥ 1 | **0 `func Benchmark`** — `tests/perf/` existe et tourne depuis le 2026-07-29 (#91), mais un scénario k6 exige une API démarrée et ne dit pas **quelle** fonction a régressé | #145 |
 | Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`, aucun `GOMAXPROCS`** | #146 |

@@ -21,6 +21,7 @@ import (
 	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/userregistration"
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
 // registerInput is the registration request.
@@ -60,10 +61,11 @@ type registerOutput struct {
 // use case, not even by accident.
 func Mount(api huma.API, mod userregistration.Module) {
 	huma.Register(api, huma.Operation{
-		OperationID: "register-user",
-		Method:      contract.RegisterRoute.Method,
-		Path:        contract.RegisterRoute.Path,
-		Summary:     "Register a user",
+		OperationID:  "register-user",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.RegisterRoute.Method,
+		Path:         contract.RegisterRoute.Path,
+		Summary:      "Register a user",
 		Description: "Creates an account awaiting confirmation. " +
 			"The account is born `pending`: the address is not proven yet.",
 		Tags:          []string{"users"},
@@ -168,11 +170,12 @@ type availabilityInput struct {
 // SECURITY.md.
 func MountAvailability(api huma.API, mod userregistration.Module) {
 	huma.Register(api, huma.Operation{
-		OperationID: "check-email-availability",
-		Method:      http.MethodGet,
-		Path:        "/v1/users/availability",
-		Summary:     "Check the availability of an address",
-		Tags:        []string{"users"},
+		OperationID:  "check-email-availability",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       http.MethodGet,
+		Path:         "/v1/users/availability",
+		Summary:      "Check the availability of an address",
+		Tags:         []string{"users"},
 	}, func(ctx context.Context, in *availabilityInput) (*availabilityOutput, error) {
 		available, failure, ok := mod.CheckEmail(ctx, in.Email).Get()
 		if !ok {

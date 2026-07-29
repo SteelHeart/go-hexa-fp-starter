@@ -268,6 +268,16 @@ jobs:
       - name: Ces trois-là aussi savent échouer
         run: ./tools/verifie-veracite-doc.sh --temoin
 
+      # ── La borne de corps est-elle désarmée partout ? (#141) ────────────────
+      # huma fixe 1 MiB sur toute opération qui ne porte pas sa borne, et c'est
+      # ELLE qui répond — pas `http.max_body_bytes`. Une route neuve qui oublie
+      # le champ ne casse rien, ne logue rien, et retombe au défaut.
+      - name: Aucune opération huma ne retombe sur la borne de huma
+        run: ./tools/verifie-borne-de-corps.sh
+
+      - name: Celui-là aussi sait échouer
+        run: ./tools/verifie-borne-de-corps.sh --temoin
+
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
   # ───────────────────────────────────────────────────────────────────────────

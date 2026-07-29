@@ -7,6 +7,7 @@ import (
 
 	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
 // identityOutput carries the resolved identity.
@@ -25,10 +26,11 @@ type identityOutput struct {
 // permission.
 func mountIdentity(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
-		OperationID: "resolve-identity",
-		Method:      contract.IdentityRoute.Method,
-		Path:        contract.IdentityRoute.Path,
-		Summary:     "Resolve the presented token",
+		OperationID:  "resolve-identity",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.IdentityRoute.Method,
+		Path:         contract.IdentityRoute.Path,
+		Summary:      "Resolve the presented token",
 		Description: "Returns the identity attached to the token. " +
 			"Authorises NOTHING: the token authenticates, it does not authorise.",
 		Tags: []string{apiTag},
