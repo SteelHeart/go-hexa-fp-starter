@@ -6,13 +6,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// TestNextCursorResumesExactlyAfterTheLastItem : le curseur suivant désigne le
-// DERNIER élément rendu, pas la ligne témoin.
+// TestNextCursorResumesExactlyAfterTheLastItem: the next cursor names the LAST
+// item returned, not the witness row.
 //
-// C'est le cœur du contrat de pagination. S'il désignait la ligne supplémentaire —
-// celle qu'on a lue mais pas rendue — la page suivante commencerait un cran trop
-// loin et cet élément ne serait JAMAIS affiché. Le défaut est silencieux : rien ne
-// signale une ligne manquante entre deux pages.
+// This is the heart of the pagination contract. Were it to name the extra row —
+// the one read but not returned — the next page would start one notch too far
+// and that item would NEVER be displayed. The defect is silent: nothing reports
+// a missing row between two pages.
 func TestNextCursorResumesExactlyAfterTheLastItem(t *testing.T) {
 	t.Parallel()
 
@@ -21,18 +21,18 @@ func TestNextCursorResumesExactlyAfterTheLastItem(t *testing.T) {
 		t.Fatalf("NewRequest: %v", err)
 	}
 
-	page := pagination.NewPage(lignes(4), req, curseurDe)
-	dernier := page.Items[len(page.Items)-1]
+	page := pagination.NewPage(rows(4), req, cursorOf)
+	last := page.Items[len(page.Items)-1]
 
-	repris, err := pagination.DecodeCursor(page.NextCursor)
+	resumed, err := pagination.DecodeCursor(page.NextCursor)
 	if err != nil {
-		t.Fatalf("le curseur rendu doit être décodable: %v", err)
+		t.Fatalf("the returned cursor must be decodable: %v", err)
 	}
-	if repris.ID != dernier.ID {
-		t.Errorf("curseur suivant = %q, attendu le dernier élément RENDU (%q)",
-			repris.ID, dernier.ID)
+	if resumed.ID != last.ID {
+		t.Errorf("next cursor = %q, want the last item RETURNED (%q)",
+			resumed.ID, last.ID)
 	}
-	if !repris.CreatedAt.Equal(dernier.CreatedAt) {
-		t.Errorf("horodatage du curseur = %v, attendu %v", repris.CreatedAt, dernier.CreatedAt)
+	if !resumed.CreatedAt.Equal(last.CreatedAt) {
+		t.Errorf("cursor timestamp = %v, want %v", resumed.CreatedAt, last.CreatedAt)
 	}
 }

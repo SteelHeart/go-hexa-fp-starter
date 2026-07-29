@@ -6,38 +6,37 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestFlatMapOptionChainsAbsences : enchaîner des recherches qui peuvent ne rien
-// trouver ne doit pas produire une Option d'Option.
+// TestFlatMapOptionChainsAbsences: chaining lookups that may find nothing must
+// not produce an Option of Option.
 //
-// C'est toute la différence avec MapOption : chercher l'employeur d'un utilisateur
-// dont on n'est pas sûr qu'il existe rend « pas d'employeur », pas « peut-être un
-// peut-être ».
+// That is the whole difference with MapOption: looking up the employer of a user
+// we are not sure exists returns "no employer", not "maybe a maybe".
 func TestFlatMapOptionChainsAbsences(t *testing.T) {
 	t.Parallel()
 
-	positifOuRien := func(n int) fp.Option[int] {
+	positiveOrNothing := func(n int) fp.Option[int] {
 		if n <= 0 {
 			return fp.None[int]()
 		}
 		return fp.Some(n)
 	}
 
-	if got := fp.FlatMapOption(fp.Some(5), positifOuRien); !got.IsSome() {
-		t.Error("une valeur valide doit traverser")
+	if got := fp.FlatMapOption(fp.Some(5), positiveOrNothing); !got.IsSome() {
+		t.Error("a valid value must pass through")
 	}
-	if got := fp.FlatMapOption(fp.Some(-5), positifOuRien); got.IsSome() {
-		t.Error("une valeur refusée par f doit donner None")
+	if got := fp.FlatMapOption(fp.Some(-5), positiveOrNothing); got.IsSome() {
+		t.Error("a value refused by f must give None")
 	}
 
-	appelee := false
-	absent := fp.FlatMapOption(fp.None[int](), func(n int) fp.Option[int] {
-		appelee = true
+	called := false
+	missing := fp.FlatMapOption(fp.None[int](), func(n int) fp.Option[int] {
+		called = true
 		return fp.Some(n)
 	})
-	if appelee {
-		t.Error("f ne doit PAS être appelée sur une Option vide")
+	if called {
+		t.Error("f must NOT be called on an empty Option")
 	}
-	if absent.IsSome() {
-		t.Error("None doit traverser inchangée")
+	if missing.IsSome() {
+		t.Error("None must pass through unchanged")
 	}
 }

@@ -6,25 +6,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestSomeOfZeroIsNotNone : `Some("")` est PRÉSENT, et distinct de None.
+// TestSomeOfZeroIsNotNone: `Some("")` is PRESENT, and distinct from None.
 //
-// C'est la distinction que le pointeur nil ne sait pas faire et que l'Option
-// existe pour rendre : « champ jamais renseigné » et « champ volontairement vidé »
-// sont deux décisions différentes. Les confondre fait réapparaître une valeur par
-// défaut là où quelqu'un avait explicitement demandé le vide.
+// This is the distinction a nil pointer cannot make and that Option exists to
+// provide: "field never filled in" and "field deliberately emptied" are two
+// different decisions. Conflating them brings back a default value where someone
+// had explicitly asked for emptiness.
 func TestSomeOfZeroIsNotNone(t *testing.T) {
 	t.Parallel()
 
-	vide := fp.Some("")
-	if !vide.IsSome() {
-		t.Fatal("Some(\"\") doit être présent")
+	empty := fp.Some("")
+	if !empty.IsSome() {
+		t.Fatal("Some(\"\") must be present")
 	}
-	if got := vide.ValueOr("repli"); got != "" {
-		t.Errorf("ValueOr = %q : le repli a écrasé une valeur vide DÉLIBÉRÉE", got)
+	if got := empty.ValueOr("fallback"); got != "" {
+		t.Errorf("ValueOr = %q: the fallback overwrote a DELIBERATE empty value", got)
 	}
 
 	zero := fp.Some(0)
 	if !zero.IsSome() || zero.ValueOr(42) != 0 {
-		t.Error("Some(0) doit être présent et rendre 0, pas le repli")
+		t.Error("Some(0) must be present and return 0, not the fallback")
 	}
 }

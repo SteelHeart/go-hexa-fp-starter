@@ -6,34 +6,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestFromPointerNeverDereferencesNil : FromPointer est le point de conversion des
-// frontières.
+// TestFromPointerNeverDereferencesNil: FromPointer is the boundary conversion
+// point.
 //
-// Au-delà, le domaine ne manipule plus de pointeur — donc plus aucun accès nil
-// possible. Le test vérifie qu'elle ne déréférence pas nil : si elle le faisait,
-// la conversion censée SUPPRIMER la classe de défauts en serait elle-même le
-// dernier refuge.
+// Past it, the domain no longer handles pointers — hence no nil access is
+// possible any more. The test checks it does not dereference nil: if it did, the
+// conversion meant to REMOVE that class of defects would itself be its last
+// refuge.
 func TestFromPointerNeverDereferencesNil(t *testing.T) {
 	t.Parallel()
 
-	var absent *string
-	converti := fp.FromPointer(absent) // ne doit pas paniquer
-	if converti.IsSome() {
-		t.Error("un pointeur nil doit devenir None")
+	var missing *string
+	converted := fp.FromPointer(missing) // must not panic
+	if converted.IsSome() {
+		t.Error("a nil pointer must become None")
 	}
 
-	valeur := "présent"
-	present := fp.FromPointer(&valeur)
-	if !present.IsSome() {
-		t.Fatal("un pointeur non nil doit devenir Some")
+	value := "present"
+	held := fp.FromPointer(&value)
+	if !held.IsSome() {
+		t.Fatal("a non-nil pointer must become Some")
 	}
-	if got, _ := present.Get(); got != "présent" {
-		t.Errorf("valeur = %q", got)
+	if got, _ := held.Get(); got != "present" {
+		t.Errorf("value = %q", got)
 	}
 
-	// La copie est faite : muter la source ne doit pas altérer l'Option.
-	valeur = "muté"
-	if got, _ := present.Get(); got != "présent" {
-		t.Errorf("l'Option a suivi la mutation de la source: %q", got)
+	// The copy is made: mutating the source must not alter the Option.
+	value = "mutated"
+	if got, _ := held.Get(); got != "present" {
+		t.Errorf("the Option followed the source mutation: %q", got)
 	}
 }

@@ -2,35 +2,34 @@ package tests
 
 import "testing"
 
-// TestGetForcesDiscrimination : `Get` est la seule sortie de la boîte, et elle
-// rend un booléen.
+// TestGetForcesDiscrimination: `Get` is the only way out of the box, and it
+// returns a boolean.
 //
-// Ce booléen n'est pas une commodité, c'est une contrainte : il force le site
-// d'appel à discriminer. Sans lui, on pourrait lire la valeur d'un Result en
-// erreur et récupérer la valeur zéro de T — exactement le défaut que Result existe
-// pour rendre impossible.
+// That boolean is not a convenience, it is a constraint: it forces the call site
+// to discriminate. Without it, one could read the value of a failed Result and
+// get the zero value of T — exactly the defect Result exists to make impossible.
 func TestGetForcesDiscrimination(t *testing.T) {
 	t.Parallel()
 
 	value, err, ok := okInt(7).Get()
 	if !ok {
-		t.Fatal("un Ok doit rendre ok=true")
+		t.Fatal("an Ok must return ok=true")
 	}
 	if value != 7 {
-		t.Errorf("valeur = %d, attendu 7", value)
+		t.Errorf("value = %d, want 7", value)
 	}
 	if err != "" {
-		t.Errorf("un Ok ne doit porter aucune erreur, reçu %q", err)
+		t.Errorf("an Ok must carry no error, got %q", err)
 	}
 
-	value, err, ok = errInt("refusé").Get()
+	value, err, ok = errInt("refused").Get()
 	if ok {
-		t.Fatal("un Err doit rendre ok=false")
+		t.Fatal("an Err must return ok=false")
 	}
-	if err != "refusé" {
-		t.Errorf("erreur = %q, attendu « refusé »", err)
+	if err != "refused" {
+		t.Errorf("error = %q, want \"refused\"", err)
 	}
 	if value != 0 {
-		t.Errorf("un Err ne doit porter aucune valeur, reçu %d", value)
+		t.Errorf("an Err must carry no value, got %d", value)
 	}
 }

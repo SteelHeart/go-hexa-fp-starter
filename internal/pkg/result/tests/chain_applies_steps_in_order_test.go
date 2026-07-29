@@ -6,30 +6,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestChainAppliesStepsInOrder : les étapes s'appliquent dans l'ordre déclaré, et
-// chacune reçoit la sortie de la précédente.
+// TestChainAppliesStepsInOrder: steps apply in the declared order, and each one
+// receives the previous one's output.
 //
-// L'ordre est la seule chose qu'un lecteur déduit de la forme du code. S'il n'était
-// pas garanti, lire un cas d'usage ne dirait plus ce qu'il fait.
+// Order is the only thing a reader infers from the shape of the code. Were it
+// not guaranteed, reading a use case would no longer tell what it does.
 func TestChainAppliesStepsInOrder(t *testing.T) {
 	t.Parallel()
 
-	// La première et la troisième étape sont identiques, et c'est le cœur du test :
-	// la même fonction appliquée à deux positions différentes doit produire deux
-	// résultats différents (2 puis 6). Dédupliquer ce que gocritic croit être une
-	// répétition détruirait la démonstration — il ne resterait plus rien qui prouve
-	// que la position compte.
-	sortie := result.Chain(okInt(1),
-		func(n int) result.Result[int, erreur] { return okInt(double(n)) },     // 2
-		func(n int) result.Result[int, erreur] { return okInt(incremente(n)) }, // 3
-		//nolint:gocritic // la répétition EST la démonstration : même étape, deux positions
-		func(n int) result.Result[int, erreur] { return okInt(double(n)) }, // 6
+	// The first and third steps are identical, and that is the heart of the
+	// test: the same function applied at two different positions must produce
+	// two different results (2 then 6). Deduplicating what gocritic believes to
+	// be a repetition would destroy the demonstration — nothing would be left
+	// proving that position matters.
+	out := result.Chain(okInt(1),
+		func(n int) result.Result[int, failure] { return okInt(double(n)) },    // 2
+		func(n int) result.Result[int, failure] { return okInt(increment(n)) }, // 3
+		//nolint:gocritic // the repetition IS the demonstration: same step, two positions
+		func(n int) result.Result[int, failure] { return okInt(double(n)) }, // 6
 	)
 
-	if !sortie.IsOk() {
-		t.Fatalf("chaîne en échec: %q", cause(sortie))
+	if !out.IsOk() {
+		t.Fatalf("chain failed: %q", causeOf(out))
 	}
-	if got := valeur(sortie); got != 6 {
-		t.Errorf("valeur = %d, attendu 6 — les étapes ne s'enchaînent pas dans l'ordre", got)
+	if got := valueOf(out); got != 6 {
+		t.Errorf("value = %d, want 6 — steps are not chained in order", got)
 	}
 }

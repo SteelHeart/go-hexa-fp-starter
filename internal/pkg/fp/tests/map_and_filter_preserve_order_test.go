@@ -6,32 +6,32 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestMapAndFilterPreserveOrder : l'ordre des éléments est conservé.
+// TestMapAndFilterPreserveOrder: item order is preserved.
 //
-// Une pagination par curseur repose entièrement sur un ordre stable : une fonction
-// qui réordonnerait silencieusement ferait sauter ou répéter des lignes entre deux
-// pages, et le symptôme n'apparaîtrait qu'au-delà de la première page.
+// Cursor pagination rests entirely on a stable order: a function silently
+// reordering would make rows skipped or repeated between two pages, and the
+// symptom would only show past the first page.
 func TestMapAndFilterPreserveOrder(t *testing.T) {
 	t.Parallel()
 
 	source := []int{3, 1, 4, 1, 5}
 
-	transforme := fp.Map(source, double)
-	attendu := []int{6, 2, 8, 2, 10}
-	for i, want := range attendu {
-		if transforme[i] != want {
-			t.Fatalf("Map = %v, attendu %v", transforme, attendu)
+	transformed := fp.Map(source, double)
+	want := []int{6, 2, 8, 2, 10}
+	for i, w := range want {
+		if transformed[i] != w {
+			t.Fatalf("Map = %v, want %v", transformed, want)
 		}
 	}
 
-	garde := fp.Filter([]int{1, 2, 3, 4, 5, 6}, pair)
-	attenduFiltre := []int{2, 4, 6}
-	if len(garde) != len(attenduFiltre) {
-		t.Fatalf("Filter = %v, attendu %v", garde, attenduFiltre)
+	kept := fp.Filter([]int{1, 2, 3, 4, 5, 6}, even)
+	wantFiltered := []int{2, 4, 6}
+	if len(kept) != len(wantFiltered) {
+		t.Fatalf("Filter = %v, want %v", kept, wantFiltered)
 	}
-	for i, want := range attenduFiltre {
-		if garde[i] != want {
-			t.Fatalf("Filter = %v, attendu %v", garde, attenduFiltre)
+	for i, w := range wantFiltered {
+		if kept[i] != w {
+			t.Fatalf("Filter = %v, want %v", kept, wantFiltered)
 		}
 	}
 }

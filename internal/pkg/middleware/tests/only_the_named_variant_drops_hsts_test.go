@@ -6,22 +6,23 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestOnlyTheNamedVariantDropsHSTS : seule la variante qui se NOMME renonce à HSTS.
+// TestOnlyTheNamedVariantDropsHSTS: only the variant that NAMES itself gives up
+// HSTS.
 //
-// # Ce que ce test protège vraiment
+// # What this test really protects
 //
-// C'était autrefois `SecurityHeaders(secure bool)`. Un booléen de contrôle ne dit
-// ni ce qu'il active, ni ce qu'il coûte : `SecurityHeaders(false)` au mauvais
-// endroit retirait HSTS en production sans que la relecture le voie.
+// It used to be `SecurityHeaders(secure bool)`. A control boolean says neither
+// what it enables nor what it costs: `SecurityHeaders(false)` in the wrong place
+// removed HSTS in production without review seeing it.
 //
-// Désormais la renonciation porte un nom, et ce test vérifie les deux sens — que
-// le défaut protège, et que la variante nommée soit la SEULE à ne pas protéger.
-// Vérifier un seul des deux laisserait passer la régression qui compte.
+// The opt-out now carries a name, and this test checks both directions — that
+// the default protects, and that the named variant is the ONLY one that does
+// not. Checking only one of the two would let the regression that matters
+// through.
 //
-// La renonciation reste légitime en développement : sur `http://localhost`, HSTS
-// inscrirait dans le navigateur une exigence de HTTPS que le poste ne peut pas
-// satisfaire, et le développeur perdrait l'accès à son propre serveur jusqu'à
-// purger le cache.
+// The opt-out stays legitimate in development: on `http://localhost`, HSTS would
+// record in the browser an HTTPS requirement the machine cannot satisfy, and the
+// developer would lose access to their own server until clearing the cache.
 func TestOnlyTheNamedVariantDropsHSTS(t *testing.T) {
 	t.Parallel()
 
@@ -29,17 +30,17 @@ func TestOnlyTheNamedVariantDropsHSTS(t *testing.T) {
 	without := call(middleware.SecurityHeadersWithoutHSTS(), get(t), okHandler(nil))
 
 	if got := withHSTS.Header().Get("Strict-Transport-Security"); got == "" {
-		t.Error("SecurityHeaders() doit poser HSTS")
+		t.Error("SecurityHeaders() must set HSTS")
 	}
 	if got := without.Header().Get("Strict-Transport-Security"); got != "" {
-		t.Errorf("SecurityHeadersWithoutHSTS() a posé HSTS: %q", got)
+		t.Errorf("SecurityHeadersWithoutHSTS() set HSTS: %q", got)
 	}
 
-	// Tout le RESTE du durcissement doit survivre à la renonciation : on renonce
-	// à HSTS, pas à la protection.
+	// ALL the rest of the hardening must survive the opt-out: we give up HSTS,
+	// not protection.
 	for _, header := range []string{"X-Content-Type-Options", "X-Frame-Options", "Content-Security-Policy"} {
 		if got := without.Header().Get(header); got == "" {
-			t.Errorf("%s perdu par la variante sans HSTS — elle ne renonce qu'à HSTS", header)
+			t.Errorf("%s lost by the variant without HSTS — it gives up HSTS only", header)
 		}
 	}
 }

@@ -1,18 +1,18 @@
-// Package tests contient les tests en BOÎTE NOIRE de la primitive result : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the result primitive: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 //
-// # Pourquoi les lois algébriques sont testées ici
+// # Why the algebraic laws are tested here
 //
-// `Result` n'est pas une structure de données ordinaire : c'est la forme imposée à
-// TOUT cas d'usage du dépôt. Si `Map` ne préservait pas l'identité, ou si
-// `FlatMap` n'était pas associatif, alors refactoriser un pipeline — regrouper
-// deux étapes, en extraire une troisième — changerait le comportement de
-// l'application. Les lois sont ce qui rend ce refactoring sûr, et elles ne se
-// voient pas à la lecture du code.
+// `Result` is not an ordinary data structure: it is the shape imposed on EVERY
+// use case in the repository. If `Map` did not preserve identity, or if
+// `FlatMap` were not associative, then refactoring a pipeline — merging two
+// steps, extracting a third — would change the behaviour of the application.
+// The laws are what makes that refactoring safe, and they are not visible when
+// reading the code.
 package tests
 
 import (
@@ -21,29 +21,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// erreur est une erreur de test, volontairement PAS une `error` : Result[T, E]
-// accepte n'importe quel type d'erreur, et le cœur métier y met sa propre
-// taxonomie plutôt que l'interface standard.
-type erreur string
+// failure is a test error, deliberately NOT an `error`: Result[T, E] accepts any
+// error type, and the business core puts its own taxonomy there rather than the
+// standard interface.
+type failure string
 
-// Trois fonctions pures, pour composer.
-func double(n int) int       { return n * 2 }
-func versTexte(n int) string { return strconv.Itoa(n) }
-func incremente(n int) int   { return n + 1 }
+// Three pure functions, to compose with.
+func double(n int) int    { return n * 2 }
+func toText(n int) string { return strconv.Itoa(n) }
+func increment(n int) int { return n + 1 }
 
-// okInt et errInt raccourcissent les constructions les plus fréquentes.
-func okInt(n int) result.Result[int, erreur] { return result.Ok[int, erreur](n) }
+// okInt and errInt shorten the most frequent constructions.
+func okInt(n int) result.Result[int, failure] { return result.Ok[int, failure](n) }
 
-func errInt(e erreur) result.Result[int, erreur] { return result.Err[int, erreur](e) }
+func errInt(e failure) result.Result[int, failure] { return result.Err[int, failure](e) }
 
-// valeur extrait la valeur de succès, ou la valeur zéro de T.
-func valeur[T, E any](r result.Result[T, E]) T {
+// valueOf extracts the success value, or the zero value of T.
+func valueOf[T, E any](r result.Result[T, E]) T {
 	value, _, _ := r.Get()
 	return value
 }
 
-// cause extrait l'erreur, ou sa valeur zéro.
-func cause[T, E any](r result.Result[T, E]) E {
+// causeOf extracts the error, or its zero value.
+func causeOf[T, E any](r result.Result[T, E]) E {
 	_, err, _ := r.Get()
 	return err
 }

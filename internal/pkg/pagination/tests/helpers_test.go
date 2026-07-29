@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE de la pagination par curseur :
-// ils n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of cursor pagination: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -12,25 +12,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// ligne est une entité paginable de test.
-type ligne struct {
+// row is a paginable test entity.
+type row struct {
 	ID        string
 	CreatedAt time.Time
 }
 
-// base est l'instant de référence.
+// base is the reference instant.
 func base() time.Time { return time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC) }
 
-// curseurDe extrait le curseur d'une ligne.
-func curseurDe(l ligne) pagination.Cursor {
-	return pagination.Cursor{CreatedAt: l.CreatedAt, ID: l.ID}
+// cursorOf extracts the cursor of a row.
+func cursorOf(r row) pagination.Cursor {
+	return pagination.Cursor{CreatedAt: r.CreatedAt, ID: r.ID}
 }
 
-// lignes fabrique n lignes espacées d'une seconde, dans l'ordre.
-func lignes(n int) []ligne {
-	out := make([]ligne, 0, n)
+// rows builds n rows one second apart, in order.
+func rows(n int) []row {
+	out := make([]row, 0, n)
 	for i := range n {
-		out = append(out, ligne{
+		out = append(out, row{
 			ID:        string(rune('a' + i)),
 			CreatedAt: base().Add(time.Duration(i) * time.Second),
 		})

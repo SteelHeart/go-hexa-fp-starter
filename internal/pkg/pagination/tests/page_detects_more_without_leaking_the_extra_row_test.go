@@ -6,12 +6,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// TestPageDetectsMoreWithoutLeakingTheExtraRow : la ligne supplémentaire sert à
-// détecter la suite, elle n'est JAMAIS rendue.
+// TestPageDetectsMoreWithoutLeakingTheExtraRow: the extra row serves to detect
+// the continuation, it is NEVER returned.
 //
-// C'est le défaut le plus facile à écrire ici : oublier la troncature ferait rendre
-// vingt et une lignes pour une limite de vingt. Le client afficherait un élément de
-// trop par page, et le retrouverait en tête de la page suivante.
+// This is the easiest defect to write here: forgetting the truncation would
+// return twenty-one rows for a limit of twenty. The client would show one item
+// too many per page, and find it again at the top of the next one.
 func TestPageDetectsMoreWithoutLeakingTheExtraRow(t *testing.T) {
 	t.Parallel()
 
@@ -20,19 +20,19 @@ func TestPageDetectsMoreWithoutLeakingTheExtraRow(t *testing.T) {
 		t.Fatalf("NewRequest: %v", err)
 	}
 
-	// FetchLimit vaut 4 : la base rend une ligne de plus que la limite.
-	page := pagination.NewPage(lignes(4), req, curseurDe)
+	// FetchLimit is 4: the database returns one row more than the limit.
+	page := pagination.NewPage(rows(4), req, cursorOf)
 
 	if !page.HasMore {
-		t.Error("HasMore doit être vrai quand la ligne supplémentaire existe")
+		t.Error("HasMore must be true when the extra row exists")
 	}
 	if len(page.Items) != 3 {
-		t.Fatalf("éléments rendus = %d, attendu 3 — la ligne témoin a fuité", len(page.Items))
+		t.Fatalf("items returned = %d, want 3 — the witness row leaked", len(page.Items))
 	}
 	if page.Items[2].ID != "c" {
-		t.Errorf("dernier élément = %q, attendu \"c\"", page.Items[2].ID)
+		t.Errorf("last item = %q, want \"c\"", page.Items[2].ID)
 	}
 	if page.NextCursor == "" {
-		t.Error("une page suivante existe : NextCursor doit être renseigné")
+		t.Error("a next page exists: NextCursor must be set")
 	}
 }

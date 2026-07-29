@@ -6,34 +6,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestOrElseRecoversOnlyFromErrors : OrElse remplace une erreur par un repli, et
-// laisse un succès intact.
+// TestOrElseRecoversOnlyFromErrors: OrElse replaces an error with a fallback,
+// and leaves a success untouched.
 //
-// C'est le seul moyen de se rattraper sans sortir de la boîte. Si elle touchait
-// aussi les succès, elle deviendrait un « remplace toujours » — et le repli
-// écraserait des valeurs légitimes sans que rien ne le signale.
+// It is the only way to recover without leaving the box. Were it to touch
+// successes too, it would become a "always replace" — and the fallback would
+// overwrite legitimate values without anything reporting it.
 func TestOrElseRecoversOnlyFromErrors(t *testing.T) {
 	t.Parallel()
 
-	repli := func(erreur) result.Result[int, erreur] { return okInt(0) }
+	fallback := func(failure) result.Result[int, failure] { return okInt(0) }
 
-	recupere := result.OrElse(errInt("cache indisponible"), repli)
-	if !recupere.IsOk() {
-		t.Fatal("OrElse doit remplacer une erreur par le repli")
+	recovered := result.OrElse(errInt("cache unavailable"), fallback)
+	if !recovered.IsOk() {
+		t.Fatal("OrElse must replace an error with the fallback")
 	}
-	if valeur(recupere) != 0 {
-		t.Errorf("valeur de repli = %d, attendu 0", valeur(recupere))
+	if valueOf(recovered) != 0 {
+		t.Errorf("fallback value = %d, want 0", valueOf(recovered))
 	}
 
-	appele := false
-	intact := result.OrElse(okInt(7), func(erreur) result.Result[int, erreur] {
-		appele = true
+	called := false
+	untouched := result.OrElse(okInt(7), func(failure) result.Result[int, failure] {
+		called = true
 		return okInt(0)
 	})
-	if appele {
-		t.Error("le repli ne doit PAS être appelé sur un succès")
+	if called {
+		t.Error("the fallback must NOT be called on a success")
 	}
-	if valeur(intact) != 7 {
-		t.Errorf("valeur = %d, attendu 7 inchangé", valeur(intact))
+	if valueOf(untouched) != 7 {
+		t.Errorf("value = %d, want 7 unchanged", valueOf(untouched))
 	}
 }

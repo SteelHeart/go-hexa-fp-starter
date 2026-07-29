@@ -6,26 +6,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestPipeComposesLeftToRight : Pipe2 et Pipe3 composent dans l'ordre de LECTURE.
+// TestPipeComposesLeftToRight: Pipe2 and Pipe3 compose in READING order.
 //
-// L'ordre n'est pas un détail de goût. La composition mathématique s'écrit de
-// droite à gauche — `g ∘ f` applique f d'abord — et c'est l'inverse de ce qu'un
-// lecteur suppose. Le dépôt choisit l'ordre de lecture, et le vérifie, parce
-// qu'une composition inversée produit un résultat plausible : `versTexte(double(3))`
-// et `double(versTexte(3))` ne compilent pas tous les deux, mais deux
-// transformations de même type, si.
+// The order is not a matter of taste. Mathematical composition is written right
+// to left — `g o f` applies f first — and that is the opposite of what a reader
+// assumes. The repository picks reading order, and checks it, because a reversed
+// composition produces a plausible result: `toText(double(3))` and
+// `double(toText(3))` do not both compile, but two transformations of the same
+// type do.
 func TestPipeComposesLeftToRight(t *testing.T) {
 	t.Parallel()
 
-	// double PUIS incremente : 3 → 6 → 7. L'ordre inverse donnerait 8.
-	deux := fp.Pipe2(double, incremente)
-	if got := deux(3); got != 7 {
-		t.Errorf("Pipe2 = %d, attendu 7 (double puis incrémente)", got)
+	// double THEN increment: 3 -> 6 -> 7. The reverse order would give 8.
+	two := fp.Pipe2(double, increment)
+	if got := two(3); got != 7 {
+		t.Errorf("Pipe2 = %d, want 7 (double then increment)", got)
 	}
 
-	// double PUIS incremente PUIS versTexte : 3 → 6 → 7 → "7".
-	trois := fp.Pipe3(double, incremente, versTexte)
-	if got := trois(3); got != "7" {
-		t.Errorf("Pipe3 = %q, attendu \"7\"", got)
+	// double THEN increment THEN toText: 3 -> 6 -> 7 -> "7".
+	three := fp.Pipe3(double, increment, toText)
+	if got := three(3); got != "7" {
+		t.Errorf("Pipe3 = %q, want \"7\"", got)
 	}
 }

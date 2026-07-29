@@ -6,19 +6,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestCORSWithAnEmptyListRefusesEverything : liste vide = refus total.
+// TestCORSWithAnEmptyListRefusesEverything: empty list means total refusal.
 //
-// Deny par défaut, et le cas est loin d'être théorique : c'est la configuration
-// d'un service qu'on vient de déployer sans avoir encore rempli
-// `http.allowed_origins`. Si la liste vide autorisait tout, le moment le plus
-// exposé de la vie d'un service — juste après sa mise en ligne, avant que
-// quiconque ait relu sa configuration — serait aussi le moins protégé.
+// Deny by default, and the case is far from theoretical: it is the configuration
+// of a service just deployed without `http.allowed_origins` filled in yet. If an
+// empty list authorised everything, the most exposed moment in a service's life
+// — right after going live, before anyone has reviewed its configuration —
+// would also be the least protected.
 func TestCORSWithAnEmptyListRefusesEverything(t *testing.T) {
 	t.Parallel()
 
 	for name, allowed := range map[string][]string{
-		"liste nil":  nil,
-		"liste vide": {},
+		"nil list":   nil,
+		"empty list": {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -28,7 +28,7 @@ func TestCORSWithAnEmptyListRefusesEverything(t *testing.T) {
 			rec := call(middleware.CORS(allowed), req, okHandler(nil))
 
 			if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-				t.Errorf("aucune origine autorisée en configuration, pourtant accordée: %q", got)
+				t.Errorf("no origin authorised in configuration, yet granted: %q", got)
 			}
 		})
 	}

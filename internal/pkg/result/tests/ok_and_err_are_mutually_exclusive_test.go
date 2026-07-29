@@ -2,22 +2,22 @@ package tests
 
 import "testing"
 
-// TestOkAndErrAreMutuallyExclusive : un Result porte un succès OU une erreur,
-// jamais les deux, jamais ni l'un ni l'autre.
+// TestOkAndErrAreMutuallyExclusive: a Result carries a success OR an error,
+// never both, never neither.
 //
-// C'est ce qui le distingue du couple `(T, error)` de Go, où rien n'empêche de
-// retourner une valeur ET une erreur — et où une bonne part des défauts vient de
-// ce que l'appelant lit la valeur sans regarder l'erreur.
+// That is what sets it apart from Go's `(T, error)` pair, where nothing prevents
+// returning a value AND an error — and where a good share of defects comes from
+// the caller reading the value without looking at the error.
 func TestOkAndErrAreMutuallyExclusive(t *testing.T) {
 	t.Parallel()
 
-	succes := okInt(7)
-	if !succes.IsOk() || succes.IsErr() {
-		t.Error("un Ok doit être IsOk et non IsErr")
+	succeeded := okInt(7)
+	if !succeeded.IsOk() || succeeded.IsErr() {
+		t.Error("an Ok must be IsOk and not IsErr")
 	}
 
-	echec := errInt("refusé")
-	if echec.IsOk() || !echec.IsErr() {
-		t.Error("un Err doit être IsErr et non IsOk")
+	failed := errInt("refused")
+	if failed.IsOk() || !failed.IsErr() {
+		t.Error("an Err must be IsErr and not IsOk")
 	}
 }

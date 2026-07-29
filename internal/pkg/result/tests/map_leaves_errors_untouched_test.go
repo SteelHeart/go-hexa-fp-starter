@@ -6,30 +6,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestMapLeavesErrorsUntouched : un Result en erreur traverse Map sans que la
-// transformation soit appelée.
+// TestMapLeavesErrorsUntouched: a failed Result crosses Map without the
+// transformation being called.
 //
-// C'est le court-circuit qui rend un pipeline lisible : les étapes suivantes n'ont
-// pas à vérifier si les précédentes ont réussi. Si la fonction était appelée quand
-// même, chaque étape devrait se protéger elle-même et tout le gain disparaîtrait.
+// This is the short circuit that makes a pipeline readable: later steps do not
+// have to check whether earlier ones succeeded. Were the function called anyway,
+// every step would have to guard itself and the whole gain would vanish.
 func TestMapLeavesErrorsUntouched(t *testing.T) {
 	t.Parallel()
 
-	appelee := false
-	transforme := func(n int) string {
-		appelee = true
-		return versTexte(n)
+	called := false
+	transform := func(n int) string {
+		called = true
+		return toText(n)
 	}
 
-	sortie := result.Map(errInt("refusé"), transforme)
+	out := result.Map(errInt("refused"), transform)
 
-	if appelee {
-		t.Error("la transformation ne doit PAS être appelée sur un Result en erreur")
+	if called {
+		t.Error("the transformation must NOT be called on a failed Result")
 	}
-	if sortie.IsOk() {
-		t.Error("Map sur une erreur doit rendre une erreur")
+	if out.IsOk() {
+		t.Error("Map on an error must return an error")
 	}
-	if cause(sortie) != "refusé" {
-		t.Errorf("l'erreur doit traverser inchangée, reçu %q", cause(sortie))
+	if causeOf(out) != "refused" {
+		t.Errorf("the error must pass through unchanged, got %q", causeOf(out))
 	}
 }

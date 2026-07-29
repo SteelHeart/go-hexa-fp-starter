@@ -6,11 +6,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// TestEmptyPageIsNotAnError : zéro résultat est une réponse valide.
+// TestEmptyPageIsNotAnError: zero results is a valid answer.
 //
-// Une recherche sans correspondance, une liste jamais alimentée, une page demandée
-// juste après la dernière : aucun de ces cas n'est une panne. Le seul piège serait
-// de rendre un `NextCursor` sur une page vide — le client boucherait.
+// A search with no match, a list never filled, a page requested right after the
+// last one: none of these is an outage. The only trap would be returning a
+// `NextCursor` on an empty page — the client would loop.
 func TestEmptyPageIsNotAnError(t *testing.T) {
 	t.Parallel()
 
@@ -19,14 +19,14 @@ func TestEmptyPageIsNotAnError(t *testing.T) {
 		t.Fatalf("NewRequest: %v", err)
 	}
 
-	page := pagination.NewPage([]ligne{}, req, curseurDe)
+	page := pagination.NewPage([]row{}, req, cursorOf)
 	if page.HasMore {
-		t.Error("une page vide n'a pas de suite")
+		t.Error("an empty page has no continuation")
 	}
 	if page.NextCursor != "" {
-		t.Errorf("NextCursor = %q, attendu vide", page.NextCursor)
+		t.Errorf("NextCursor = %q, want empty", page.NextCursor)
 	}
 	if len(page.Items) != 0 {
-		t.Errorf("éléments = %d, attendu 0", len(page.Items))
+		t.Errorf("items = %d, want 0", len(page.Items))
 	}
 }

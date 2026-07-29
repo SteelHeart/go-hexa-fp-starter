@@ -6,24 +6,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestIdentityIsNeutral : Identity rend son argument, et sert de branche neutre.
+// TestIdentityIsNeutral: Identity returns its argument, and serves as a neutral
+// branch.
 //
-// Elle a l'air inutile jusqu'au premier Fold dont une branche n'a rien à faire.
-// L'écrire à la main à chaque fois produirait des closures anonymes qui se
-// ressemblent toutes et qu'on finit par confondre.
+// It looks useless until the first Fold one of whose branches has nothing to do.
+// Writing it by hand every time would produce anonymous closures that all look
+// alike and that one eventually mixes up.
 func TestIdentityIsNeutral(t *testing.T) {
 	t.Parallel()
 
 	if got := fp.Identity(42); got != 42 {
 		t.Errorf("Identity(42) = %d", got)
 	}
-	if got := fp.Identity("texte"); got != "texte" {
-		t.Errorf("Identity(\"texte\") = %q", got)
+	if got := fp.Identity("text"); got != "text" {
+		t.Errorf("Identity(\"text\") = %q", got)
 	}
 
-	// Composée avec elle-même ou avec une autre fonction, elle reste neutre.
-	compose := fp.Pipe2(fp.Identity[int], double)
-	if got := compose(5); got != 10 {
-		t.Errorf("Identity dans une composition = %d, attendu 10", got)
+	// Composed with itself or with another function, it stays neutral.
+	composed := fp.Pipe2(fp.Identity[int], double)
+	if got := composed(5); got != 10 {
+		t.Errorf("Identity inside a composition = %d, want 10", got)
 	}
 }

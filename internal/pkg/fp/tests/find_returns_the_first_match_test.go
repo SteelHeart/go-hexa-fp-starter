@@ -6,27 +6,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestFindReturnsTheFirstMatch : Find rend le PREMIER élément satisfaisant le
-// prédicat, et None si aucun ne le satisfait.
+// TestFindReturnsTheFirstMatch: Find returns the FIRST item satisfying the
+// predicate, and None if none does.
 //
-// « Premier » est le contrat, pas un hasard d'implémentation : sur une liste
-// ordonnée — la plus récente en tête — rendre le dernier au lieu du premier
-// inverserait le sens de la recherche sans qu'aucun type ne s'y oppose.
+// "First" is the contract, not an implementation accident: on an ordered list —
+// most recent first — returning the last instead of the first would reverse the
+// meaning of the search without any type objecting.
 //
-// L'absence rend None plutôt qu'une valeur zéro : c'est ce qui distingue
-// « aucun résultat » de « un résultat vide ».
+// Absence returns None rather than a zero value: that is what tells "no result"
+// apart from "an empty result".
 func TestFindReturnsTheFirstMatch(t *testing.T) {
 	t.Parallel()
 
-	trouve := fp.Find([]int{1, 3, 4, 6, 8}, pair)
-	if !trouve.IsSome() {
-		t.Fatal("un élément satisfait le prédicat : Find doit le trouver")
+	found := fp.Find([]int{1, 3, 4, 6, 8}, even)
+	if !found.IsSome() {
+		t.Fatal("an item satisfies the predicate: Find must find it")
 	}
-	if got, _ := trouve.Get(); got != 4 {
-		t.Errorf("Find = %d, attendu 4 — le PREMIER pair, pas un autre", got)
+	if got, _ := found.Get(); got != 4 {
+		t.Errorf("Find = %d, want 4 — the FIRST even one, not another", got)
 	}
 
-	if absent := fp.Find([]int{1, 3, 5}, pair); absent.IsSome() {
-		t.Error("aucun élément ne satisfait le prédicat : Find doit rendre None")
+	if missing := fp.Find([]int{1, 3, 5}, even); missing.IsSome() {
+		t.Error("no item satisfies the predicate: Find must return None")
 	}
 }

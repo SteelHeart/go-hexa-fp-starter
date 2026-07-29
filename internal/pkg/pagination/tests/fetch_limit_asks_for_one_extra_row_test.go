@@ -6,12 +6,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// TestFetchLimitAsksForOneExtraRow : on demande UNE ligne de plus que nécessaire.
+// TestFetchLimitAsksForOneExtraRow: we ask for ONE row more than needed.
 //
-// C'est ce qui permet de savoir s'il existe une page suivante sans exécuter de
-// `COUNT(*)`. Sur une grande table, ce COUNT coûte un parcours complet à chaque
-// page — plus cher que la page elle-même, pour une information dont on n'a besoin
-// que sous forme de booléen.
+// That is what tells whether a next page exists without running a `COUNT(*)`. On
+// a large table that COUNT costs a full scan on every page — more expensive than
+// the page itself, for a piece of information only needed as a boolean.
 func TestFetchLimitAsksForOneExtraRow(t *testing.T) {
 	t.Parallel()
 
@@ -20,6 +19,6 @@ func TestFetchLimitAsksForOneExtraRow(t *testing.T) {
 		t.Fatalf("NewRequest: %v", err)
 	}
 	if got := req.FetchLimit(); got != 21 {
-		t.Errorf("FetchLimit = %d, attendu 21 (limite + 1)", got)
+		t.Errorf("FetchLimit = %d, want 21 (limit + 1)", got)
 	}
 }

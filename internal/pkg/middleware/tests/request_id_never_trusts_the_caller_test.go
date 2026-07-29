@@ -7,31 +7,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestRequestIDNeverTrustsTheCaller : un identifiant de corrélation hostile est
-// remplacé, jamais propagé.
+// TestRequestIDNeverTrustsTheCaller: a hostile correlation identifier is
+// replaced, never propagated.
 //
-// # Le chemin d'attaque
+// # The attack path
 //
-// Cet identifiant FINIT DANS LES JOURNAUX. Un appelant qui y glisse un retour
-// chariot injecte donc des lignes entières dans le journal du serveur : fausses
-// entrées, faux niveaux de gravité, effacement visuel d'une trace gênante. C'est
-// une injection de journal, et elle vise précisément ce qui sert à enquêter après
-// coup.
+// This identifier ENDS UP IN THE LOGS. A caller slipping a carriage return into
+// it therefore injects whole lines into the server's log: fake entries, fake
+// severity levels, visual erasure of an inconvenient trace. This is log
+// injection, and it targets precisely what serves to investigate afterwards.
 //
-// Une valeur démesurée, elle, gonfle chaque ligne de journal d'une requête —
-// donc le coût de stockage et le temps d'analyse.
+// An oversized value, for its part, inflates every log line of a request — hence
+// storage cost and analysis time.
 //
-// Le middleware réutilise l'identifiant fourni quand il est plausible, ce qui est
-// utile pour suivre un appel à travers plusieurs services. « Plausible » doit donc
-// être vérifié, pas supposé.
+// The middleware reuses the supplied identifier when it is plausible, which is
+// useful to follow a call across several services. "Plausible" must therefore be
+// checked, not assumed.
 func TestRequestIDNeverTrustsTheCaller(t *testing.T) {
 	t.Parallel()
 
 	hostile := map[string]string{
-		"retour chariot": "abc\r\nlevel=ERROR msg=\"faux incident\"",
-		"saut de ligne":  "abc\ninjection",
-		"démesuré":       strings.Repeat("x", 500),
-		"vide":           "",
+		"carriage return": "abc\r\nlevel=ERROR msg=\"fake incident\"",
+		"line feed":       "abc\ninjection",
+		"oversized":       strings.Repeat("x", 500),
+		"empty":           "",
 	}
 
 	for name, value := range hostile {
@@ -43,13 +42,13 @@ func TestRequestIDNeverTrustsTheCaller(t *testing.T) {
 			got := call(middleware.RequestID(), req, okHandler(nil)).Header().Get(middleware.RequestIDHeader)
 
 			if got == value {
-				t.Errorf("identifiant hostile propagé tel quel: %q", got)
+				t.Errorf("hostile identifier propagated as is: %q", got)
 			}
 			if strings.ContainsAny(got, "\r\n") {
-				t.Errorf("l'identifiant rendu contient un saut de ligne: %q", got)
+				t.Errorf("the returned identifier holds a line break: %q", got)
 			}
 			if got == "" {
-				t.Error("un identifiant doit toujours être rendu, même après refus de celui reçu")
+				t.Error("an identifier must always be returned, even after refusing the received one")
 			}
 		})
 	}

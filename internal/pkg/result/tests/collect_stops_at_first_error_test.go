@@ -6,30 +6,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestCollectStopsAtFirstError : Collect transforme une liste de Result en un
-// Result de liste, et s'arrête à la première erreur.
+// TestCollectStopsAtFirstError: Collect turns a list of Results into a Result of
+// list, and stops at the first error.
 //
-// « Tout ou rien » est le bon contrat ici : rendre une liste partielle obligerait
-// chaque appelant à décider quoi faire des éléments manquants, et le premier qui
-// oublierait de le faire traiterait un lot incomplet comme un lot complet.
+// "All or nothing" is the right contract here: returning a partial list would
+// force every caller to decide what to do with the missing items, and the first
+// one forgetting to would treat an incomplete batch as a complete one.
 func TestCollectStopsAtFirstError(t *testing.T) {
 	t.Parallel()
 
-	tous := result.Collect([]result.Result[int, erreur]{okInt(1), okInt(2), okInt(3)})
-	if !tous.IsOk() {
-		t.Fatalf("une liste de succès doit rendre un succès, reçu %q", cause(tous))
+	all := result.Collect([]result.Result[int, failure]{okInt(1), okInt(2), okInt(3)})
+	if !all.IsOk() {
+		t.Fatalf("a list of successes must return a success, got %q", causeOf(all))
 	}
-	if got := valeur(tous); len(got) != 3 || got[0] != 1 || got[2] != 3 {
-		t.Errorf("valeurs rassemblées = %v, attendu [1 2 3]", got)
+	if got := valueOf(all); len(got) != 3 || got[0] != 1 || got[2] != 3 {
+		t.Errorf("collected values = %v, want [1 2 3]", got)
 	}
 
-	partiel := result.Collect([]result.Result[int, erreur]{
-		okInt(1), errInt("deuxième refusé"), errInt("troisième refusé"),
+	partial := result.Collect([]result.Result[int, failure]{
+		okInt(1), errInt("second refused"), errInt("third refused"),
 	})
-	if partiel.IsOk() {
-		t.Fatal("une seule erreur doit faire échouer tout le lot")
+	if partial.IsOk() {
+		t.Fatal("a single error must fail the whole batch")
 	}
-	if cause(partiel) != "deuxième refusé" {
-		t.Errorf("erreur = %q, attendu la PREMIÈRE rencontrée", cause(partiel))
+	if causeOf(partial) != "second refused" {
+		t.Errorf("error = %q, want the FIRST one met", causeOf(partial))
 	}
 }
