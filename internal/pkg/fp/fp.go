@@ -1,36 +1,36 @@
-// Package fp fournit les primitives fonctionnelles qui ne concernent pas la
-// gestion d'erreur : Option, composition et opérations sur les tranches.
+// Package fp provides the functional primitives that are not about error
+// handling: Option, composition and slice operations.
 //
-// Comme result, ce paquet n'importe rien et ne doit jamais rien importer.
-// Voir arch-go.yml.
+// Like result, this package imports nothing and must never import anything.
+// See arch-go.yml.
 package fp
 
-// Option porte une valeur éventuellement absente. Elle remplace un pointeur nil
-// dans le domaine : l'absence devient un cas que le compilateur oblige à traiter.
+// Option carries a possibly absent value. It replaces a nil pointer inside the
+// domain: absence becomes a case the compiler forces you to handle.
 //
-// Sa valeur zéro est None.
+// Its zero value is None.
 type Option[T any] struct {
 	value   T
 	present bool
 }
 
-// Some construit une Option contenant une valeur.
+// Some builds an Option holding a value.
 func Some[T any](value T) Option[T] { return Option[T]{value: value, present: true} }
 
-// None construit une Option vide.
+// None builds an empty Option.
 func None[T any]() Option[T] { return Option[T]{} }
 
-// IsSome indique si l'Option contient une valeur.
+// IsSome reports whether the Option holds a value.
 func (o Option[T]) IsSome() bool { return o.present }
 
-// IsNone indique si l'Option est vide.
+// IsNone reports whether the Option is empty.
 func (o Option[T]) IsNone() bool { return !o.present }
 
-// Get expose la valeur et sa présence. Le booléen force le site d'appel à
-// traiter l'absence.
+// Get exposes the value and its presence. The boolean forces the call site to
+// handle absence.
 func (o Option[T]) Get() (T, bool) { return o.value, o.present }
 
-// ValueOr retourne la valeur contenue, ou la valeur de repli si l'Option est vide.
+// ValueOr returns the held value, or the fallback if the Option is empty.
 func (o Option[T]) ValueOr(fallback T) T {
 	if o.present {
 		return o.value
@@ -38,7 +38,7 @@ func (o Option[T]) ValueOr(fallback T) T {
 	return fallback
 }
 
-// MapOption applique f à la valeur contenue. Une Option vide traverse inchangée.
+// MapOption applies f to the held value. An empty Option passes through unchanged.
 func MapOption[T, U any](o Option[T], f func(T) U) Option[U] {
 	if !o.present {
 		return None[U]()
@@ -46,7 +46,7 @@ func MapOption[T, U any](o Option[T], f func(T) U) Option[U] {
 	return Some(f(o.value))
 }
 
-// FlatMapOption enchaîne une opération qui peut elle-même ne rien retourner.
+// FlatMapOption chains an operation that may itself return nothing.
 func FlatMapOption[T, U any](o Option[T], f func(T) Option[U]) Option[U] {
 	if !o.present {
 		return None[U]()
@@ -54,7 +54,7 @@ func FlatMapOption[T, U any](o Option[T], f func(T) Option[U]) Option[U] {
 	return f(o.value)
 }
 
-// FoldOption réduit les deux branches à une seule valeur.
+// FoldOption reduces both branches to a single value.
 func FoldOption[T, R any](o Option[T], onSome func(T) R, onNone func() R) R {
 	if o.present {
 		return onSome(o.value)
@@ -62,9 +62,9 @@ func FoldOption[T, R any](o Option[T], onSome func(T) R, onNone func() R) R {
 	return onNone()
 }
 
-// FromPointer convertit un pointeur en Option, sans déréférencer nil.
-// C'est le point de conversion des frontières : au-delà, le domaine ne
-// manipule plus de pointeur.
+// FromPointer converts a pointer into an Option, without dereferencing nil.
+// This is the boundary conversion point: past it, the domain no longer handles
+// pointers.
 func FromPointer[T any](p *T) Option[T] {
 	if p == nil {
 		return None[T]()
@@ -72,21 +72,21 @@ func FromPointer[T any](p *T) Option[T] {
 	return Some(*p)
 }
 
-// Identity retourne son argument. Utile comme branche neutre d'un Fold.
+// Identity returns its argument. Useful as the neutral branch of a Fold.
 func Identity[T any](value T) T { return value }
 
-// Pipe2 compose deux fonctions de gauche à droite.
+// Pipe2 composes two functions left to right.
 func Pipe2[A, B, C any](f func(A) B, g func(B) C) func(A) C {
 	return func(a A) C { return g(f(a)) }
 }
 
-// Pipe3 compose trois fonctions de gauche à droite.
+// Pipe3 composes three functions left to right.
 func Pipe3[A, B, C, D any](f func(A) B, g func(B) C, h func(C) D) func(A) D {
 	return func(a A) D { return h(g(f(a))) }
 }
 
-// Map applique f à chaque élément et retourne une nouvelle tranche.
-// L'entrée n'est jamais modifiée.
+// Map applies f to every item and returns a new slice.
+// The input is never modified.
 func Map[T, U any](items []T, f func(T) U) []U {
 	out := make([]U, 0, len(items))
 	for _, item := range items {
@@ -95,7 +95,7 @@ func Map[T, U any](items []T, f func(T) U) []U {
 	return out
 }
 
-// Filter retourne les éléments qui satisfont le prédicat.
+// Filter returns the items satisfying the predicate.
 func Filter[T any](items []T, keep func(T) bool) []T {
 	out := make([]T, 0, len(items))
 	for _, item := range items {
@@ -106,7 +106,7 @@ func Filter[T any](items []T, keep func(T) bool) []T {
 	return out
 }
 
-// Reduce replie la tranche sur un accumulateur.
+// Reduce folds the slice onto an accumulator.
 func Reduce[T, A any](items []T, initial A, f func(A, T) A) A {
 	acc := initial
 	for _, item := range items {
@@ -115,7 +115,7 @@ func Reduce[T, A any](items []T, initial A, f func(A, T) A) A {
 	return acc
 }
 
-// Find retourne le premier élément satisfaisant le prédicat.
+// Find returns the first item satisfying the predicate.
 func Find[T any](items []T, match func(T) bool) Option[T] {
 	for _, item := range items {
 		if match(item) {

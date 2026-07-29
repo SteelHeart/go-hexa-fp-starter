@@ -1,28 +1,36 @@
-// Package middleware fournit les préoccupations transverses du transport HTTP.
+// Package middleware provides the cross-cutting concerns of the HTTP transport.
 //
-// Ce sont les SEULS « middlewares » du dépôt : le mot est réservé au HTTP. Les
-// préoccupations transverses du métier sont des décorateurs `func(P) P`
-// (rules/references.md § vocabulaire imposé).
+// These are the ONLY "middlewares" in the repository: the word is reserved for
+// HTTP. Cross-cutting business concerns are decorators, `func(P) P`
+// (rules/references.md, imposed vocabulary).
 //
-// Tous sont des `func(http.Handler) http.Handler`, donc composables avec
-// n'importe quel routeur de l'écosystème net/http.
+// All of them are `func(http.Handler) http.Handler`, hence composable with any
+// router of the net/http ecosystem.
 //
-// # Un fichier par fonction publique
+// # One file per public function
 //
-// Ce paquet applique au CODE la règle des tests (rules/tests.md §2) : chaque
-// garde vit dans son propre fichier, nommé d'après elle. Ce n'est pas une
-// préférence de rangement — le limiteur de débit de ce paquet n'a jamais rien
-// limité, et le défaut a survécu parce qu'il était perdu au milieu d'un fichier
-// que personne n'ouvrait pour lui.
+// This package applies the test rule (rules/tests.md §2) to CODE: every guard
+// lives in its own file, named after it. This is not a filing preference — the
+// rate limiter in this package never limited anything, and the defect survived
+// because it was lost in the middle of a file nobody opened for it.
+//
+//	middleware.go        the Middleware type and Chain
+//	access_log.go        one log line per completed request
+//	cors.go              allowed origins, deny by default
+//	max_body.go          bounds the size of the body read
+//	rate_limiter.go      per-client throttling, in memory
+//	recover.go           turns a panic into a 500 without leaking the stack
+//	request_id.go        correlation identifier, never trusted on input
+//	security_headers.go  hardening headers, with and without HSTS
 package middleware
 
 import "net/http"
 
-// Middleware est une transformation d'un gestionnaire HTTP.
+// Middleware is a transformation of an HTTP handler.
 type Middleware = func(http.Handler) http.Handler
 
-// Chain compose des middlewares. Le premier listé est le plus externe : il voit
-// la requête en premier et la réponse en dernier.
+// Chain composes middlewares. The first one listed is the outermost: it sees the
+// request first and the response last.
 func Chain(middlewares ...Middleware) Middleware {
 	return func(next http.Handler) http.Handler {
 		for i := len(middlewares) - 1; i >= 0; i-- {

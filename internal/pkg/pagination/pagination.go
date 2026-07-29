@@ -1,10 +1,9 @@
-// Package pagination fournit la pagination par curseur, contrat commun à
-// toutes les surfaces.
+// Package pagination provides cursor pagination, the contract shared by every
+// surface.
 //
-// Pourquoi pas OFFSET : au-delà de quelques milliers de lignes Postgres doit
-// parcourir puis jeter tout ce qui précède, et surtout une insertion concurrente
-// décale les pages — l'appelant saute alors des lignes sans le savoir. Un
-// curseur désigne une position stable, pas un rang.
+// Why not OFFSET: past a few thousand rows Postgres has to walk then discard
+// everything before, and — worse — a concurrent insert shifts the pages, so the
+// caller silently skips rows. A cursor names a stable position, not a rank.
 package pagination
 
 import (
@@ -16,36 +15,35 @@ import (
 	"time"
 )
 
-// Bornes de taille de page. Une page non bornée est un déni de service offert.
+// Page size bounds. An unbounded page is a denial of service, offered.
 const (
 	DefaultLimit = 20
 	MaxLimit     = 100
 )
 
-// ErrInvalidCursor signale un curseur illisible ou falsifié.
-var ErrInvalidCursor = errors.New("curseur invalide")
+// ErrInvalidCursor reports an unreadable or tampered cursor.
+var ErrInvalidCursor = errors.New("invalid cursor")
 
-// Cursor désigne une position stable dans un ordre (CreatedAt, ID).
+// Cursor names a stable position in a (CreatedAt, ID) ordering.
 //
-// Le couple horodatage + identifiant est nécessaire : l'horodatage seul n'est
-// pas unique, et deux lignes créées dans la même microseconde feraient boucler
-// la pagination.
+// The timestamp + identifier pair is required: the timestamp alone is not
+// unique, and two rows created within the same microsecond would make
+// pagination loop forever.
 type Cursor struct {
 	CreatedAt time.Time
 	ID        string
 }
 
-// Encode sérialise le curseur pour un transport public.
+// Encode serialises the cursor for public transport.
 //
-// L'encodage est réversible et NON signé : un curseur n'est pas un secret et ne
-// doit jamais porter d'information d'autorisation. La requête revérifie les
-// droits, toujours.
+// The encoding is reversible and UNSIGNED: a cursor is not a secret and must
+// never carry authorisation information. The query re-checks rights, always.
 func (c Cursor) Encode() string {
 	raw := strconv.FormatInt(c.CreatedAt.UTC().UnixMicro(), 10) + "|" + c.ID
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
-// DecodeCursor lit un curseur encodé.
+// DecodeCursor reads an encoded cursor.
 func DecodeCursor(encoded string) (Cursor, error) {
 	if encoded == "" {
 		return Cursor{}, ErrInvalidCursor
@@ -60,21 +58,21 @@ func DecodeCursor(encoded string) (Cursor, error) {
 	}
 	parsed, err := strconv.ParseInt(micros, 10, 64)
 	if err != nil {
-		return Cursor{}, fmt.Errorf("%w: horodatage: %w", ErrInvalidCursor, err)
+		return Cursor{}, fmt.Errorf("%w: timestamp: %w", ErrInvalidCursor, err)
 	}
 	return Cursor{CreatedAt: time.UnixMicro(parsed).UTC(), ID: id}, nil
 }
 
-// Request porte une demande de page.
+// Request carries a page request.
 type Request struct {
 	After Cursor
 	Limit int
-	// HasAfter distingue « première page » de « curseur zéro ».
+	// HasAfter tells "first page" apart from "zero cursor".
 	HasAfter bool
 }
 
-// NewRequest construit une demande de page en bornant la taille.
-// Un curseur vide vaut « première page », ce n'est pas une erreur.
+// NewRequest builds a page request, bounding the size.
+// An empty cursor means "first page"; that is not an error.
 func NewRequest(encodedCursor string, limit int) (Request, error) {
 	req := Request{Limit: clampLimit(limit)}
 	if encodedCursor == "" {
@@ -100,19 +98,19 @@ func clampLimit(limit int) int {
 	}
 }
 
-// FetchLimit est la taille à demander à la base : un élément de plus que
-// nécessaire, pour savoir s'il existe une page suivante sans faire de COUNT.
+// FetchLimit is the size to ask the database for: one item more than needed, so
+// we know whether a next page exists without running a COUNT.
 func (r Request) FetchLimit() int { return r.Limit + 1 }
 
-// Page porte une tranche de résultats et de quoi demander la suivante.
+// Page carries a slice of results and what is needed to ask for the next one.
 type Page[T any] struct {
 	Items      []T
 	NextCursor string
 	HasMore    bool
 }
 
-// NewPage construit une page à partir des lignes réellement lues (FetchLimit
-// éléments au plus) et de la fonction qui extrait le curseur d'un élément.
+// NewPage builds a page from the rows actually read (FetchLimit items at most)
+// and the function extracting the cursor from an item.
 func NewPage[T any](fetched []T, req Request, cursorOf func(T) Cursor) Page[T] {
 	hasMore := len(fetched) > req.Limit
 	items := fetched

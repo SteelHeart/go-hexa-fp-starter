@@ -5,8 +5,8 @@ import (
 	"slices"
 )
 
-// CORS n'autorise que les origines explicitement listées.
-// Une liste vide refuse tout — deny par défaut.
+// CORS only allows explicitly listed origins.
+// An empty list refuses everything — deny by default.
 func CORS(allowedOrigins []string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
