@@ -22,7 +22,7 @@ func TestHistoryExceptionsAreEnumerated(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]bool{
-		"CLAUDE.md":                             true,
+		"documentation/AMORCAGE.md":             true,
 		"documentation/process/REPRISE.md":      true,
 		"documentation/adr/013-a-guard.md":      true,
 		"documentation/adr/README.md":           true,

@@ -4,7 +4,7 @@
 > passe les gardes. Il dit quoi faire, dans quel ordre, et ce qui attend une décision.
 >
 > **Ce qu'il n'est pas** : la source de vérité sur l'état du dépôt. C'est
-> [`CLAUDE.md`](../../CLAUDE.md) § « État réel du dépôt » qui **fait foi sur les faits**, et
+> [`documentation/AMORCAGE.md`](../../../AMORCAGE.md) § « État réel du dépôt » qui **fait foi sur les faits**, et
 > [`rules/`](../../rules/README.md) qui fait foi sur les règles. En cas de contradiction, ce
 > document a tort.
 >
@@ -226,7 +226,7 @@ Toute la famille de défauts la plus coûteuse de ce dépôt vient de là. Trois
 - Filtrer la sortie d'`arch-go` sur `Failed|Compliance` **masque un échec `COVERAGE`** — c'est
   exactement comme ça que le piège a été manqué une fois de plus, tout récemment.
 
-La liste complète est dans [`CLAUDE.md`](../../CLAUDE.md) § « Pièges d'outillage découverts ».
+La liste complète est dans [`documentation/AMORCAGE.md`](../../../AMORCAGE.md) § « Pièges d'outillage découverts ».
 La relire coûte cinq minutes ; les redécouvrir a coûté des heures.
 
 ## 4. Les cliquets de couverture — à lire avant de les juger
@@ -303,7 +303,7 @@ Deux conclusions à ne pas reperdre :
 ## 7. Les invariants qu'il ne faut pas rouvrir
 
 Ils ont chacun coûté une correction. La liste complète et datée est dans
-[`CLAUDE.md`](../../CLAUDE.md) § « Invariants à ne pas réapprendre » et § « Campagne de
+[`documentation/AMORCAGE.md`](../../../AMORCAGE.md) § « Invariants à ne pas réapprendre » et § « Campagne de
 signalements ». Les quatre qui se réapprennent le plus souvent :
 
 - **Un port est un type fonction**, jamais une interface. Les doubles de test sont des closures ;

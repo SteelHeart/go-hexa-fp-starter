@@ -3,7 +3,7 @@
 > Anatomie et règles communes : [ADR 012](../adr/012-anatomie-d-un-module-et-pilotes.md).
 >
 > Ce document est une **cible de conception**. La colonne *État* dit, module par module, ce qui
-> existe réellement — et le relevé qui fait foi reste [`CLAUDE.md`](../../CLAUDE.md).
+> existe réellement — et le relevé qui fait foi reste [`documentation/AMORCAGE.md`](../../../AMORCAGE.md).
 
 ## Vue d'ensemble
 

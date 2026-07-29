@@ -114,7 +114,7 @@ func copyOne(p ProjectPlan, relative string) error {
 func CitesSocleByHistory(relative string) bool {
 	const separator = "/"
 	switch {
-	case relative == "CLAUDE.md":
+	case relative == "documentation/AMORCAGE.md":
 		return true
 	case relative == "documentation/process/REPRISE.md":
 		return true

@@ -20,7 +20,7 @@
 
 1. **ADR** — tranche l'architecture. Gagne sur tout le reste.
 2. **`rules/`** — règlement d'ingénierie.
-3. **`CLAUDE.md`** — amorçage, résumé. Ne fait jamais foi contre un ADR ou une règle.
+3. **`documentation/AMORCAGE.md`** — amorçage, résumé. Ne fait jamais foi contre un ADR ou une règle.
 4. **README, commentaires de code** — indicatifs.
 
 Une contradiction découverte se corrige **dans la même PR** que celle qui l'a révélée. Une

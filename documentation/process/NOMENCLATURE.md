@@ -81,7 +81,7 @@ Impératif présent, minuscule, sans point final.
 
 **Convention** : `kebab-case` pour les fichiers de documentation, `snake_case` pour les paquets Go
 et les migrations, sauf identifiants (`ADR`, `S{NNN}`, `F{NNN}`) et fichiers racine conventionnels
-(`README.md`, `CLAUDE.md`, `SECURITY.md`).
+(`README.md`, `documentation/AMORCAGE.md`, `SECURITY.md`).
 
 **Paquets Go** : un nom court, en minuscules, sans underscore ni pluriel — sauf les dossiers de
 features, en `snake_case`, qui reprennent le vocabulaire métier.

@@ -1,9 +1,14 @@
-# CLAUDE.md — amorçage
+# Amorçage — par où commencer, et où en est le dépôt
 
-> Chargé automatiquement à l'ouverture du dépôt. Point d'entrée unique pour tout agent — et pour
-> tout collègue. Versionné → identique pour tout le monde après `git clone`.
+> **Point d'entrée unique.** À lire en premier, avant `rules/` et avant le code. Versionné → il dit
+> la même chose à tout le monde après `git clone`.
 >
 > Ce fichier **résume**. Il ne fait jamais foi contre un ADR ou un fichier de `rules/`.
+>
+> Il porte deux choses que rien d'autre ne porte : la **carte du dépôt**, et le **relevé d'état
+> réel**, daté et sans complaisance. Le second est ce qui empêche de croire un document sur parole —
+> et les écarts connus entre l'écrit et le réel sont énumérés dans
+> [`process/AUDIT_CONFORMITE.md`](process/AUDIT_CONFORMITE.md).
 
 ## Ce qu'est ce dépôt
 

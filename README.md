@@ -22,7 +22,7 @@ règlement outillé qui empêche la forme de se dégrader. Le chemin y menant es
 > → notification` a été exercée sur les binaires réels. **`auth` et `notification` existent
 > désormais** ; il manque le **multi-locataire**, le **paiement** et la **limitation de débit**,
 > décrits sans aucun code. Le relevé factuel, daté et sans complaisance, est dans
-> [`CLAUDE.md`](CLAUDE.md) § « État réel du dépôt ». Il fait foi sur les faits — pas ce README.
+> [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) § « État réel du dépôt ». Il fait foi sur les faits — pas ce README.
 >
 > Les écarts connus entre ce qui est écrit et ce qui est sont listés dans
 > [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md).
@@ -156,7 +156,7 @@ adaptateurs par surface — parce que c'est cette forme qui sera copiée pour é
 ```
 rules/                       règlement d'ingénierie — FAIT FOI
 documentation/adr/           décisions d'architecture — FONT FOI
-CLAUDE.md                    amorçage et état réel : à lire en premier
+documentation/AMORCAGE.md                    amorçage et état réel : à lire en premier
 
 config/*.yaml                configuration par groupes, secrets par ${VAR} uniquement
 cmd/{server,worker}          composition root — le seul code qui connaît tout
@@ -251,7 +251,7 @@ C'est une règle d'or, pas une intention. Trois niveaux, jamais confondus :
 - **jamais déployé** — `deploy-uat.yml` et `deploy-production.yml` n'ont jamais tourné.
 
 Un document qui coche « ✅ testé » sans test est pire qu'aucun document. Le relevé complet, avec sa
-date, est dans [`CLAUDE.md`](CLAUDE.md).
+date, est dans [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md).
 
 Ces trois avertissements étaient tous devenus **faux** avant d'être corrigés — c'est ce que l'audit
 [#107](https://github.com/SteelHeart/go-hexa-fp-starter/issues/107) est venu chercher. Leur version
@@ -278,7 +278,7 @@ Ces trois avertissements étaient tous devenus **faux** avant d'être corrigés 
 
 | Je cherche | C'est ici |
 |---|---|
-| Par où commencer, et l'état réel | [`CLAUDE.md`](CLAUDE.md) |
+| Par où commencer, et l'état réel | [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) |
 | Le règlement | [`rules/README.md`](rules/README.md) |
 | Ce qui est interdit | [`rules/interdictions.md`](rules/interdictions.md) |
 | La barre pour livrer | [`rules/definition-of-done.md`](rules/definition-of-done.md) |
