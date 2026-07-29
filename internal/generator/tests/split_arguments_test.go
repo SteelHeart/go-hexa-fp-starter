@@ -59,8 +59,8 @@ func TestSplitArguments(t *testing.T) {
 			wantPositional: []string{"./project"},
 		},
 		"two options": {
-			args:           []string{"./project", "--module", "x/y", "--depuis", "/socle"},
-			wantOptions:    []string{"--module", "x/y", "--depuis", "/socle"},
+			args:           []string{"./project", "--module", "x/y", "--from", "/socle"},
+			wantOptions:    []string{"--module", "x/y", "--from", "/socle"},
 			wantPositional: []string{"./project"},
 		},
 		"unknown option left to flag": {
@@ -70,7 +70,7 @@ func TestSplitArguments(t *testing.T) {
 		},
 	}
 
-	withValue := valueFlags(t, "new", "module", "depuis")
+	withValue := valueFlags(t, "new", "module", "from")
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestSplitArguments(t *testing.T) {
 // # The defect this test would have caught
 //
 // SplitArguments carried a hand-written table: `-module`, `--module`, `-depuis`,
-// `--depuis`. When `make:feature` introduced `--dans`, the table did not know
+// `--from`. When `make:feature` introduced `--into`, the table did not know
 // it — its value was therefore classified as positional, and the command refused
 // with:
 //
@@ -100,20 +100,20 @@ func TestSplitArguments(t *testing.T) {
 //
 // A message accusing the user of omitting what they had just written.
 //
-// The fix was not to add `--dans` to the table: it was to REMOVE the table.
+// The fix was not to add `--into` to the table: it was to REMOVE the table.
 // FlagsWithValue derives the options from the flag set, so a declared option is
 // recognised by construction. This test checks that on an option which did not
 // exist when the sorting was written.
 func TestEveryDeclaredOptionIsRecognised(t *testing.T) {
 	t.Parallel()
 
-	withValue := valueFlags(t, "make:feature", "dans")
+	withValue := valueFlags(t, "make:feature", "into")
 
 	options, positional := generator.SplitArguments(
-		[]string{"order_tracking", "--dans", "/project"}, withValue)
+		[]string{"order_tracking", "--into", "/project"}, withValue)
 
-	if !slices.Equal(options, []string{"--dans", "/project"}) {
-		t.Errorf("options = %v, want the --dans/value pair", options)
+	if !slices.Equal(options, []string{"--into", "/project"}) {
+		t.Errorf("options = %v, want the --into/value pair", options)
 	}
 	if !slices.Equal(positional, []string{"order_tracking"}) {
 		t.Errorf("positional = %v, want only the module name", positional)

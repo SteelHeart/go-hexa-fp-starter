@@ -95,7 +95,7 @@ func commandHealth(ctx context.Context) int {
 	}
 	defer assembly.conn.Close()
 
-	fmt.Fprintf(os.Stdout, "ok\tenv=%s\tbase=%t\tcache=%t\n",
+	fmt.Fprintf(os.Stdout, "ok\tenv=%s\tdb=%t\tcache=%t\n",
 		assembly.cfg.App.Env, assembly.conn.Pool != nil, assembly.conn.Cache != nil)
 	return exit.OK
 }

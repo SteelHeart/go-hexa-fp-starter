@@ -383,7 +383,7 @@ tasks:
           echo "  génération :"
           "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere | sed 's/^/    /'
           echo "  création d'un module métier :"
-          "$bac/hexa" make:feature order_tracking --dans "$bac/projet" | head -1 | sed 's/^/    /'
+          "$bac/hexa" make:feature order_tracking --into "$bac/projet" | head -1 | sed 's/^/    /'
           # La règle d'étanchéité NOMME chaque module en dur dans arch-go.yml.
           # Sans elle, le module neuf n'est couvert par AUCUNE règle et l'outil
           # afficherait 100 % de conformité — parce qu'il n'a rien à dire sur un
@@ -629,7 +629,7 @@ tasks:
       # l'historique du socle vers un dépôt qui ne l'a jamais porté. GitHub
       # redirige les URL d'un dépôt transféré, donc ces liens restent valides.
       #
-      # La liste est identique à `citeLeSocleParHistoire` dans cmd/hexa, et pour
+      # La liste est identique à `CitesSocleByHistory` dans internal/generator, et pour
       # la même raison. Les deux doivent bouger ensemble.
       #
       # Toute AUTRE occurrence est un oubli, et fait échouer la tâche.

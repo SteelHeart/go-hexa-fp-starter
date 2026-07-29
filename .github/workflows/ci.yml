@@ -487,7 +487,7 @@ jobs:
           bac=$(mktemp -d)
           go build -o "$bac/hexa" ./cmd/hexa
           "$bac/hexa" new "$bac/projet" --module github.com/exemple/projet-genere
-          "$bac/hexa" make:feature order_tracking --dans "$bac/projet"
+          "$bac/hexa" make:feature order_tracking --into "$bac/projet"
 
           # ⚠️ La règle d'étanchéité d'arch-go NOMME chaque module en dur. Un
           # module créé sans elle n'est couvert par AUCUNE règle : il pourrait
