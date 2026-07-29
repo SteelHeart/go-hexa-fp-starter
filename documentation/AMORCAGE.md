@@ -229,8 +229,10 @@ qu'aucune relecture de PR ne fait :
   INCOMPLET, il ne signale que ce qu'il observe. Changer la longueur de quelques chaînes a suffi à
   l'exposer, et elle ne se déclenche toujours pas en local. Une aide qui court rend **invérifiable
   la garantie même du test** ;
-- **huit godoc qui décrivent l'inverse du code** (#127), dont un qui annonce remonter le corps d'une
-  réponse distante alors qu'un test l'interdit pour raison de sécurité ;
+- **quatorze godoc qui décrivent l'inverse du code** (#127), dont un qui annonce remonter le corps
+  d'une réponse distante alors qu'un test l'interdit pour raison de sécurité. Ce relevé a longtemps
+  écrit « huit » : c'était le chiffre de la première estimation, gardé après que l'inventaire eut
+  été terminé — la correction en a traité quatorze ;
 - **quatre couplages CI**, dont deux documentés nulle part. Le plus discret : le `Taskfile` grepait
   les libellés du tableau de couverture. **Ce contrôle n'aurait pas échoué** — il aurait affiché
   moins.
@@ -616,11 +618,20 @@ est écrite à côté :
 
 ### Prochaines actions, dans l'ordre
 
-**Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
-#93, #10, #11, #13, #19, **#72**, **#18**, **#107** (audit de conformité), **#113** (licence),
-**#114** (nom du fichier d'amorçage), **#34** (langue du code), **#117** (garde de dette), **#91**
-(test de charge), et la campagne de signalements. F001, F002, F005, F006, F007, F010 et F011 sont
-**résolues**.
+**Terminés** — chaque état vérifié par `gh`, aucun recopié : #2 (barrière verte), #20, #37 (niveau
+`integration`), #17 (`hexa new`), #75, #84, #93, #10, #11, #13, #19, **#72**, **#18**, **#107**
+(audit de conformité), **#113** (licence), **#114** (nom du fichier d'amorçage), **#34** (langue du
+code, README compris), **#117** (garde de dette), **#91** (test de charge), **#116** (ADR 019 —
+l'anatomie nomme ses adaptateurs et le générateur en pose un), **#118** (garde de véracité de la
+documentation), **#127** (quatorze godoc inversés), **#129** (drapeaux de `hexa` en anglais),
+**#138** (cinq preuves de personas), **#148** (la grille affirmait quatre faits non remesurés), et
+la campagne de signalements. F001, F002, F005, F006, F007, F010 et F011 sont **résolues**.
+
+⚠️ **Cette liste a réclamé trois lots déjà fusionnés** — #116, #118 et #129 figuraient encore parmi
+les prochaines actions, dont #116 avec la mention « le dernier point qui touche encore la FORME du
+code, donc le plus cher à repousser ». C'est le pire état pour une liste de priorités : elle ne se
+trompait pas sur ce qui reste, elle se trompait sur **ce qui est fait**. Une liste qui réclame un
+travail accompli se fait relire une fois, puis cesse d'être ouverte. Corrigé en #151.
 
 ⚠️ **#9 et #27 restent ouvertes après avoir été comptées comme faites.** Toutes deux produisent un
 effet observable, et aucune des deux n'a livré l'artefact demandé : pas d'`adapters/primary/events/`
@@ -639,29 +650,46 @@ celle du faux vert, appliquée au suivi.
 
 > 🔴 **Le transfert vers l'organisation n'attend plus AUCUN code — seulement des décisions.**
 > L'audit #107 est clos, la licence est énoncée, le nom du fichier d'amorçage est neutre, le code
-> est en anglais. Ce qui reste ci-dessous se tranche, ça ne se code pas.
+> est en anglais, l'anatomie est tranchée (ADR 019), et les cinq personas sont **mesurées** et non
+> plus affirmées (#138). Ce qui reste ci-dessous se tranche, ça ne se code pas.
+>
+> ⚠️ **Le transfert reste subordonné à une condition écrite hors de ce document** : les modules de
+> base de la v0.1.0 prêts **et éprouvés du point de vue de toutes les personas**. Les preuves
+> existent désormais, et elles disent **non** : P3 est **impossible** — les cinq paquets hors
+> `internal/` sont tous `package main`, donc zéro paquet importable — et P2 reste rouge sur quatre
+> critères. Voir [`produit/preuves/`](produit/preuves/README.md).
 
-1. **#116 — l'anatomie de module.** L'ADR 012 grave `surfaces/`, le code écrit `adapters/primary/`,
-   et le générateur n'engendre **ni l'un ni l'autre** : un module engendré n'est joignable par
-   aucune surface. Amendement d'ADR, donc décision — mais c'est le dernier point qui touche encore
-   la FORME du code, donc le plus cher à repousser
-2. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
-   sortantes vers un hôte qui n'existe pas. Ne se corrige pas par du code : c'est un **séquencement**
-   à décider — dissocier le tag de la publication, ou fournir la cible
-3. **#129 — les drapeaux de `hexa`** sont `--depuis` et `--dans` alors que son aide est en anglais.
-   Renommer change une **interface publique** : à faire tant que personne n'utilise le socle
-4. **#118 — outiller la véracité de la documentation.** La recommandation de l'audit, et la campagne
-   de traduction l'a confirmée trois fois : un fait recopié à la main dérive
-5. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
-   charge, tous rouges depuis le début. Une suite de lots individuellement justifiés a composé un
-   ordre de priorité que personne n'a choisi
-6. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
-7. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
+1. **#89 — le dernier rouge d'ENVIRONNEMENT, et le SEUL verrou du transfert.** Poser le tag `v0.1.0`
+   déclencherait des publications sortantes vers un hôte qui n'existe pas. Ne se corrige pas par du
+   code : c'est un **séquencement** à décider — dissocier le tag de la publication, ou fournir la
+   cible
+2. **#141 — `max_body_bytes` est validée puis ignorée.** `huma.DefaultConfig` porte sa propre borne,
+   non reliée : une clé de configuration qui existe, est documentée, est validée au démarrage, et
+   **n'agit pas**. Pire qu'une valeur en dur, qui se voit. Trouvée en mesurant P2 (#138)
+3. **P2 n'avait AUCUN lot — pas des lots dépriorisés, aucune issue.** Recherche le 2026-07-29 sur
+   `stream`, `SSE`, `Flusher`, `queue`, `benchmark`, `pprof`, `GOMEMLIMIT`, `extension`, dans les
+   issues ouvertes **et** fermées : zéro. Six relevés ont constaté le même rouge sans que rien ne
+   bouge, parce qu'il n'y avait rien à prendre — **une absence qui ne produit aucun symptôme**, la
+   famille de défaut que ce dépôt traque partout ailleurs.
+   Les cinq lots existent depuis : **#143** (réponse en flux, que `write_timeout` rend impossible),
+   **#144** (file de travaux longs), **#145** (benchmarks Go et leur garde), **#146**
+   (`GOMEMLIMIT`, `GOMAXPROCS`, `pprof` fermé par défaut), **#147** (point d'extension de la
+   configuration). **#144 et #147 portent `needs-decision`** : ils engagent l'architecture et
+   attendent un arbitrage, pas du code
+4. **#147 — la configuration fermée** (#8 de la grille des personas) : le DERNIER blocage de P1,
+   et rédhibitoire pour P2. `Config` a **16 champs** et aucun point d'extension, alors que
+   **brancher** un module n'exige plus rien depuis l'ADR 014. Se croise avec P3 : un point
+   d'extension qui vivrait sous `internal/` serait inutilisable de l'extérieur
+5. **#149 — l'ADR 018 ne dit rien des noms de fichiers de production.** Sa table tranche pour les
+   noms de fichiers **de test** — « déjà le cas, zéro écart » — et se tait sur les fichiers de
+   production, où six noms français subsistent dans `cmd/`. Une règle formulée à partir de ce qui
+   allait bien
+6. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
    ⚠️ Douze des quatorze règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
    déplacement doit porter son témoin, sinon elle rend 100 % de conformité en ne gardant plus rien
-8. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
+7. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
    d'être levé à moitié
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
