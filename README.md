@@ -8,10 +8,24 @@ cible est un **framework** : un noyau de modules réutilisables, un générateur
 règlement outillé qui empêche la forme de se dégrader. Le chemin y menant est décrit dans
 [`documentation/technique/parite-frameworks.md`](documentation/technique/parite-frameworks.md).
 
-> **État d'avancement.** Le serveur HTTP et le dépileur d'événements existent et tournent.
-> **Manquent l'authentification, le multi-locataire et les notifications** — trois modules noyau
-> décrits, sans aucun code. Le relevé factuel, daté et sans complaisance, est dans
+> **⚠️ Lisible, pas réutilisable.** Ce dépôt est **public en lecture** et reste sous
+> [`LICENSE`](LICENSE) **tous droits réservés** : aucun droit d'usage, de copie, de modification ni
+> de redistribution n'est accordé. Le publier sert la transparence et l'analyse de sécurité, pas
+> l'adoption. **Ne le forkez pas, ne l'intégrez pas** — ni dans un produit, ni dans un jeu de
+> données d'entraînement. Une ouverture est envisagée, sans date et sans engagement.
+>
+> C'est une décision, pas un oubli. Elle est prise et tracée en
+> [#113](https://github.com/SteelHeart/go-hexa-fp-starter/issues/113).
+
+> **État d'avancement.** Le serveur HTTP, la ligne de commande et le dépileur d'événements existent
+> et tournent — la chaîne complète `inscription → outbox → dépileur → relais → garde d'idempotence
+> → notification` a été exercée sur les binaires réels. **`auth` et `notification` existent
+> désormais** ; il manque le **multi-locataire**, le **paiement** et la **limitation de débit**,
+> décrits sans aucun code. Le relevé factuel, daté et sans complaisance, est dans
 > [`CLAUDE.md`](CLAUDE.md) § « État réel du dépôt ». Il fait foi sur les faits — pas ce README.
+>
+> Les écarts connus entre ce qui est écrit et ce qui est sont listés dans
+> [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md).
 
 ## En trente secondes, sans rien installer
 
@@ -239,17 +253,26 @@ C'est une règle d'or, pas une intention. Trois niveaux, jamais confondus :
 Un document qui coche « ✅ testé » sans test est pire qu'aucun document. Le relevé complet, avec sa
 date, est dans [`CLAUDE.md`](CLAUDE.md).
 
-Trois conséquences à ne pas oublier :
+Ces trois avertissements étaient tous devenus **faux** avant d'être corrigés — c'est ce que l'audit
+[#107](https://github.com/SteelHeart/go-hexa-fp-starter/issues/107) est venu chercher. Leur version
+à jour, et ce qu'ils cachaient :
 
-- **Le dépôt n'a aucune authentification ni autorisation.** Il ne faut donc jamais parler de « zéro
-  faille » à son sujet. `POST /v1/users` est ouvert, et `GET /v1/users/availability` permet
+- ~~« aucune authentification ni autorisation »~~ — **`auth` existe**, avec sa surface HTTP et son
+  garde d'autorisation ; l'[ADR 017](documentation/adr/017-authentification-et-autorisation.md)
+  tranche que *le jeton authentifie, il n'autorise pas*, donc un droit révoqué est refusé à l'appel
+  suivant. ⚠️ **Ne pas en conclure « zéro faille »** : ce module est neuf, il n'a jamais été éprouvé
+  ailleurs qu'ici, et rien n'a été audité par un tiers. `GET /v1/users/availability` permet toujours
   d'**énumérer** les adresses enregistrées — acceptable derrière une limitation de débit, et le
-  module `ratelimit` n'existe pas.
-- **Personne ne consomme les événements.** `user.registered.v1` est écrit dans l'outbox puis publié
-  vers le courtier, et aucun abonné n'écoute. Le courriel de bienvenue attend le module
-  `notification`, qui n'a aucun code.
-- **Les pilotes `postgres` n'ont jamais tourné ici.** La migration existe, mais aucune base ne
-  tourne sur la machine de référence : seule la CI les exécute.
+  module `ratelimit` **n'existe pas**.
+- ~~« personne ne consomme les événements »~~ — la chaîne `inscription → outbox → dépileur → relais
+  → garde d'idempotence → notification` a **tourné sur les binaires réels**, en local puis en CI,
+  avec l'adresse masquée et le corps non journalisé. ⚠️ Le consommateur est câblé dans `cmd/worker`
+  et **non monté en `adapters/primary/events/`** : le troisième adaptateur primaire n'existe pas
+  encore ([#9](https://github.com/SteelHeart/go-hexa-fp-starter/issues/9)). Et `notification` n'a
+  qu'un pilote `log` — **aucun courriel n'est parti nulle part**
+  ([#27](https://github.com/SteelHeart/go-hexa-fp-starter/issues/27)).
+- ~~« les pilotes `postgres` n'ont jamais tourné ici »~~ — le niveau `integration` les exerce contre
+  un vrai Postgres et un vrai Redis, et le job CI du même nom l'exécute à chaque PR.
 
 ## Documentation
 
@@ -267,3 +290,17 @@ Trois conséquences à ne pas oublier :
 | Nommer branche, commit, fichier | [`documentation/process/NOMENCLATURE.md`](documentation/process/NOMENCLATURE.md) |
 | Contribuer | [`rules/workflow-git.md`](rules/workflow-git.md) |
 | Signaler une faille | [`SECURITY.md`](SECURITY.md) |
+| Les écarts connus entre l'écrit et le réel | [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md) |
+
+## Licence
+
+[`LICENSE`](LICENSE) — **tous droits réservés**. Le dépôt est **public en lecture** : consultable,
+analysable, citable. **Aucun droit d'usage, de copie, de modification ni de redistribution n'est
+accordé**, y compris pour l'entraînement de modèles.
+
+C'est un état *source-available*, **choisi** — pas une licence ouverte qu'on aurait oublié de poser.
+La transparence sert la revue de sécurité et l'évaluation ; l'adoption n'est pas l'objectif
+aujourd'hui. Une ouverture est envisagée, **sans date et sans engagement**, et sera annoncée ici
+avant de l'être ailleurs.
+
+Pour un usage nécessitant des droits, ouvrir une issue.
