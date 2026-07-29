@@ -7,12 +7,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestPreflightStopsBeforeTheHandler : un OPTIONS s'arrête au middleware.
+// TestPreflightStopsBeforeTheHandler: an OPTIONS stops at the middleware.
 //
-// Laisser la pré-vérification atteindre le gestionnaire lui ferait exécuter la
-// logique métier d'une requête qui n'est PAS la vraie requête — le navigateur
-// n'a encore rien envoyé d'utile. Sur une route d'écriture, cela reviendrait à
-// exécuter l'opération deux fois, dont une sans corps.
+// Letting the preflight reach the handler would make it run the business logic
+// of a request that is NOT the real one — the browser has not sent anything
+// useful yet. On a write route, that would amount to running the operation
+// twice, once of them without a body.
 func TestPreflightStopsBeforeTheHandler(t *testing.T) {
 	t.Parallel()
 
@@ -22,12 +22,12 @@ func TestPreflightStopsBeforeTheHandler(t *testing.T) {
 	rec := call(middleware.CORS([]string{origin}), preflight(t, origin), okHandler(&reached))
 
 	if reached {
-		t.Error("le gestionnaire a été atteint par une pré-vérification OPTIONS")
+		t.Error("the handler was reached by an OPTIONS preflight")
 	}
 	if rec.Code != http.StatusNoContent {
-		t.Errorf("statut = %d, attendu 204", rec.Code)
+		t.Errorf("status = %d, want 204", rec.Code)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got == "" {
-		t.Error("la pré-vérification doit annoncer les méthodes autorisées")
+		t.Error("the preflight must announce the allowed methods")
 	}
 }

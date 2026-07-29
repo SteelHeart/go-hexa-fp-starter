@@ -6,16 +6,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestCORSAcceptsTheListedOriginAndVaries : l'origine listée passe, et la
-// réponse porte `Vary: Origin`.
+// TestCORSAcceptsTheListedOriginAndVaries: the listed origin passes, and the
+// response carries `Vary: Origin`.
 //
-// Deux raisons d'exister :
+// Two reasons to exist:
 //
-//   - Un refus systématique protégerait tout aussi bien et ne servirait à rien.
-//     Le test doit prouver que la garde DISCRIMINE, pas qu'elle bloque.
-//   - Sans `Vary: Origin`, un cache partagé — mandataire, CDN — peut servir à une
-//     origine la réponse autorisée d'une autre. La garde serait alors contournée
-//     par le cache, sans que personne n'ait touché au code.
+//   - A blanket refusal would protect just as well and serve no purpose. The
+//     test must prove the guard DISCRIMINATES, not that it blocks.
+//   - Without `Vary: Origin`, a shared cache — proxy, CDN — can serve one origin
+//     the authorised response of another. The guard would then be bypassed by
+//     the cache, without anyone touching the code.
 func TestCORSAcceptsTheListedOriginAndVaries(t *testing.T) {
 	t.Parallel()
 
@@ -26,9 +26,9 @@ func TestCORSAcceptsTheListedOriginAndVaries(t *testing.T) {
 	rec := call(middleware.CORS([]string{origin}), req, okHandler(nil))
 
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != origin {
-		t.Errorf("Allow-Origin = %q, attendu %q", got, origin)
+		t.Errorf("Allow-Origin = %q, want %q", got, origin)
 	}
 	if got := rec.Header().Get("Vary"); got != "Origin" {
-		t.Errorf("Vary = %q, attendu Origin — sinon un cache partagé rejoue l'autorisation", got)
+		t.Errorf("Vary = %q, want Origin — otherwise a shared cache replays the authorisation", got)
 	}
 }

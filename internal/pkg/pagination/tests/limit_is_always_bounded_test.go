@@ -6,37 +6,37 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/pagination"
 )
 
-// TestLimitIsAlwaysBounded : une page non bornée est un déni de service offert.
+// TestLimitIsAlwaysBounded: an unbounded page is a denial of service, offered.
 //
-// `?limit=1000000` sur une table de plusieurs millions de lignes suffit à saturer
-// la mémoire du processus — sans authentification particulière, sans outil, avec
-// une seule requête. Le plafond n'est donc pas un réglage de confort.
+// `?limit=1000000` on a table of several million rows is enough to exhaust the
+// process memory — with no particular authentication, no tool, in a single
+// request. The ceiling is therefore not a comfort setting.
 //
-// Zéro et les valeurs négatives retombent sur le défaut plutôt que de refuser :
-// une limite absente est le cas nominal d'un premier appel.
+// Zero and negative values fall back to the default rather than being refused: a
+// missing limit is the nominal case of a first call.
 func TestLimitIsAlwaysBounded(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		demande int
-		attendu int
+		requested int
+		want      int
 	}{
-		"absente":            {demande: 0, attendu: pagination.DefaultLimit},
-		"négative":           {demande: -10, attendu: pagination.DefaultLimit},
-		"raisonnable":        {demande: 50, attendu: 50},
-		"au plafond":         {demande: pagination.MaxLimit, attendu: pagination.MaxLimit},
-		"au-delà du plafond": {demande: 1_000_000, attendu: pagination.MaxLimit},
+		"missing":          {requested: 0, want: pagination.DefaultLimit},
+		"negative":         {requested: -10, want: pagination.DefaultLimit},
+		"reasonable":       {requested: 50, want: 50},
+		"at the ceiling":   {requested: pagination.MaxLimit, want: pagination.MaxLimit},
+		"past the ceiling": {requested: 1_000_000, want: pagination.MaxLimit},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			req, err := pagination.NewRequest("", tc.demande)
+			req, err := pagination.NewRequest("", tc.requested)
 			if err != nil {
 				t.Fatalf("NewRequest: %v", err)
 			}
-			if req.Limit != tc.attendu {
-				t.Errorf("limite = %d, attendu %d", req.Limit, tc.attendu)
+			if req.Limit != tc.want {
+				t.Errorf("limit = %d, want %d", req.Limit, tc.want)
 			}
 		})
 	}

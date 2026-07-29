@@ -8,39 +8,39 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestRateLimiterIsolatesEachClient : un client qui sature n'affecte pas les autres.
+// TestRateLimiterIsolatesEachClient: a client that saturates does not affect the
+// others.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un limiteur qui compte GLOBALEMENT au lieu de compter PAR CLIENT transforme la
-// protection en arme : un seul attaquant suffit alors à mettre tout le monde en
-// 429. Le service reste debout, répond, ne journalise aucune erreur — et personne
-// ne peut s'en servir.
+// A limiter counting GLOBALLY instead of PER CLIENT turns the protection into a
+// weapon: a single attacker is then enough to put everyone on 429. The service
+// stays up, answers, logs no error — and nobody can use it.
 //
-// Ce défaut ne se voit jamais en développement, où il n'y a qu'un client.
+// That defect never shows in development, where there is only one client.
 func TestRateLimiterIsolatesEachClient(t *testing.T) {
 	t.Parallel()
 
 	const burst = 2
 	limiter := middleware.NewRateLimiter(0.001, burst, time.Minute).Middleware()
 
-	// Le premier client épuise son quota.
+	// The first client exhausts its quota.
 	for i := range burst {
 		if code := requestFrom(t, limiter, "10.0.0.1:1234"); code != http.StatusOK {
-			t.Fatalf("requête %d du premier client = %d, attendu 200", i+1, code)
+			t.Fatalf("request %d of the first client = %d, want 200", i+1, code)
 		}
 	}
 	if code := requestFrom(t, limiter, "10.0.0.1:1234"); code != http.StatusTooManyRequests {
-		t.Errorf("au-delà du quota = %d, attendu 429", code)
+		t.Errorf("past the quota = %d, want 429", code)
 	}
 
-	// Un AUTRE client doit conserver le sien.
+	// ANOTHER client must keep its own.
 	if code := requestFrom(t, limiter, "10.0.0.2:5678"); code != http.StatusOK {
-		t.Errorf("second client = %d, attendu 200 — le quota est PAR CLIENT", code)
+		t.Errorf("second client = %d, want 200 — the quota is PER CLIENT", code)
 	}
 }
 
-// requestFrom envoie une requête depuis une adresse donnée.
+// requestFrom sends a request from a given address.
 func requestFrom(t *testing.T, mw func(http.Handler) http.Handler, remoteAddr string) int {
 	t.Helper()
 

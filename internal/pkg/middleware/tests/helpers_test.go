@@ -1,13 +1,12 @@
-// Package tests éprouve les middlewares HTTP en BOÎTE NOIRE.
+// Package tests exercises the HTTP middlewares as a BLACK BOX.
 //
-// Ce sont les gardes que traverse CHAQUE requête : en-têtes de durcissement,
-// CORS, limitation de débit, borne de corps, récupération de panique. Aucun
-// n'était couvert.
+// These are the guards EVERY request goes through: hardening headers, CORS, rate
+// limiting, body bound, panic recovery. None of them was covered.
 //
-// Un middleware de sécurité non testé est le pire endroit où l'être : il ne
-// produit aucun symptôme quand il cesse de protéger. Un `Access-Control-Allow-Origin`
-// accordé par erreur ne casse rien, n'apparaît dans aucun journal, et ne se
-// découvre que le jour où quelqu'un s'en sert.
+// An untested security middleware is the worst place to be untested: it produces
+// no symptom when it stops protecting. An `Access-Control-Allow-Origin` granted
+// by mistake breaks nothing, shows up in no log, and is only discovered the day
+// someone uses it.
 package tests
 
 import (
@@ -19,7 +18,7 @@ import (
 	"testing"
 )
 
-// okHandler répond 200 et signale s'il a été atteint.
+// okHandler answers 200 and reports whether it was reached.
 func okHandler(reached *bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if reached != nil {
@@ -29,26 +28,26 @@ func okHandler(reached *bool) http.Handler {
 	})
 }
 
-// call fait passer une requête à travers un middleware et rend la réponse.
+// call sends a request through a middleware and returns the response.
 func call(mw func(http.Handler) http.Handler, req *http.Request, next http.Handler) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 	return rec
 }
 
-// get construit une requête GET vers /.
+// get builds a GET request to /.
 func get(t *testing.T) *http.Request {
 	t.Helper()
 	return httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 }
 
-// post construit une requête POST portant un corps.
+// post builds a POST request carrying a body.
 func post(t *testing.T, body string) *http.Request {
 	t.Helper()
 	return httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(body))
 }
 
-// preflight construit une pré-vérification CORS.
+// preflight builds a CORS preflight request.
 func preflight(t *testing.T, origin string) *http.Request {
 	t.Helper()
 
@@ -58,7 +57,7 @@ func preflight(t *testing.T, origin string) *http.Request {
 	return req
 }
 
-// discardLogger jette les journaux.
+// discardLogger throws logs away.
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

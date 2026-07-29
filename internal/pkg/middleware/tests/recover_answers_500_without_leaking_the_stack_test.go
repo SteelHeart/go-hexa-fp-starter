@@ -8,34 +8,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestRecoverAnswers500WithoutLeakingTheStack : une panique devient un 500
-// silencieux sur le détail.
+// TestRecoverAnswers500WithoutLeakingTheStack: a panic becomes a 500 that is
+// silent about the details.
 //
-// Deux exigences opposées, et il faut les deux :
+// Two opposing requirements, and both are needed:
 //
-//   - Le processus ne meurt pas. Sans récupération, UNE requête qui panique
-//     emporte tout le serveur, donc toutes les requêtes en cours.
-//   - Le client n'apprend rien. Une pile d'appels renvoyée expose les chemins de
-//     fichiers, les noms de paquets et la structure interne — la carte exacte que
-//     cherche quelqu'un qui sonde le service.
+//   - The process does not die. Without recovery, ONE panicking request takes
+//     the whole server down, hence every in-flight request.
+//   - The client learns nothing. A returned call stack exposes file paths,
+//     package names and internal structure — the exact map someone probing the
+//     service is after.
 func TestRecoverAnswers500WithoutLeakingTheStack(t *testing.T) {
 	t.Parallel()
 
-	const secret = "mot_de_passe_dans_la_panique"
+	const secret = "password_inside_the_panic"
 	panicking := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		panic("échec interne avec " + secret)
+		panic("internal failure with " + secret)
 	})
 
 	rec := call(middleware.Recover(discardLogger()), get(t), panicking)
 
 	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("statut = %d, attendu 500", rec.Code)
+		t.Fatalf("status = %d, want 500", rec.Code)
 	}
 
 	body := rec.Body.String()
 	for _, forbidden := range []string{secret, "goroutine", ".go:", "panic"} {
 		if strings.Contains(body, forbidden) {
-			t.Errorf("la réponse contient %q — la cause ne doit jamais sortir: %s", forbidden, body)
+			t.Errorf("the response holds %q — the cause must never leave: %s", forbidden, body)
 		}
 	}
 }
