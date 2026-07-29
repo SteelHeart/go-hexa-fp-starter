@@ -477,6 +477,17 @@ tasks:
           ./tools/verifie-dette.sh --temoin | sed 's/^/    /' || fail=1
           exit "$fail"
 
+  ci:doc:
+    desc: "Confronte la documentation au dépôt réel — le job #118"
+    silent: true
+    cmds:
+      # UNE seule définition, partagée avec `ci.yml` : le script.
+      - ./tools/verifie-veracite-doc.sh
+      # ADR 013 : les trois contrôles sont livrés avec les cas qui les font
+      # échouer. Sans cette moitié, « la documentation dit vrai » et « le garde
+      # ne cherche plus rien » rendent exactement la même sortie.
+      - ./tools/verifie-veracite-doc.sh --temoin
+
   fmt:
     desc: Formate le code
     cmds:
