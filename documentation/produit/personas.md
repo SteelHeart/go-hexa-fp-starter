@@ -13,6 +13,20 @@
 > État constaté le **2026-07-28**. Chaque verdict est **sourcé** — commande ou fichier. Aucun n'est
 > écrit de mémoire, et chacun a été **remesuré** à cette date plutôt que recopié.
 
+## Comment recompter, plutôt que relire
+
+Le relevé du 2026-07-28 annonçait « 6 rouges » alors que sa grille en portait 7. L'écart venait
+d'une relecture, pas d'un comptage. Une seule commande tranche, et elle doit être exécutée à chaque
+remesure :
+
+```bash
+awk -F'|' '/^\| [0-9]+ \|/ {gsub(/ /,"",$4); print $4}' documentation/produit/personas.md \
+  | sort | uniq -c
+```
+
+Elle lit la colonne d'état de chaque ligne numérotée et compte les verdicts. Si le total ne
+correspond pas au texte de la lecture d'ensemble, c'est le TEXTE qui a tort.
+
 ## Les règles de l'exercice
 
 Un exercice de personas raté coûte plus cher que pas de personas du tout. Quatre pièges, quatre
@@ -162,7 +176,8 @@ est désormais **testable** : toute demande qui ne sert que P0 est hors périmè
 
 ## La grille — 15 questions, 7 axes
 
-Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
+Verdicts **remesurés le 2026-07-28**, sur `main`, après `auth` (#11), `notification` et le
+consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du dépôt :
 **✅ prouvé** · **⚠️ écrit non prouvé** · **🔴 absent** · **⛔ refusé assumé**.
 
 | # | Question | État | Source | Persona la plus touchée |
@@ -172,10 +187,10 @@ Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 | 2 | De quoi ai-je besoin sur ma machine ? | ✅ | `deploy/toolbox/` — rien d'installé, `go run` démarre sans service | P1 |
 | **Écriture** ||||
 | 3 | Comment je crée un module ? | ✅ | `hexa make:feature <nom>` — domaine, ports, cas d'usage, pilote sans dépendance, catalogue, composition root et tests aux trois niveaux. Il **éprouve** le projet entier avant de rendre la main, et écrit la règle d'étanchéité `arch-go` du module neuf. ⚠️ Une **surface** reste à écrire à la main : `make:adapter` n'existe pas | P1 |
-| 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` 20 règles, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
+| 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` **21 règles**, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
 | 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||
-| 6 | Plusieurs frontends simultanés ? | ⚠️ | doctrine juste, **une seule surface** : `adapters/primary/http` ; `cmd/` = `server`, `worker` | P2 |
+| 6 | Plusieurs frontends simultanés ? | ⚠️ | **deux** surfaces HTTP (`user_registration`, `auth`) et un **consommateur d'événements** qui produit un effet réel — la chaîne complète a tourné (#9, #103). Mais le consommateur est câblé dans `cmd/worker`, pas monté en `adapters/primary/events/` : la doctrine n'est donc pas encore démontrée par l'anatomie. La surface CLI (#8) est en revue | P2 |
 | 7 | Streaming et temps réel ? | 🔴 | aucun SSE, aucun WebSocket, aucun `Flusher` ; `write_timeout: 10s` ; `max_body_bytes: 1 MiB` | P2 |
 | **Configuration** ||||
 | 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée**, **19 champs** aujourd'hui contre 16 au premier relevé (`internal/config/config.go`) — aucun point d'extension, et elle se referme | **P1 · P2** |
@@ -186,19 +201,28 @@ Verdicts au **2026-07-28**, sur `main`. Vocabulaire du dépôt :
 | 12 | Comment je maîtrise la mémoire ? | 🔴 | aucun `GOMEMLIMIT`, `GOMAXPROCS`, pool ni borne de goroutines ; `limits` ne couvre que le débit | P2 |
 | 13 | Comment je vérifie que ça tient ? | 🔴 | **0 benchmark** ; `tests/perf/` **n'existe toujours pas** alors que `task test:perf` lance `k6 run tests/perf/registration.js` — commande morte, revérifiée le 2026-07-28 | P2 · P5 |
 | **Exploitation** ||||
-| 14 | Comment j'authentifie ? | 🔴 | `auth` : **rien** (#11) | P1 · P4 |
+| 14 | Comment j'authentifie ? | ✅ | `auth` livré : jeton **opaque**, session ouverte/résolue/révoquée, compte d'amorçage à secret engendré (ADR 017). **Prouvé sur le binaire réel** — 201 → 200 → 204 → 401 après révocation. ⚠️ L'**autorisation** est prouvée par 39 tests et son garde est en revue (#109) : tant qu'il n'est pas fusionné, `Authorize` n'est joignable par aucune surface | P1 · P4 |
 | 15 | Où est passé le temps ? Comment je reprends ? | ✅ | traces ✅ depuis #13 — `trace_id` et `span_id` dans chaque ligne de journal, `/metrics` servi, trace reçue par le collecteur · outbox, idempotence, audit, isolation SQL ✅, désormais **éprouvés contre de vrais services** (#37) | P4 |
 | **Durée** ||||
 | 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**, contre 10 au 2026-07-27. Trois des quatre gagnés
-servent **P1** — « créer mon projet » (`hexa new`), « brancher mon module » (ADR 014), « créer un
-module » (`hexa make:feature`) — et le quatrième sert **P4** : l'observabilité est branchée (#13),
-donc P4 n'a plus aucun critère rouge.
+**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**.
+
+> 🔴 **Le relevé précédent annonçait « 6 rouges » alors que sa propre grille en portait 7.** L'écart
+> a été trouvé en recomptant la colonne, pas en la relisant. C'est exactement ce que la règle d'or
+> n°2 interdit — *la doc ne ment jamais sur l'état réel* — et c'est aussi la raison pour laquelle ce
+> document exige une **remesure**, jamais une recopie. Le compte est désormais vérifié
+> mécaniquement : `awk` sur la colonne d'état.
+
+Le gain de ce lot est **`auth` (#14)**, le critère le plus lourd de P1 et de P4 : il passe de
+« rien » à « prouvé sur le binaire réel ». Le second gain n'apparaît pas dans la colonne mais change
+le sens du critère 6 : le consommateur d'événements EXISTE et produit un effet — la chaîne
+`inscription → outbox → relais → notification` a tourné, en local puis en CI.
 
 Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
-sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher** et
-**créer** sont levés, **configurer** ne l'est pas.
+sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher**,
+**créer** et **authentifier** sont levés ; **configurer** ne l'est pas — et c'est désormais son
+DERNIER blocage.
 
 > ⚠️ **Ce que ce relevé dit du séquencement, et qui n'est pas confortable.** Les premiers lots
 > livrés après le 2026-07-27 — niveau `integration`, amorçage réparé, gardes de déploiement —
@@ -206,8 +230,11 @@ sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois point
 > levait aucun blocage de la persona primaire. Le constat a été écrit ici avant d'être corrigé, et
 > c'est à ça que sert ce document.
 >
-> **P2 reste intouchée : cinq critères sur cinq.** Une suite de lots individuellement justifiés peut
-> composer un ordre de priorité que personne n'a choisi.
+> **P2 reste presque intouchée.** Sur ses cinq critères, un seul a bougé — et seulement en nuance
+> (critère 6). Les quatre autres — streaming, file de travaux, mémoire, mesure de charge — sont
+> rouges depuis le premier relevé. Une suite de lots individuellement justifiés peut composer un
+> ordre de priorité que personne n'a choisi, et c'est le cas ici : trois relevés successifs, aucun
+> gain pour P2.
 
 ---
 
@@ -215,7 +242,7 @@ sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois point
 
 | Version | Promesse en une phrase | Sert | Ce qui y entre |
 |---|---|---|---|
-| **v0.1** | « Le socle tient ce qu'il affiche » | **P1** partiellement, **P5** | Barrière CI réelle (#47) · `auth` (#11) · 2ᵉ surface CLI (#8) · tests d'intégration (#37) · observabilité branchée (#13) · consommateur d'événements (#9) |
+| **v0.1** | « Le socle tient ce qu'il affiche » | **P1** partiellement, **P5** | Barrière CI réelle (#47) ✅ · `auth` (#11) ✅ *(garde d'autorisation en revue)* · 2ᵉ surface CLI (#8) *en revue* · tests d'intégration (#37) ✅ · observabilité branchée (#13) ✅ · consommateur d'événements (#9) ✅ |
 | **v1.0** | « Le framework s'utilise **sans le modifier** » | **P1** · **P2** · **P3** | **Configuration ouverte** · **déclaration des pilotes hors framework** · `hexa new` (#17) · file de travaux · streaming et délais par route · frontière API publique et politique de versions · `notification`, `tenancy`, `i18n` |
 | **v2.0** | « Le framework se déploie à l'échelle » | **P4** · **P5** | Cloud native, microservices, devops avancé, multi-région, découverte de services, disjoncteur, passerelle d'API |
 | **⛔ jamais** | — | — | CRUD administratif généré · Active Record / ORM · conteneur d'injection · façades statiques · système de plugins |
