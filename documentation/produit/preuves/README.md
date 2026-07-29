@@ -30,11 +30,24 @@ divergent, **c'est la divergence qui est le résultat**.
 
 | Persona | Preuve | Verdict |
 |---|---|---|
-| [P1 — l'équipe produit](p1-equipe-produit.md) · **PRIMAIRE** | ✅ écrite | ✅ **trois critères sur quatre**, et le quatrième n'est plus celui qui était écrit |
-| [P3 — l'adoption externe](p3-adoption-externe.md) | ✅ écrite | 🔴 **impossible en l'état** — et c'est mesuré, plus seulement affirmé |
-| P2 — le fort trafic | à écrire | — |
-| P4 — l'exploitant | à écrire | — |
-| P5 — le décideur | à écrire | — |
+| [P1 — l'équipe produit](p1-equipe-produit.md) · **PRIMAIRE** | ✅ | ✅ **trois critères sur quatre**, et le quatrième n'est plus celui qui était écrit |
+| [P2 — le fort trafic](p2-fort-trafic.md) | ✅ | 🔴 **quatre sur cinq rouges** — dont un **pire** que la grille ne le disait (#141) |
+| [P3 — l'adoption externe](p3-adoption-externe.md) | ✅ | 🔴 **impossible en l'état** — zéro paquet importable, mesuré |
+| [P4 — l'exploitant](p4-exploitant.md) | ✅ | ✅ **cinq sur cinq** — la seule persona entièrement verte |
+| [P5 — le décideur](p5-decideur.md) | ✅ | ⚠️ **trois sur quatre** — le coût d'entrée est enfin **chiffré** : 4 917 lignes |
+
+**Les cinq preuves sont écrites.** Deux verts, un mitigé, deux rouges — et les deux rouges étaient
+annoncés avant d'être mesurés, ce qui est la seule façon qu'ils comptent comme mesure et non comme
+surprise.
+
+### Ce que l'exercice a trouvé, et que la grille ne pouvait pas voir
+
+| Trouvaille | Persona | Suite |
+|---|---|---|
+| `max_body_bytes` **ne produit aucun effet** — une clé qui existe, est validée, et n'agit pas | P2 | [#141](https://github.com/SteelHeart/go-hexa-fp-starter/issues/141) |
+| Les cinq paquets hors `internal/` sont des `package main` : **zéro** importable, pas « peu » | P3 | alimente l'ADR 015 |
+| Le critère « 0 fichier du framework » doit se lire **« à modifier À LA MAIN »** | P1 | grille corrigée |
+| Le coût d'entrée vaut **4 917 lignes, dont 4 593 en français** | P5 | chiffré pour la première fois |
 
 ⚠️ **Deux verdicts négatifs sont attendus, et ils comptent autant que les positifs.** La grille des
 personas affirme des rouges depuis trois relevés sans les avoir jamais exercés. Un projet qui bute
