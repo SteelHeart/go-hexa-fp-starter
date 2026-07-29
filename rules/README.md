@@ -79,6 +79,21 @@ Deux propriétés sont non négociables, et tout le reste en découle :
 2. **La doc ne mente jamais sur l'état réel.** Elle distingue explicitement **écrit** / **prouvé
    localement** / **déployé pour de vrai**. Un document qui coche « ✅ testé » sans test envoie
    l'humain et l'agent sur une fausse piste : c'est le pire échec possible.
+
+   **Garde : `tools/verifie-veracite-doc.sh`**, trois contrôles mécaniques — la carte du dépôt
+   contre `git ls-files`, le tableau de `pilotes.md` contre les `catalog.go`, l'anatomie de
+   l'ADR 012 contre l'arborescence.
+
+   ⚠️ **Il ne juge pas la prose, et ne le pourra jamais.** Il vérifie des faits : un chemin existe,
+   un pilote est déclaré. Les quatorze godoc qui décrivaient l'inverse du code (#127) lui échappent
+   entièrement.
+
+   **Ce qu'il faut en retenir n'est pas la couverture, c'est le procédé : un fait recopié à la main
+   dérive.** Toujours. La grille des personas annonçait six rouges et en portait sept ; `pilotes.md`
+   annonçait onze pilotes quand il y en avait quinze ; l'invariant « plus de deux retours » portait
+   un compteur valant cinq, six ou sept selon le fichier. **Un chiffre qu'on recompte ne dérive
+   pas.** Écrire une commande de recomptage à côté d'un chiffre vaut mieux que de le vérifier une
+   fois de plus.
 3. **Deny par défaut.** Toute garde, toute permission, tout repli sur erreur → refus. Jamais de
    fail-open, jamais « temporairement ».
 4. **Le cœur est pur.** Aucune I/O, aucun `time.Now()`, aucun logger, aucun `panic` dans

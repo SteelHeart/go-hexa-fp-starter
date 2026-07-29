@@ -258,6 +258,16 @@ jobs:
       - name: Celui-là aussi sait échouer
         run: ./tools/verifie-encodage.sh --temoin
 
+      # ── La documentation dit-elle vrai ? (#118) ─────────────────────────────
+      # L'audit #107 a trouvé douze écarts, dont ONZE sur la documentation. Le
+      # code est outillé, la documentation ne l'était pas — la dérive s'installe
+      # exactement là où rien ne regarde.
+      - name: La documentation dit vrai sur ce qui se vérifie
+        run: ./tools/verifie-veracite-doc.sh
+
+      - name: Ces trois-là aussi savent échouer
+        run: ./tools/verifie-veracite-doc.sh --temoin
+
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Tests unitaires — le cœur est pur, donc aucun service n'est requis.
   # ───────────────────────────────────────────────────────────────────────────
