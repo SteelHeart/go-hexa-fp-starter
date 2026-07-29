@@ -46,12 +46,12 @@ Examples:
 
 Options of "new":
   --module   REQUIRED. The Go module path of the created project.
-  --depuis   Root of the starter to copy (default: the current directory).
+  --from     Root of the starter to copy (default: the current directory).
              It must be a git repository: it is the TRACKED files that define
              the starter, which rules out .git/, bin/ and .env.
 
 Options of "make:feature":
-  --dans     Root of the project in which to create the module (default: the
+  --into     Root of the project in which to create the module (default: the
              current directory). The name is in snake_case: it becomes a
              directory, a config/modules.yaml key, and — without its
              underscores — a Go package.
@@ -94,7 +94,7 @@ func commandNew(args []string) error {
 	set := flag.NewFlagSet("new", flag.ContinueOnError)
 	set.SetOutput(os.Stderr)
 	module := set.String("module", "", "Go module path of the created project (required)")
-	from := set.String("depuis", ".", "root of the starter to copy")
+	from := set.String("from", ".", "root of the starter to copy")
 
 	options, positional := generator.SplitArguments(args, generator.FlagsWithValue(set))
 	if err := set.Parse(options); err != nil {
@@ -120,7 +120,7 @@ func commandNew(args []string) error {
 func commandFeature(args []string) error {
 	set := flag.NewFlagSet("make:feature", flag.ContinueOnError)
 	set.SetOutput(os.Stderr)
-	in := set.String("dans", ".", "root of the project in which to create the module")
+	in := set.String("into", ".", "root of the project in which to create the module")
 
 	options, positional := generator.SplitArguments(args, generator.FlagsWithValue(set))
 	if err := set.Parse(options); err != nil {
