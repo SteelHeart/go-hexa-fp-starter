@@ -156,11 +156,33 @@ ni `application/`.
 ⚠️ Le consommateur d'événements reste câblé dans `cmd/worker` et non monté en
 `adapters/primary/events/` : la doctrine tient, cet adaptateur-là n'existe pas encore.
 
-## État réel du dépôt — vérifié le 2026-07-25
+## État réel du dépôt — vérifié le 2026-07-29
 
 > Cette section est un **relevé**, pas une intention. Elle distingue rigoureusement
 > **prouvé** / **écrit non prouvé** / **absent**. La mettre à jour fait partie de toute PR qui
 > change l'état des faits (`rules/README.md` § règle d'or 2).
+
+### Le dépôt est PUBLIC — ce que ça a changé, mesuré
+
+Trois gardes que le dépôt avait écrits et que le compte ne pouvait pas exécuter se sont mis à
+tourner, **sans qu'une ligne de configuration change** :
+
+| Garde | Avant | Après |
+|---|---|---|
+| CodeQL (`codeql.yml`) | échec à `analyze` — remontée refusée en dépôt privé | **succès, 0 alerte** |
+| Protection de `main` | aucune : le crochet local était le seul dispositif | **ruleset actif, sans acteur en dérogation**, éprouvé par un refus `GH013` réel |
+| Analyse de secrets | indisponible | activée, **protection à la poussée** comprise |
+
+Deux leçons, dans l'ordre où elles se paient :
+
+1. **Un job rouge qui signifie « indisponible » vaut mieux qu'un job vert qui ne signifie rien.**
+   La décision du 2026-07-27 de ne PAS rendre CodeQL non bloquant est ce qui a permis de constater
+   le changement le jour même. Rendu vert-mais-vide, il le serait resté sans que personne le sache.
+2. **Un environnement qui refuse ne prouve rien sur le code.** `codeql.yml` était juste depuis le
+   début ; l'échec accusait le workflow et venait d'ailleurs. Même forme que F008.
+
+⚠️ **`LICENSE` dit « tous droits réservés »** — le code est donc lisible par tout le monde et
+utilisable par personne. État cohérent, mais non énoncé : voir les arbitrages en attente.
 
 ### Prouvé sur la machine de référence
 
@@ -369,11 +391,15 @@ périmètre **en le disant**.
   de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
 - **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
   `tenant_id`. En écrire une serait décorer une décision non prise (ADR 011 § ce qui n'est pas tranché)
-- **Aucune authentification ni autorisation**. Ne jamais parler de « zéro faille » tant que c'est vrai
+- ~~Aucune authentification ni autorisation~~ — **RÉSOLU** (#11, #109). `auth` existe, avec sa
+  surface HTTP et son garde d'autorisation ; l'ADR 017 tranche que **le jeton authentifie, il
+  n'autorise pas**. ⚠️ Ne toujours pas parler de « zéro faille » : ce module est neuf, il n'a jamais
+  été éprouvé ailleurs qu'ici, et rien n'a été audité par un tiers
 - i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010,
   `deploy/docker-compose.deploy.yml`
-- Les modules `auth`, `notification`, `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`,
-  `search`, `document` : décrits dans `documentation/technique/modules-noyau.md`, **aucun code**
+- Les modules `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`, `search`, `document` :
+  décrits dans `documentation/technique/modules-noyau.md`, **aucun code**. `auth` et `notification`
+  ne sont plus de cette liste
 
 ### Jamais déployé
 
@@ -384,11 +410,15 @@ hôte qui n'existent pas.
 
 ### Branche courante
 
-`refactor/21-modules-a-pilotes` — 3 commits, poussée. Base : `refactor/19-module-noyau-metier`
-(PR [#20](https://github.com/SteelHeart/go-hexa-fp-starter/pull/20), **non fusionnée**).
+`main` porte **toute la ligne v0.1**. Il n'y a plus de PR en attente qui bloquerait un départ de
+`main` : #20 est fusionnée depuis longtemps, et l'avertissement qui vivait ici — « `main` ne contient
+ni le renommage `features` → `modules`, ni la configuration par fichiers » — était **faux depuis des
+semaines**. C'est le genre de note qui survit à sa vérité et fait perdre une heure à qui la croit.
 
-⚠️ `main` ne contient donc **ni** le renommage `features` → `modules`, **ni** la configuration par
-fichiers. Fusionner #20 avant tout travail parti de `main`.
+**Le dépôt est PUBLIC** depuis le 2026-07-28, et `main` est protégé par un ruleset serveur
+(`pull_request` + contrôles obligatoires + historique linéaire, **sans acteur en dérogation**).
+Une poussée directe est refusée par le serveur — vérifié, pas supposé. Le crochet `pre-push` local
+reste un filet contre l'accident ; il n'est plus le seul dispositif.
 
 ### Décisions prises et gravées
 
@@ -408,7 +438,9 @@ fichiers. Fusionner #20 avant tout travail parti de `main`.
 | Un garde est livré avec le cas qui le fait échouer | ADR 013 |
 | Le catalogue des modules est passé au chargeur, pas écrit dans le framework | ADR 014 |
 | La frontière publique est dérivée d'un usage mesuré, pas décidée d'avance | ADR 015 |
-| Dépôt INTERNE — `LICENSE` tous droits réservés, ouverture visée sans date | décision du 2026-07-27 |
+| Le générateur est une BIBLIOTHÈQUE ; `cmd/hexa` n'est qu'une coquille | ADR 016 |
+| Le jeton AUTHENTIFIE, il n'autorise pas — le droit est relu à chaque appel | ADR 017 |
+| Dépôt **PUBLIC en lecture**, `LICENSE` tous droits réservés | décision du 2026-07-28 |
 | `v0.1.0` opérationnel · `v0.2.0+` nouveaux modules · `v1.0.0` frontière GELÉE | décision du 2026-07-27 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
@@ -503,19 +535,21 @@ est écrite à côté :
 | Réf | Effet concret |
 |---|---|
 | ~~F001~~ | **Résolue** — WSL + Podman rootless + [`deploy/toolbox/`](deploy/toolbox/README.md) : l'outillage en image, rien sur le poste |
-| F002 | Aucune protection de branche serveur (plan gratuit) — le crochet est un filet, pas un contrôle |
+| ~~F002~~ | **Résolue** — dépôt public, ruleset actif sur `main`, **sans acteur en dérogation**. Éprouvé par un refus réel (`GH013`), pas par une lecture de l'interface |
 | F003 | Aucun test de mutation |
 | F004 | Outillage en `latest` : CI non reproductible |
 | ~~F005~~ | **Résolue** — `gcc` dans la toolbox, `task test:race` vert en local |
-| **F010** | Le garde CI « Isolation des schémas Postgres » rend des **faux positifs** (il analyse la prose des commentaires) — déjà rouge sur `main`, issue #40 |
-| **F008** | **Aucun binaire Go ne peut écrire sous `C:\xampp\htdocs\`** → `task check` ne peut pas être vert ici. Sortir le dépôt de `htdocs`, ou passer sous WSL |
 | ~~F006~~ | **Résolue** — `task` et `govulncheck` installés par `go install` |
 | ~~F007~~ | **Résolue** — `go 1.25.12` dans `go.mod`, `GOTOOLCHAIN=auto` fait le reste |
+| **F008** | **Aucun binaire Go ne peut écrire sous `C:\xampp\htdocs\`** → `task check` ne peut pas être vert ici. Sortir le dépôt de `htdocs`, ou passer sous WSL |
+| ~~F010~~ | **Résolue** — le garde d'isolation vit dans `tools/verifie-isolation-schemas.sh`, ne lit que le SQL exécutable, et est livré avec son cas d'échec versionné |
+| ~~F011~~ | **Résolue** — CodeQL s'exécute depuis le passage en public : **succès, 0 alerte**. Le workflow n'a pas changé d'une ligne |
 
 ### Prochaines actions, dans l'ordre
 
 **Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
-#93, et la campagne de signalements. F001, F005, F006, F007 sont **résolues**.
+#93, **#72** (CodeQL), et la campagne de signalements. F001, F002, F005, F006, F007, F010 et F011
+sont **résolues**.
 
 > ✅ **LA LIGNE v0.1 EST LIVRÉE EN ENTIER** : #47, #37, #13, #9, #11 et #8. Ce qui reste avant le tag
 > ne dépend plus du code.
@@ -523,10 +557,11 @@ est écrite à côté :
 1. **#107 — l'audit de conformité**, exigé avant tout transfert vers une organisation. Arborescence
    contre la carte, conventions de fichiers, ADR tenus par le code, véracité de la documentation,
    hygiène de publication sur TOUT l'historique, et — leçon de ce lot — vérifier que chaque garde
-   sait **échouer**
-2. **#72 et #89 — deux rouges d'ENVIRONNEMENT.** CodeQL est indisponible en dépôt privé, et poser le
-   tag déclencherait un déploiement impossible. Aucun des deux ne se corrige par du code : le
-   premier dépend de la VISIBILITÉ du dépôt, pas de son propriétaire
+   sait **échouer**. Le passage en public lui ajoute une ligne : ce qui n'était visible que de nous
+   l'est désormais de tout le monde
+2. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
+   sortantes vers un hôte qui n'existe pas. Ne se corrige pas par du code : c'est un **séquencement**
+   à décider — dissocier le tag de la publication, ou fournir la cible
 3. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
    charge, tous rouges depuis le début. Une suite de lots individuellement justifiés a composé un
    ordre de priorité que personne n'a choisi
@@ -576,9 +611,11 @@ Le catalogue appartient à l'**application** (`internal/modules/catalog.go`), pa
 deux composition roots lisent le même `config/modules.yaml`, donc le même ensemble de noms
 déclarables. Monter un module reste une décision par binaire.
 
-⚠️ **`RequiresSQL` et `RequiresCache` ne sont appelées par aucun binaire** — seuls des tests les
-utilisent. La promesse « démarre sans base » est donc *assertée*, pas *exercée*. Défaut
-préexistant, indépendant de l'ADR 014.
+~~`RequiresSQL` et `RequiresCache` ne sont appelées par aucun binaire~~ — **RÉSOLU** (#103, #106).
+`internal/infrastructure/ressources` les interroge, et les deux composition roots passent par elle.
+La promesse « démarre sans base » n'est plus *assertée* par des tests : elle est **exercée** à
+chaque démarrage. Ce défaut avait un corollaire bien pire — `database.New` n'était appelée nulle
+part, donc **aucun pilote `postgres` du dépôt n'était atteignable depuis un binaire**.
 
 > **Terminé** : la campagne `golangci-lint` (239 → 0) et **#5** (schéma `platform`, rôles,
 > ADR 011, garde `verify.sql`, job CI `migrations`). Ce paragraphe créditait **#2** par erreur —
@@ -611,9 +648,21 @@ Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriét
 
 ### Arbitrages en attente côté produit
 
-- **#11 `auth`** : session cookie / jeton porteur par surface ? fournisseur d'identité externe
-  (Keycloak, Zitadel, Auth0) ou magasin interne ? `rbac`, `permissions`, `abac`, ou ReBAC ?
-- **#18 F002** : dépôt public, GitHub Pro, ou assumer l'absence de protection ?
+- ~~**#11 `auth`**~~ — **TRANCHÉ** par l'ADR 017 : jeton porteur, magasin interne, RBAC à
+  permissions exactes. Un fournisseur externe reste possible **en tant que pilote**, c'est
+  précisément ce que l'anatomie de l'ADR 012 rend interchangeable
+- ~~**#18 F002**~~ — **TRANCHÉ** : dépôt public, ruleset serveur actif
+- 🔴 **LA LICENCE, question NEUVE ouverte par le passage en public.** `LICENSE` dit *tous droits
+  réservés* : le code est désormais **lisible par tout le monde et utilisable par personne**. C'est
+  un état cohérent — « source-available » — mais il doit être **choisi et énoncé**, pas subi.
+  Personne ne peut forker, contribuer, ni s'appuyer dessus, et le `README` ne le dit nulle part.
+  Trois issues à ouvrir selon la réponse : licence ouverte (laquelle ?), mention explicite du
+  caractère source-available, ou repassage en privé
 - **#34** : langue du **code** — recommandation posée, anglais dès maintenant pour `godoc` et les
   identifiants, français pour `rules/` jusqu'à la PR de traduction
 - **#36** : SQLite comme pilote SQL par défaut ?
+- **`CLAUDE.md` porte le nom d'un outil d'assistance** — la règle 🔴 du dépôt, violée par son propre
+  point d'entrée, et désormais visible publiquement. Le garde de contenu ne le voit pas : il cherche
+  des mentions dans le TEXTE, pas dans les noms de fichiers. Recommandation : déplacer la substance
+  dans un fichier au nom neutre et ne garder à la racine qu'une **coquille de chargement**, puis
+  outiller la règle pour qu'elle couvre les noms. À traiter en PR distincte — c'est du périmètre #107
