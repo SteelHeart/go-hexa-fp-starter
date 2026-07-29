@@ -10,19 +10,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/relay"
 )
 
-// TestRelayCarriesEveryField : la traduction message → enveloppe ne perd rien.
+// TestRelayCarriesEveryField: the message → envelope translation loses nothing.
 //
-// # Pourquoi ce test existe malgré la trivialité du code
+// # Why this test exists despite the triviality of the code
 //
-// C'est un mappage champ à champ, donc « évidemment correct » — et c'est
-// exactement le genre de code où une omission ne se voit pas. Oublier `Payload`
-// publierait des enveloppes vides ; oublier `TraceParent` couperait la trace
-// entre producteur et consommateur.
+// It is a field-to-field mapping, hence "obviously correct" — and that is
+// exactly the kind of code where an omission does not show. Forgetting
+// `Payload` would publish empty envelopes; forgetting `TraceParent` would cut
+// the trace between producer and consumer.
 //
-// Dans les deux cas, le dépileur rapporterait `published`, le message serait
-// marqué traité, et rien ne signalerait la perte. Le défaut ne se découvrirait
-// qu'au bout de la chaîne, chez un consommateur qui ne reçoit rien
-// d'exploitable — et il faudrait alors remonter tout le trajet pour le trouver.
+// In both cases, the dispatcher would report `published`, the message would be
+// marked as handled, and nothing would signal the loss. The defect would only
+// be discovered at the end of the chain, at a consumer receiving nothing
+// usable — and the whole journey would then have to be walked back to find it.
 func TestRelayCarriesEveryField(t *testing.T) {
 	t.Parallel()
 
@@ -44,7 +44,7 @@ func TestRelayCarriesEveryField(t *testing.T) {
 	})
 
 	if err := handle(context.Background(), msg); err != nil {
-		t.Fatalf("relais: %v", err)
+		t.Fatalf("relay: %v", err)
 	}
 
 	fields := map[string]struct{ got, want string }{
@@ -56,17 +56,17 @@ func TestRelayCarriesEveryField(t *testing.T) {
 	}
 	for name, field := range fields {
 		if field.got != field.want {
-			t.Errorf("%s = %q, attendu %q", name, field.got, field.want)
+			t.Errorf("%s = %q, want %q", name, field.got, field.want)
 		}
 	}
 
-	// OccurredAt porte la date de CRÉATION, pas celle de la publication : un
-	// consommateur ordonne les faits selon le moment où ils se sont produits.
-	// Après une panne du dépileur, les deux diffèrent de plusieurs heures.
+	// OccurredAt carries the CREATION date, not that of the publication: a
+	// consumer orders facts according to the moment they occurred. After a
+	// dispatcher breakdown, the two differ by several hours.
 	if !captured.OccurredAt.Equal(createdAt) {
-		t.Errorf("OccurredAt = %v, attendu la date de création %v", captured.OccurredAt, createdAt)
+		t.Errorf("OccurredAt = %v, want the creation date %v", captured.OccurredAt, createdAt)
 	}
 	if captured.Headers["tenant"] != "acme" {
-		t.Errorf("Headers = %v, l'en-tête tenant est perdu", captured.Headers)
+		t.Errorf("Headers = %v, the tenant header is lost", captured.Headers)
 	}
 }

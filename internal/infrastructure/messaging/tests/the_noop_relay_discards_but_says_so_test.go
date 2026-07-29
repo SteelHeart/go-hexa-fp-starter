@@ -10,18 +10,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestTheNoopRelayDiscardsButSaysSo : le relais muet jette, et le DIT.
+// TestTheNoopRelayDiscardsButSaysSo: the silent relay discards, and SAYS SO.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un relais qui jette les événements SANS RIEN DIRE est indiscernable d'un
-// relais en panne. C'est le seul pilote du socle dont le comportement nominal
-// est la perte : il doit donc être le plus bavard, pas le plus silencieux.
+// A relay that discards the events WITHOUT SAYING ANYTHING is
+// indistinguishable from a broken relay. It is the only driver of the starter
+// whose nominal behaviour is loss: it must therefore be the most talkative, not
+// the most silent.
 //
-// La trace est en Debug volontairement — en production le relais `noop` n'a rien
-// à faire, et l'exiger en Info noierait les journaux d'un environnement de test.
-// Mais elle doit NOMMER le type d'événement : « publication ignorée » sans le
-// nom n'aide personne à comprendre pourquoi son courriel n'est pas parti.
+// The trace is at Debug deliberately — in production the `noop` relay has no
+// business being there, and requiring it at Info would drown the logs of a test
+// environment. But it must NAME the event type: "publication discarded"
+// without the name helps nobody understand why their email did not go out.
 func TestTheNoopRelayDiscardsButSaysSo(t *testing.T) {
 	t.Parallel()
 
@@ -29,11 +30,11 @@ func TestTheNoopRelayDiscardsButSaysSo(t *testing.T) {
 
 	broker, err := messaging.New(relayConfig(string(messaging.DriverNoop)), logger)
 	if err != nil {
-		t.Fatalf("montage du relais noop en échec: %v", err)
+		t.Fatalf("mounting of the noop relay failed: %v", err)
 	}
 
-	// Un consommateur enregistré sur le relais muet ne doit RIEN recevoir :
-	// c'est ce qui le rend utilisable en migration sans effet de bord.
+	// A consumer registered on the silent relay must receive NOTHING: that is
+	// what makes it usable during a migration without a side effect.
 	var received int
 	broker.Consume.Subscribe("user.registered.v1", func(context.Context, messaging.Envelope) error {
 		received++
@@ -41,23 +42,23 @@ func TestTheNoopRelayDiscardsButSaysSo(t *testing.T) {
 	})
 
 	if err := broker.Publish(context.Background(), envelope("user.registered.v1")); err != nil {
-		t.Fatalf("le relais muet a rendu une erreur: %v", err)
+		t.Fatalf("the silent relay returned an error: %v", err)
 	}
 	if received != 0 {
-		t.Errorf("le relais muet a livré %d événement(s) — il ne doit rien livrer", received)
+		t.Errorf("the silent relay delivered %d event(s) — it must deliver nothing", received)
 	}
 
 	trace := logs.String()
 	if !strings.Contains(trace, "user.registered.v1") {
-		t.Errorf("la trace ne nomme pas le type ignoré, trace=%q", trace)
+		t.Errorf("the trace does not name the discarded type, trace=%q", trace)
 	}
 }
 
-// TestTheNoopConsumerReturnsOnShutdown : Run rend la main à l'annulation.
+// TestTheNoopConsumerReturnsOnShutdown: Run hands back control on cancellation.
 //
-// Un consommateur qui ne surveillerait pas le contexte bloquerait l'arrêt du
-// worker jusqu'au SIGKILL — y compris pour le pilote qui, par définition, n'a
-// rien à terminer.
+// A consumer that did not watch the context would block the shutdown of the
+// worker until SIGKILL — including for the driver that, by definition, has
+// nothing to finish.
 func TestTheNoopConsumerReturnsOnShutdown(t *testing.T) {
 	t.Parallel()
 
@@ -69,9 +70,9 @@ func TestTheNoopConsumerReturnsOnShutdown(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Errorf("Run a rendu %v à l'annulation, attendu nil", err)
+			t.Errorf("Run returned %v on cancellation, want nil", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("Run n'a pas rendu la main sur un contexte annulé — l'arrêt du worker bloquerait")
+		t.Fatal("Run did not hand back control on a cancelled context — the shutdown of the worker would block")
 	}
 }

@@ -9,24 +9,24 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestAnEnvelopeSurvivesARoundTrip : l'enveloppe traverse le transport intacte.
+// TestAnEnvelopeSurvivesARoundTrip: the envelope crosses the transport intact.
 //
-// # Pourquoi ce test existe
+// # Why this test exists
 //
-// L'enveloppe est le CONTRAT PUBLIÉ du socle : c'est ce qu'un consommateur écrit
-// dans un autre langage, ou déployé séparément, va lire. Les deux relais réseau
-// la sérialisent en JSON, et rien d'autre ne vérifie ce passage.
+// The envelope is the PUBLISHED CONTRACT of the starter: it is what a consumer
+// written in another language, or deployed separately, is going to read. Both
+// network relays serialise it into JSON, and nothing else checks that passage.
 //
-// Trois pièges concrets :
+// Three concrete pitfalls:
 //
-//   - Une étiquette `json` oubliée renomme le champ en son nom Go — `AggregateID`
-//     au lieu de `aggregate_id`. Le consommateur d'un autre langage lit nil, et
-//     le producteur, lui, ne voit rien.
-//   - `Payload []byte` est encodé en base64 par `encoding/json`. C'est correct,
-//     mais il DOIT ressortir identique : la charge utile est du JSON opaque, on
-//     ne la réinterprète jamais.
-//   - `omitempty` sur `traceparent` : une trace vide ne doit pas occuper la place
-//     d'une trace absente.
+//   - A forgotten `json` tag renames the field to its Go name — `AggregateID`
+//     instead of `aggregate_id`. The consumer in another language reads nil, and
+//     the producer sees nothing.
+//   - `Payload []byte` is encoded in base64 by `encoding/json`. That is correct,
+//     but it MUST come back out identical: the payload is opaque JSON, we never
+//     reinterpret it.
+//   - `omitempty` on `traceparent`: an empty trace must not take the place of an
+//     absent trace.
 func TestAnEnvelopeSurvivesARoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -36,60 +36,60 @@ func TestAnEnvelopeSurvivesARoundTrip(t *testing.T) {
 
 	raw, err := json.Marshal(original)
 	if err != nil {
-		t.Fatalf("sérialisation de l'enveloppe: %v", err)
+		t.Fatalf("serialisation of the envelope: %v", err)
 	}
 
-	// Les noms de champs SONT le contrat : ils s'affirment en dur, jamais par
-	// réflexion sur la structure — sinon le test suivrait docilement un
-	// renommage qui casse tous les consommateurs.
+	// The field names ARE the contract: they are asserted literally, never by
+	// reflection over the structure — otherwise the test would meekly follow a
+	// rename that breaks every consumer.
 	for _, field := range []string{
 		`"id"`, `"type"`, `"aggregate_id"`, `"payload"`, `"traceparent"`,
 		`"occurred_at"`, `"headers"`,
 	} {
 		if !strings.Contains(string(raw), field) {
-			t.Errorf("champ %s absent du JSON produit: %s", field, raw)
+			t.Errorf("field %s absent from the produced JSON: %s", field, raw)
 		}
 	}
 
 	var back messaging.Envelope
 	if err := json.Unmarshal(raw, &back); err != nil {
-		t.Fatalf("désérialisation de l'enveloppe: %v", err)
+		t.Fatalf("deserialisation of the envelope: %v", err)
 	}
 
 	if back.ID != original.ID || back.Type != original.Type ||
 		back.AggregateID != original.AggregateID {
-		t.Errorf("identité altérée par l'aller-retour: %+v", back)
+		t.Errorf("identity altered by the round trip: %+v", back)
 	}
 	if !bytes.Equal(back.Payload, original.Payload) {
-		t.Errorf("charge utile altérée: %q, attendu %q", back.Payload, original.Payload)
+		t.Errorf("payload altered: %q, want %q", back.Payload, original.Payload)
 	}
 	if !back.OccurredAt.Equal(original.OccurredAt) {
-		t.Errorf("horodatage altéré: %s, attendu %s", back.OccurredAt, original.OccurredAt)
+		t.Errorf("timestamp altered: %s, want %s", back.OccurredAt, original.OccurredAt)
 	}
 	if back.TraceParent != original.TraceParent {
-		t.Errorf("trace perdue: %q — la corrélation s'arrêterait au broker", back.TraceParent)
+		t.Errorf("trace lost: %q — the correlation would stop at the broker", back.TraceParent)
 	}
 	if back.Headers["tenant"] != "acme" {
-		t.Errorf("en-têtes altérés: %v", back.Headers)
+		t.Errorf("headers altered: %v", back.Headers)
 	}
 }
 
-// TestAnAbsentTraceIsOmittedNotEmptied : pas de champ vide dans le contrat.
+// TestAnAbsentTraceIsOmittedNotEmptied: no empty field in the contract.
 //
-// Un `"traceparent":""` transmis force chaque consommateur à distinguer la chaîne
-// vide de l'absence. C'est exactement le genre de détail qu'on ne peut plus
-// retirer une fois qu'un consommateur externe s'en est accommodé.
+// A transmitted `"traceparent":""` forces every consumer to tell the empty
+// string apart from absence. That is exactly the kind of detail one can no
+// longer take away once an external consumer has accommodated it.
 func TestAnAbsentTraceIsOmittedNotEmptied(t *testing.T) {
 	t.Parallel()
 
 	raw, err := json.Marshal(envelope("user.registered.v1"))
 	if err != nil {
-		t.Fatalf("sérialisation: %v", err)
+		t.Fatalf("serialisation: %v", err)
 	}
 	if strings.Contains(string(raw), `"traceparent"`) {
-		t.Errorf("traceparent vide présent dans le JSON: %s", raw)
+		t.Errorf("empty traceparent present in the JSON: %s", raw)
 	}
 	if strings.Contains(string(raw), `"headers"`) {
-		t.Errorf("headers vides présents dans le JSON: %s", raw)
+		t.Errorf("empty headers present in the JSON: %s", raw)
 	}
 }

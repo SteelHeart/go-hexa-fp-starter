@@ -1,12 +1,12 @@
-// Package tests exerce le montage HTTP par son API PUBLIQUE.
+// Package tests exercises the HTTP mounting through its PUBLIC API.
 //
-// Ce paquet monte la pile que TOUTE requête traverse, et les deux sondes que
-// l'orchestrateur interroge pour décider de tuer un conteneur ou de lui envoyer
-// du trafic. Une erreur ici ne se traduit pas par un bug fonctionnel : elle se
-// traduit par une indisponibilité, ou par une fuite dans un corps de réponse.
+// This package mounts the stack that EVERY request goes through, and the two
+// probes the orchestrator queries to decide whether to kill a container or to
+// send it traffic. A mistake here does not translate into a functional bug: it
+// translates into unavailability, or into a leak in a response body.
 //
-// Rien de tout cela n'exige de service : le routeur se construit en mémoire et
-// les sondes sont des closures.
+// None of this requires a service: the router is built in memory and the probes
+// are closures.
 package tests
 
 import (
@@ -22,24 +22,24 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 )
 
-// quietLogger rend un journal muet : ces tests observent des RÉPONSES, pas des
+// quietLogger returns a silent logger: these tests observe RESPONSES, not
 // traces.
 func quietLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(newDiscard(), nil))
 }
 
-// newDiscard évite d'importer io.Discard dans chaque fichier.
+// newDiscard avoids importing io.Discard in every file.
 func newDiscard() *discard { return &discard{} }
 
 type discard struct{}
 
 func (*discard) Write(p []byte) (int, error) { return len(p), nil }
 
-// serverConfig construit une configuration suffisante pour monter le routeur.
+// serverConfig builds a configuration sufficient to mount the router.
 //
-// Les bornes sont larges : ces tests ne mesurent pas la limitation de débit, elle
-// a ses propres tests dans `internal/pkg/middleware/tests`. Un débit trop bas ici
-// ferait échouer des tests pour une raison qui n'est pas la leur.
+// The bounds are wide: these tests do not measure rate limiting, it has its own
+// tests in `internal/pkg/middleware/tests`. A rate too low here would make
+// tests fail for a reason that is not theirs.
 func serverConfig(env config.Environment) config.Config {
 	var cfg config.Config
 	cfg.App.Env = env
@@ -58,12 +58,12 @@ func serverConfig(env config.Environment) config.Config {
 	return cfg
 }
 
-// router monte le routeur avec les sondes fournies.
+// router mounts the router with the supplied probes.
 func router(env config.Environment, readiness map[string]httpserver.Probe) *httpserver.Router {
 	return httpserver.NewRouter(serverConfig(env), quietLogger(), readiness)
 }
 
-// get interroge un chemin du routeur et rend la réponse enregistrée.
+// get queries a path of the router and returns the recorded response.
 func get(t *testing.T, env config.Environment, readiness map[string]httpserver.Probe, path string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -74,12 +74,12 @@ func get(t *testing.T, env config.Environment, readiness map[string]httpserver.P
 	return rec
 }
 
-// failingProbe rend une sonde qui échoue avec l'erreur donnée.
+// failingProbe returns a probe that fails with the given error.
 func failingProbe(message string) httpserver.Probe {
 	return func(context.Context) error { return errors.New(message) }
 }
 
-// healthyProbe rend une sonde qui réussit.
+// healthyProbe returns a probe that succeeds.
 func healthyProbe() httpserver.Probe {
 	return func(context.Context) error { return nil }
 }

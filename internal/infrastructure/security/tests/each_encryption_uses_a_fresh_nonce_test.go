@@ -6,34 +6,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 )
 
-// TestEachEncryptionUsesAFreshNonce : deux chiffrements du MÊME clair donnent deux
-// messages différents.
+// TestEachEncryptionUsesAFreshNonce: two encryptions of the SAME plaintext give
+// two different messages.
 //
-// Avec GCM, réutiliser un nonce sur deux messages ne fait pas qu'affaiblir le
-// chiffrement : cela révèle le XOR des deux clairs, et compromet la clé
-// d'authentification. C'est la faute la plus grave possible sur ce mode, et elle
-// est indétectable à l'usage — les deux messages se déchiffrent parfaitement.
+// With GCM, reusing a nonce across two messages does not merely weaken the
+// encryption: it reveals the XOR of the two plaintexts, and compromises the
+// authentication key. It is the gravest fault possible on this mode, and it is
+// undetectable in use — both messages decrypt perfectly.
 //
-// C'est pour cela que le nonce est ALÉATOIRE et jamais dérivé d'un identifiant, si
-// tentant soit-il de le rendre reproductible.
+// That is why the nonce is RANDOM and never derived from an identifier, however
+// tempting it may be to make it reproducible.
 func TestEachEncryptionUsesAFreshNonce(t *testing.T) {
 	t.Parallel()
 
-	cipher, err := security.NewCipher(cleAES())
+	cipher, err := security.NewCipher(aesKey())
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
 
-	const clair = "une donnée personnelle"
-	vus := map[string]struct{}{}
+	const plaintext = "some personal data"
+	seen := map[string]struct{}{}
 	for range 5 {
-		chiffre, err := cipher.Encrypt([]byte(clair))
+		ciphertext, err := cipher.Encrypt([]byte(plaintext))
 		if err != nil {
 			t.Fatalf("Encrypt: %v", err)
 		}
-		if _, deja := vus[chiffre]; deja {
-			t.Fatal("deux chiffrements du même clair ont produit le même message : nonce réutilisé")
+		if _, already := seen[ciphertext]; already {
+			t.Fatal("two encryptions of the same plaintext produced the same message: nonce reused")
 		}
-		vus[chiffre] = struct{}{}
+		seen[ciphertext] = struct{}{}
 	}
 }

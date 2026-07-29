@@ -10,8 +10,8 @@
 // chaque binaire déclare ce qu'il monte. Appliqué tel quel, ça casse — mesuré en
 // CI, pas déduit :
 //
-//	démarrage impossible: configuration: configuration invalide:
-//	  modules.user_registration : module inconnu
+//	configuration: invalid configuration:
+//	  modules.user_registration: unknown module
 //
 // `cmd/server` monte `user_registration` ; `cmd/worker` non. Mais les deux
 // lisent le MÊME `config/modules.yaml`. Une configuration valide pour un binaire

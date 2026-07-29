@@ -7,28 +7,28 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Broker est un relais monté : ses trois faces vont ensemble.
+// Broker is a mounted relay: its three faces go together.
 //
-// Les rendre séparément avait fait quatre valeurs de retour, et surtout laissait
-// l'appelant libre d'en oublier une — typiquement Close, dont l'oubli ne se voit
-// qu'au moment où les connexions au broker fuient en production.
+// Returning them separately made four return values, and above all left the
+// caller free to forget one — typically Close, whose omission only shows up the
+// moment connections to the broker leak in production.
 type Broker struct {
-	// Publish remet une enveloppe au transport.
+	// Publish hands an envelope over to the transport.
 	Publish Publisher
-	// Consume s'abonne et boucle jusqu'à annulation.
+	// Consume subscribes and loops until cancellation.
 	Consume Consumer
-	// Close libère les ressources. Jamais nil, même pour un relais qui n'en
-	// détient aucune : l'appelant ne doit pas avoir à tester.
+	// Close releases the resources. Never nil, even for a relay that holds
+	// none: the caller must not have to test.
 	Close Closer
 }
 
-// noClose est le libérateur d'un relais sans ressource externe.
+// noClose is the releaser of a relay without external resources.
 func noClose() error { return nil }
 
-// New construit le relais correspondant à la configuration.
+// New builds the relay matching the configuration.
 //
-// C'est le SEUL point du dépôt qui choisit un broker. Ajouter un transport se
-// fait ici et nulle part ailleurs.
+// This is the ONLY point of the repository that chooses a broker. Adding a
+// transport happens here and nowhere else.
 func New(cfg config.Messaging, logger *slog.Logger) (Broker, error) {
 	switch Driver(cfg.Driver) {
 	case DriverInproc:

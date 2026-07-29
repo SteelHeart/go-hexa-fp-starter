@@ -9,17 +9,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestDurationIntegerIsNeverNanoseconds : `read_timeout: 5` doit valoir cinq
-// SECONDES. Lu en nanosecondes, le délai vaudrait pratiquement zéro — donc une
-// panne silencieuse, le pire des défauts.
+// TestDurationIntegerIsNeverNanoseconds: `read_timeout: 5` must mean five
+// SECONDS. Read as nanoseconds, the timeout would be practically zero — hence a
+// silent outage, the worst of defects.
 func TestDurationIntegerIsNeverNanoseconds(t *testing.T) {
 	t.Parallel()
 
 	var out struct{ D config.Duration }
 	if err := yaml.Unmarshal([]byte(`d: 5`), &out); err != nil {
-		t.Fatalf("décodage: %v", err)
+		t.Fatalf("decoding: %v", err)
 	}
 	if out.D.Duration() < time.Second {
-		t.Errorf("entier interprété en nanosecondes: %v", out.D.Duration())
+		t.Errorf("integer interpreted as nanoseconds: %v", out.D.Duration())
 	}
 }

@@ -1,10 +1,11 @@
-// Package database porte le pool Postgres, l'unité de travail et la portée RLS.
+// Package database carries the Postgres pool, the unit of work and the RLS
+// scope.
 //
-// Point central du paquet : la fonction Querier. Un adaptateur secondaire ne
-// reçoit jamais le pool directement — il demande le « querier » du contexte,
-// qui est la transaction en cours s'il y en a une, le pool sinon. Le même code
-// SQL fonctionne donc à l'identique dans et hors transaction, et il devient
-// impossible d'écrire une requête qui échappe à la transaction ouverte.
+// Central point of the package: the Querier function. A secondary adapter never
+// receives the pool directly — it asks for the "querier" of the context, which
+// is the transaction in progress if there is one, the pool otherwise. The same
+// SQL code therefore works identically inside and outside a transaction, and it
+// becomes impossible to write a query that escapes the open transaction.
 package database
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Querier est le sous-ensemble commun au pool et à une transaction.
+// Querier is the subset common to the pool and to a transaction.
 type Querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
@@ -29,29 +30,29 @@ type Querier interface {
 
 type contextKey struct{ name string }
 
-// Clés de contexte du paquet.
+// Context keys of the package.
 //
-// Globales assumées : c'est l'idiome Go qui rend toute collision IMPOSSIBLE. Le
-// type `contextKey` est privé au paquet, donc aucun autre paquet ne peut fabriquer
-// une clé égale à celles-ci, même en copiant le littéral. Les rendre locales ou
-// exportées casserait précisément la propriété recherchée, et une collision de clé
-// de contexte se manifeste par une transaction attribuée à la mauvaise requête —
-// donc par une écriture dans les données d'un autre client.
+// Globals owned up to: this is the Go idiom that makes any collision
+// IMPOSSIBLE. The `contextKey` type is private to the package, so no other
+// package can fabricate a key equal to these, even by copying the literal.
+// Making them local or exported would break precisely the sought property, and
+// a context key collision manifests itself as a transaction attributed to the
+// wrong request — hence as a write into another customer's data.
 //
-//nolint:gochecknoglobals // clés de contexte : le type privé au niveau paquet EST le remède aux collisions
+//nolint:gochecknoglobals // context keys: the package-level private type IS the remedy against collisions
 var (
 	txKey     = &contextKey{name: "pgx-tx"}
 	tenantKey = &contextKey{name: "tenant-id"}
 )
 
-// New ouvre le pool de connexions et vérifie qu'il répond.
+// New opens the connection pool and checks that it answers.
 //
-// La vérification au démarrage est délibérée : un service qui démarre sans base
-// signalera son défaut à la première requête utilisateur, c'est-à-dire trop tard.
+// The check at start-up is deliberate: a service that starts without a database
+// will signal its defect on the first user request, that is to say too late.
 func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
-		return nil, fmt.Errorf("DSN invalide: %w", err)
+		return nil, fmt.Errorf("invalid DSN: %w", err)
 	}
 	poolCfg.MaxConns = cfg.MaxConns
 	poolCfg.MinConns = cfg.MinConns
@@ -60,33 +61,33 @@ func New(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
-		return nil, fmt.Errorf("ouverture du pool: %w", err)
+		return nil, fmt.Errorf("opening the pool: %w", err)
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout.Duration())
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("base injoignable: %w", err)
+		return nil, fmt.Errorf("database unreachable: %w", err)
 	}
 	return pool, nil
 }
 
-// WithTenant place la portée de tenant dans le contexte. RunInTx la traduira en
-// `SET LOCAL` pour que les politiques RLS s'appliquent.
+// WithTenant places the tenant scope into the context. RunInTx will translate
+// it into a `SET LOCAL` so that the RLS policies apply.
 func WithTenant(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, tenantKey, tenantID)
 }
 
-// TenantFrom lit la portée de tenant. Chaîne vide si aucune portée n'est posée.
+// TenantFrom reads the tenant scope. Empty string if no scope is set.
 func TenantFrom(ctx context.Context) string {
 	tenantID, _ := ctx.Value(tenantKey).(string)
 	return tenantID
 }
 
-// QuerierFrom retourne la transaction du contexte s'il y en a une, le pool
-// sinon. C'est le SEUL point d'acces aux donnees d'un adaptateur secondaire :
-// le meme SQL fonctionne donc a l'identique dans et hors transaction.
+// QuerierFrom returns the transaction of the context if there is one, the pool
+// otherwise. It is the ONLY data access point of a secondary adapter: the same
+// SQL therefore works identically inside and outside a transaction.
 func QuerierFrom(ctx context.Context, pool *pgxpool.Pool) Querier {
 	if tx, ok := ctx.Value(txKey).(pgx.Tx); ok {
 		return tx
@@ -94,21 +95,21 @@ func QuerierFrom(ctx context.Context, pool *pgxpool.Pool) Querier {
 	return pool
 }
 
-// InTx indique si le contexte porte une transaction.
+// InTx reports whether the context carries a transaction.
 func InTx(ctx context.Context) bool {
 	_, ok := ctx.Value(txKey).(pgx.Tx)
 	return ok
 }
 
-// RunInTx construit une unité de travail à la forme d'un port.
+// RunInTx builds a unit of work shaped like a port.
 //
-// Le rollback est déclenché par un Result en Err — l'erreur métier est donc
-// transactionnellement significative, ce qui est le comportement attendu : un
-// email déjà pris ne doit pas laisser d'événement dans l'outbox.
+// The rollback is triggered by a Result in Err — the business error is
+// therefore transactionally significant, which is the expected behaviour: an
+// email already taken must not leave an event in the outbox.
 //
-// Une transaction déjà ouverte n'est pas imbriquée : la fonction est exécutée
-// dans la transaction courante. C'est ce qui permet de composer plusieurs
-// décorateurs transactionnels sans surprise.
+// An already open transaction is not nested: the function is executed inside
+// the current transaction. That is what allows several transactional decorators
+// to be composed without surprise.
 func RunInTx[T, E any](
 	pool *pgxpool.Pool,
 ) func(context.Context, func(context.Context) result.Result[T, E]) result.Result[T, E] {
@@ -125,7 +126,7 @@ func RunInTx[T, E any](
 	}
 }
 
-// runWithRollback isole la mécanique de validation/annulation.
+// runWithRollback isolates the commit/rollback mechanics.
 func runWithRollback[T, E any](
 	ctx context.Context,
 	tx pgx.Tx,
@@ -134,16 +135,17 @@ func runWithRollback[T, E any](
 	committed := false
 	defer func() {
 		if !committed {
-			// Le contexte parent peut être annulé : on annule sur un contexte
-			// neuf, sinon le rollback lui-même échoue et la connexion reste sale.
+			// The parent context may be cancelled: we roll back on a fresh
+			// context, otherwise the rollback itself fails and the connection
+			// stays dirty.
 			_ = tx.Rollback(context.WithoutCancel(ctx))
 		}
 	}()
 
 	txCtx := context.WithValue(ctx, txKey, tx)
 	if tenantID := TenantFrom(ctx); tenantID != "" {
-		// SET LOCAL est borné à la transaction : aucune fuite d'état vers le
-		// pool, donc aucun risque qu'une requête suivante hérite du tenant.
+		// SET LOCAL is bounded to the transaction: no state leaks towards the
+		// pool, hence no risk that a following query inherits the tenant.
 		if _, err := tx.Exec(txCtx, "SELECT set_config('app.current_tenant', $1, true)", tenantID); err != nil {
 			var zero E
 			return result.Err[T, E](zero)
@@ -162,12 +164,12 @@ func runWithRollback[T, E any](
 	return res
 }
 
-// TryAdvisoryLock tente de prendre un verrou consultatif de session.
+// TryAdvisoryLock attempts to take a session advisory lock.
 //
-// C'est le mécanisme d'élection utilisé par l'ordonnanceur : derrière N
-// répliques, une seule obtient le verrou et exécute la tâche. Le verrou est
-// libéré à la fermeture de la connexion, donc la mort d'une réplique ne bloque
-// pas les autres durablement.
+// It is the election mechanism used by the scheduler: behind N replicas, only
+// one obtains the lock and runs the task. The lock is released when the
+// connection closes, so the death of a replica does not block the others
+// durably.
 func TryAdvisoryLock(ctx context.Context, q Querier, key int64) (bool, error) {
 	var acquired bool
 	if err := q.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&acquired); err != nil {
@@ -176,7 +178,7 @@ func TryAdvisoryLock(ctx context.Context, q Querier, key int64) (bool, error) {
 	return acquired, nil
 }
 
-// ReleaseAdvisoryLock libère un verrou consultatif.
+// ReleaseAdvisoryLock releases an advisory lock.
 func ReleaseAdvisoryLock(ctx context.Context, q Querier, key int64) error {
 	if _, err := q.Exec(ctx, "SELECT pg_advisory_unlock($1)", key); err != nil {
 		return fmt.Errorf("pg_advisory_unlock: %w", err)
@@ -184,8 +186,8 @@ func ReleaseAdvisoryLock(ctx context.Context, q Querier, key int64) error {
 	return nil
 }
 
-// Codes d'erreur Postgres utilisés pour la traduction en erreurs de domaine.
-// Un adaptateur secondaire ne doit jamais laisser remonter une erreur de pilote
+// Postgres error codes used for the translation into domain errors.
+// A secondary adapter must never let a driver error go back up
 // (rules/donnees-et-migrations.md §2).
 const (
 	CodeUniqueViolation      = "23505"
@@ -195,7 +197,7 @@ const (
 	CodeSerializationFailure = "40001"
 )
 
-// PgErrorCode extrait le code SQLSTATE d'une erreur, ou la chaîne vide.
+// PgErrorCode extracts the SQLSTATE code of an error, or the empty string.
 func PgErrorCode(err error) string {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -204,10 +206,11 @@ func PgErrorCode(err error) string {
 	return ""
 }
 
-// ConstraintName extrait le nom de la contrainte violée, ou la chaîne vide.
+// ConstraintName extracts the name of the violated constraint, or the empty
+// string.
 //
-// C'est ce nom qui permet de traduire une violation d'unicité en erreur métier
-// précise : une table peut porter plusieurs contraintes uniques.
+// It is that name which allows a uniqueness violation to be translated into a
+// precise business error: a table can carry several unique constraints.
 func ConstraintName(err error) string {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -216,11 +219,12 @@ func ConstraintName(err error) string {
 	return ""
 }
 
-// IsNotFound indique une absence de ligne. C'est un cas nominal, pas un défaut.
+// IsNotFound reports a missing row. It is a nominal case, not a defect.
 func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-// IsUnavailable indique une indisponibilité transitoire du stockage : à traduire
-// en CodeUnavailable, jamais en CodeInternal (les deux ne s'alertent pas pareil).
+// IsUnavailable reports a transient unavailability of the storage: to be
+// translated into CodeUnavailable, never into CodeInternal (the two are not
+// alerted on the same way).
 func IsUnavailable(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return true

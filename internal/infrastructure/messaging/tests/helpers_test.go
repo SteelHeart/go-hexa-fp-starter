@@ -1,13 +1,13 @@
-// Package tests exerce le relais d'événements par son API PUBLIQUE.
+// Package tests exercises the event relay through its PUBLIC API.
 //
-// Ce que ces tests NE couvrent pas, et il faut le dire : les relais `kafka` et
-// `rabbitmq` ouvrent une connexion réseau dès leur construction. Aucun broker
-// n'existe ici, donc ils restent ÉCRITS, NON PROUVÉS — c'est le niveau
-// `-tags=integration` qui les exercera, en CI.
+// What these tests do NOT cover, and it must be said: the `kafka` and
+// `rabbitmq` relays open a network connection as soon as they are built. No
+// broker exists here, so they stay WRITTEN, UNPROVEN — it is the
+// `-tags=integration` level that will exercise them, in CI.
 //
-// Tout le reste — le choix du relais, le bus en mémoire, le relais muet, le
-// décorateur de réessai, l'enveloppe — se teste sans aucune infrastructure, et
-// c'est exactement ce que le socle promet.
+// Everything else — the choice of the relay, the in-memory bus, the silent
+// relay, the retry decorator, the envelope — is tested without any
+// infrastructure, and that is exactly what the starter promises.
 package tests
 
 import (
@@ -21,20 +21,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// quietLogger rend un journal muet, pour les tests qui ne l'observent pas.
+// quietLogger returns a silent logger, for the tests that do not observe it.
 func quietLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 }
 
-// recordingLogger rend un journal ET son tampon : certains tests vérifient
-// qu'une situation anormale a bien été SIGNALÉE, pas seulement tolérée.
+// recordingLogger returns a logger AND its buffer: some tests check that an
+// abnormal situation was indeed SIGNALLED, not merely tolerated.
 func recordingLogger(level slog.Level) (*slog.Logger, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	handler := slog.NewTextHandler(buf, &slog.HandlerOptions{Level: level})
 	return slog.New(handler), buf
 }
 
-// relayConfig construit une configuration minimale pour un relais donné.
+// relayConfig builds a minimal configuration for a given relay.
 func relayConfig(driver string) config.Messaging {
 	return config.Messaging{
 		Driver:         driver,
@@ -44,7 +44,7 @@ func relayConfig(driver string) config.Messaging {
 	}
 }
 
-// envelope construit une enveloppe de test au type donné.
+// envelope builds a test envelope of the given type.
 func envelope(eventType string) messaging.Envelope {
 	return messaging.Envelope{
 		ID:          "01890000-0000-7000-8000-000000000000",
@@ -55,19 +55,19 @@ func envelope(eventType string) messaging.Envelope {
 	}
 }
 
-// mustBroker monte un relais, ou fait échouer le test.
+// mustBroker mounts a relay, or fails the test.
 func mustBroker(t *testing.T, driver string) messaging.Broker {
 	t.Helper()
 
 	broker, err := messaging.New(relayConfig(driver), quietLogger())
 	if err != nil {
-		t.Fatalf("montage du relais %q en échec: %v", driver, err)
+		t.Fatalf("mounting of the %q relay failed: %v", driver, err)
 	}
 	return broker
 }
 
-// cancelled rend un contexte déjà annulé, pour réveiller un Run bloquant sans
-// attendre.
+// cancelled returns an already cancelled context, to wake up a blocking Run
+// without waiting.
 func cancelled() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

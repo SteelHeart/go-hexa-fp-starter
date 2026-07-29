@@ -6,9 +6,10 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestTransportSwitchIsPureConfiguration documente l'intention de l'ADR 010 :
-// passer un module de inproc à http, c'est l'extraire en service sans toucher
-// une ligne de code. Ce test échouerait si la résolution devenait implicite.
+// TestTransportSwitchIsPureConfiguration documents the intention of ADR 010:
+// moving a module from inproc to http means extracting it into a service
+// without touching a line of code. This test would fail if the resolution
+// became implicit.
 func TestTransportSwitchIsPureConfiguration(t *testing.T) {
 	t.Parallel()
 
@@ -20,9 +21,9 @@ func TestTransportSwitchIsPureConfiguration(t *testing.T) {
 	}
 
 	if before.TransportFor("user_registration") != "inproc" {
-		t.Fatal("état initial inattendu")
+		t.Fatal("unexpected initial state")
 	}
 	if after.TransportFor("user_registration") != "http" {
-		t.Error("le changement de mode doit venir de la seule configuration")
+		t.Error("the change of mode must come from the configuration alone")
 	}
 }

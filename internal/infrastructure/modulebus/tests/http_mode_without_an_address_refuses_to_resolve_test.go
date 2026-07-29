@@ -7,30 +7,31 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/modulebus"
 )
 
-// TestHTTPModeWithoutAnAddressRefusesToResolve : pas d'adresse, pas d'appel.
+// TestHTTPModeWithoutAnAddressRefusesToResolve: no address, no call.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Sans cette garde, l'adresse absente produit une URL relative : `"" + "/v1/things"`,
-// soit `/v1/things`. `http.NewRequest` refuse une URL sans schéma, donc l'échec
-// arrive — mais AU PREMIER APPEL, en production, avec un message de bibliothèque
-// parlant d'URL malformée. Personne ne remonte de là à « la variable
-// `interop.base_urls.some_module` n'a pas été définie dans l'environnement UAT ».
+// Without this guard, the missing address produces a relative URL:
+// `"" + "/v1/things"`, that is `/v1/things`. `http.NewRequest` refuses a URL
+// with no scheme, so the failure does happen — but AT THE FIRST CALL, in
+// production, with a library message talking about a malformed URL. Nobody
+// works back from there to "the `interop.base_urls.some_module` variable was
+// not defined in the UAT environment".
 //
-// La garde déplace l'échec du premier appel vers le DÉMARRAGE, et le message
-// nomme le module. C'est la différence entre un incident et une ligne de journal.
+// The guard moves the failure from the first call to START-UP, and the message
+// names the module. That is the difference between an incident and a log line.
 //
-// Une adresse présente mais VIDE est traitée comme absente : c'est exactement ce
-// que produit une référence `${VAR}` non résolue, et c'est le cas le plus
-// fréquent en pratique.
+// An address that is present but EMPTY is treated as missing: that is exactly
+// what an unresolved `${VAR}` reference produces, and it is the most frequent
+// case in practice.
 func TestHTTPModeWithoutAnAddressRefusesToResolve(t *testing.T) {
 	t.Parallel()
 
 	for name, baseURLs := range map[string]map[string]string{
-		"table absente":   nil,
-		"table vide":      {},
-		"entrée vide":     {someModule: ""},
-		"un AUTRE module": {"other_module": "http://other:8080"},
+		"missing table":      nil,
+		"empty table":        {},
+		"empty entry":        {someModule: ""},
+		"a DIFFERENT module": {"other_module": "http://other:8080"},
 	} {
 		var localCalls int
 
@@ -39,11 +40,11 @@ func TestHTTPModeWithoutAnAddressRefusesToResolve(t *testing.T) {
 			someModule, route(), someEvent, localCaller(&localCalls))
 
 		if err == nil {
-			t.Errorf("%s: résolution acceptée sans adresse — l'échec surviendrait au premier appel", name)
+			t.Errorf("%s: resolution accepted with no address — the failure would happen at the first call", name)
 			continue
 		}
 		if !errors.Is(err, modulebus.ErrNoBaseURL) {
-			t.Errorf("%s: rendu avec %v, attendu ErrNoBaseURL", name, err)
+			t.Errorf("%s: returned with %v, want ErrNoBaseURL", name, err)
 		}
 	}
 }

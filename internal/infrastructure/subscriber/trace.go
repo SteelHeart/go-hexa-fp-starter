@@ -9,41 +9,40 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// traceParentHeader est l'en-tête W3C que porte l'enveloppe.
+// traceParentHeader is the W3C header the envelope carries.
 const traceParentHeader = "traceparent"
 
-// WithTrace reprend le contexte de trace déposé par le producteur.
+// WithTrace takes back the trace context deposited by the producer.
 //
-// # Ce que l'oubli produit, et pourquoi personne ne le remarque
+// # What the oversight produces, and why nobody notices it
 //
-// Tout continue de fonctionner. Les événements partent, les effets ont lieu, les
-// tests passent. Seulement, la moitié asynchrone d'une requête apparaît comme
-// une trace ORPHELINE : l'inscription a sa trace, l'envoi du courriel a la
-// sienne, et rien ne les relie. Le jour où un envoi échoue, on ne peut pas
-// remonter à l'inscription qui l'a causé — et c'est précisément le jour où l'on
-// en a besoin.
+// Everything keeps working. The events leave, the effects take place, the tests
+// pass. Only, the asynchronous half of a request appears as an ORPHAN trace:
+// the registration has its trace, the email sending has its own, and nothing
+// links them. On the day a sending fails, one cannot go back up to the
+// registration that caused it — and that is precisely the day one needs to.
 //
-// C'est le même défaut que `relay` documente en sens inverse : oublier
-// `TraceParent` au dépilage coupe la chaîne côté producteur. Les deux moitiés
-// doivent être branchées pour qu'une seule des deux serve à quelque chose.
+// It is the same defect that `relay` documents in the other direction:
+// forgetting `TraceParent` at dispatching time cuts the chain on the producer
+// side. Both halves must be wired for either one of them to serve any purpose.
 //
-// # Une enveloppe SANS traceparent n'est pas une erreur
+// # An envelope WITHOUT a traceparent is not an error
 //
-// Le contexte d'origine repart alors intact, et un nouveau tronçon commence.
-// Refuser l'enveloppe ferait perdre un événement pour un défaut d'observabilité
-// — sacrifier ce qu'on mesure à la façon dont on le mesure.
+// The original context then leaves intact, and a new segment begins. Refusing
+// the envelope would lose an event over an observability defect — sacrificing
+// what one measures to the way one measures it.
 func WithTrace(handler messaging.Handler) messaging.Handler {
 	return func(ctx context.Context, env messaging.Envelope) error {
 		return handler(restore(ctx, env), env)
 	}
 }
 
-// restore extrait le contexte de trace de l'enveloppe.
+// restore extracts the trace context from the envelope.
 //
-// Passe par le propagateur GLOBAL plutôt que par une instance locale : c'est
-// celui que `telemetry.Setup` configure, donc le même que le producteur a
-// utilisé pour écrire. En construire un ici ferait diverger les deux moitiés le
-// jour où la configuration changerait, sans qu'aucun test ne le voie.
+// It goes through the GLOBAL propagator rather than a local instance: it is the
+// one `telemetry.Setup` configures, hence the same one the producer used to
+// write. Building one here would make the two halves diverge on the day the
+// configuration changed, without any test seeing it.
 func restore(ctx context.Context, env messaging.Envelope) context.Context {
 	if env.TraceParent == "" {
 		return ctx

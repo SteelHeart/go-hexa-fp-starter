@@ -8,15 +8,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestDurationRefusesGarbage : une durée illisible doit ÉCHOUER, jamais valoir
-// zéro. Un délai à zéro n'est pas une valeur sûre.
+// TestDurationRefusesGarbage: an unreadable duration must FAIL, never be worth
+// zero. A timeout of zero is not a safe value.
 func TestDurationRefusesGarbage(t *testing.T) {
 	t.Parallel()
 
-	for _, raw := range []string{`d: cinq secondes`, `d: 5 secondes`, `d: [1,2]`, `d: {a: 1}`} {
+	for _, raw := range []string{`d: five seconds`, `d: 5 seconds`, `d: [1,2]`, `d: {a: 1}`} {
 		var out struct{ D config.Duration }
 		if err := yaml.Unmarshal([]byte(raw), &out); err == nil {
-			t.Errorf("%q accepté alors qu'il devrait échouer (obtenu %v)", raw, out.D)
+			t.Errorf("%q accepted when it should fail (got %v)", raw, out.D)
 		}
 	}
 }

@@ -14,41 +14,41 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Les DEUX seules variables d'environnement que le socle lit pour décider quoi
-// charger. Tout le reste est dans les fichiers de config/ ; les secrets y sont
-// référencés par ${VAR}.
+// The ONLY TWO environment variables the starter reads to decide what to load.
+// Everything else is in the files of config/; secrets are referenced there by
+// ${VAR}.
 const (
 	EnvVarAppEnv    = "APP_ENV"
 	EnvVarConfigDir = "CONFIG_DIR"
 )
 
-// DefaultConfigDir est le répertoire de configuration par défaut.
+// DefaultConfigDir is the default configuration directory.
 //
-// Les fichiers sont lus sur DISQUE et non embarqués : l'exploitation doit
-// pouvoir les lire, les comparer et les corriger sans reconstruire une image.
-// Le Dockerfile les copie dans l'image ; un volume monté les surcharge.
+// The files are read from DISK and not embedded: operations must be able to
+// read them, compare them and fix them without rebuilding an image. The
+// Dockerfile copies them into the image; a mounted volume overrides them.
 const DefaultConfigDir = "config"
 
-// placeholder capture ${VAR} et ${VAR:-défaut}.
+// placeholder captures ${VAR} and ${VAR:-default}.
 var placeholder = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
 
-// ErrMissingSecret signale des références ${VAR} non résolues et sans défaut.
+// ErrMissingSecret reports unresolved ${VAR} references that have no default.
 //
-// Refuser le démarrage est délibéré : un secret manquant qui se résoudrait en
-// chaîne vide produit une connexion anonyme ou un chiffrement avec une clé
-// vide — un échec silencieux, donc le pire.
+// Refusing to start is deliberate: a missing secret that resolved to the empty
+// string would produce an anonymous connection or an encryption with an empty
+// key — a silent failure, hence the worst kind.
 //
-// « Non résolue » couvre la variable ABSENTE et la variable DÉFINIE MAIS VIDE :
-// la seconde est le symptôme habituel d'un secret oublié dans une chaîne de
-// déploiement, et elle doit refuser aussi fort que la première.
+// "Unresolved" covers the ABSENT variable and the DEFINED BUT EMPTY variable:
+// the second is the usual symptom of a secret forgotten in a deployment chain,
+// and it must refuse just as hard as the first.
 type ErrMissingSecret struct{ Variables []string }
 
 func (e ErrMissingSecret) Error() string {
-	return "variables d'environnement requises par la configuration et non définies: " +
+	return "environment variables required by the configuration and not defined: " +
 		strings.Join(e.Variables, ", ")
 }
 
-// Dir résout le répertoire de configuration.
+// Dir resolves the configuration directory.
 func Dir() string {
 	if dir := os.Getenv(EnvVarConfigDir); dir != "" {
 		return dir
@@ -56,25 +56,26 @@ func Dir() string {
 	return DefaultConfigDir
 }
 
-// Load lit, fusionne, résout et valide la configuration.
+// Load reads, merges, resolves and validates the configuration.
 //
-// Ordre de priorité croissant :
+// Order of increasing priority:
 //
-//  1. config/*.yaml           groupes — valeurs par défaut, versionnées
-//  2. config/env/{env}.yaml   surcharges par environnement, versionnées
-//  3. config/local.yaml       surcharges du développeur — NON versionné
-//  4. ${VAR} dans les valeurs secrets, depuis l'environnement d'exécution
+//  1. config/*.yaml           groups — default values, versioned
+//  2. config/env/{env}.yaml   per-environment overrides, versioned
+//  3. config/local.yaml       developer overrides — NOT versioned
+//  4. ${VAR} in the values    secrets, from the runtime environment
 //
-// Les secrets ne sont dans AUCUN fichier : seulement référencés.
-// Load lit la configuration et la valide CONTRE LE CATALOGUE reçu.
+// Secrets are in NO file: only referenced.
+// Load reads the configuration and validates it AGAINST THE CATALOGUE it
+// receives.
 //
-// Le catalogue vient du composition root, qui fusionne celui de chaque module
-// monté — noyau comme métier (ADR 014). Il n'y a aucune table de modules dans ce
-// paquet : ce qui n'est pas monté n'est pas configurable.
+// The catalogue comes from the composition root, which merges the one of every
+// mounted module — core as well as business (ADR 014). There is no module table
+// in this package: what is not mounted is not configurable.
 //
-// Passer un catalogue vide fait refuser toute déclaration de module. C'est le
-// comportement voulu, et c'est ce qui rend l'oubli du catalogue bruyant plutôt
-// que permissif.
+// Passing an empty catalogue makes every module declaration be refused. That is
+// the intended behaviour, and it is what makes forgetting the catalogue loud
+// rather than permissive.
 func Load(catalog ModuleCatalog) (Config, error) {
 	dir := Dir()
 	env := os.Getenv(EnvVarAppEnv)
@@ -89,7 +90,7 @@ func Load(catalog ModuleCatalog) (Config, error) {
 
 	raw, err := yaml.Marshal(merged)
 	if err != nil {
-		return Config{}, fmt.Errorf("réassemblage de la configuration: %w", err)
+		return Config{}, fmt.Errorf("reassembling the configuration: %w", err)
 	}
 	resolved, err := expand(string(raw))
 	if err != nil {
@@ -97,17 +98,17 @@ func Load(catalog ModuleCatalog) (Config, error) {
 	}
 
 	var cfg Config
-	// KnownFields refuse une clé inconnue : une faute de frappe dans un fichier
-	// serait autrement silencieuse, et le réglage n'aurait simplement aucun effet.
+	// KnownFields refuses an unknown key: a typo in a file would otherwise be
+	// silent, and the setting would simply have no effect.
 	decoder := yaml.NewDecoder(strings.NewReader(resolved))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&cfg); err != nil {
-		return Config{}, fmt.Errorf("décodage de la configuration (%s): %w", dir, err)
+		return Config{}, fmt.Errorf("decoding the configuration (%s): %w", dir, err)
 	}
 
 	cfg.applyDefaults()
-	// Les défauts de pilote sont résolus AVANT la validation, pour que le message
-	// d'erreur nomme le pilote réellement retenu et non une chaîne vide.
+	// Driver defaults are resolved BEFORE validation, so that the error message
+	// names the driver actually retained and not an empty string.
 	cfg.Modules = cfg.Modules.Resolve(catalog)
 	if err := cfg.validate(catalog); err != nil {
 		return Config{}, err
@@ -119,17 +120,17 @@ func mergeLayers(dir, env string) (map[string]any, error) {
 	root := os.DirFS(dir)
 	groups, err := fs.Glob(root, "*.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("lecture de %s: %w", dir, err)
+		return nil, fmt.Errorf("reading %s: %w", dir, err)
 	}
 	if len(groups) == 0 {
 		return nil, fmt.Errorf(
-			"aucun fichier de configuration dans %q (définir %s ?)", dir, EnvVarConfigDir)
+			"no configuration file in %q (set %s?)", dir, EnvVarConfigDir)
 	}
 	sort.Strings(groups)
 
 	merged := map[string]any{}
 	for _, name := range groups {
-		// local.yaml est appliqué en dernier, après la couche d'environnement.
+		// local.yaml is applied last, after the environment layer.
 		if filepath.Base(name) == "local.yaml" {
 			continue
 		}
@@ -148,21 +149,21 @@ func mergeLayers(dir, env string) (map[string]any, error) {
 func mergeFile(dst map[string]any, root fs.FS, name string) error {
 	content, err := fs.ReadFile(root, name)
 	if err != nil {
-		return fmt.Errorf("lecture de %s: %w", name, err)
+		return fmt.Errorf("reading %s: %w", name, err)
 	}
 	var layer map[string]any
 	if err := yaml.Unmarshal(content, &layer); err != nil {
-		return fmt.Errorf("YAML invalide dans %s: %w", name, err)
+		return fmt.Errorf("invalid YAML in %s: %w", name, err)
 	}
 	deepMerge(dst, layer)
 	return nil
 }
 
-// deepMerge fusionne récursivement. Une valeur scalaire ou une liste écrase ;
-// seules les tables fusionnent.
+// deepMerge merges recursively. A scalar value or a list overwrites; only
+// tables merge.
 //
-// Les listes écrasent VOLONTAIREMENT : concaténer `allowed_origins` entre
-// couches ajouterait silencieusement des origines qu'on croyait avoir retirées.
+// Lists overwrite DELIBERATELY: concatenating `allowed_origins` between layers
+// would silently add back origins one believed had been removed.
 func deepMerge(dst, src map[string]any) {
 	for key, value := range src {
 		nested, isMap := value.(map[string]any)
@@ -178,7 +179,7 @@ func deepMerge(dst, src map[string]any) {
 	}
 }
 
-// expand résout les références ${VAR} et ${VAR:-défaut}.
+// expand resolves the ${VAR} and ${VAR:-default} references.
 func expand(raw string) (string, error) {
 	seen := map[string]struct{}{}
 	out := placeholder.ReplaceAllStringFunc(raw, func(match string) string {
@@ -186,20 +187,22 @@ func expand(raw string) (string, error) {
 		name, fallback := groups[1], groups[2]
 		optional := strings.Contains(match, ":-")
 
-		// Une variable DÉFINIE MAIS VIDE vaut « absente ». C'est le cas le plus
-		// courant en vrai : un secret déclaré dans la CI ou dans un orchestrateur
-		// mais jamais injecté arrive comme chaîne vide, pas comme variable absente.
-		// Le laisser passer produirait une connexion anonyme ou un chiffrement avec
-		// une clé vide — l'échec silencieux que ErrMissingSecret existe pour
-		// empêcher.
+		// A variable DEFINED BUT EMPTY counts as "absent". That is the most
+		// common case in the real world: a secret declared in the CI or in an
+		// orchestrator but never injected arrives as an empty string, not as an
+		// absent variable. Letting it through would produce an anonymous
+		// connection or an encryption with an empty key — the silent failure
+		// ErrMissingSecret exists to prevent.
 		//
-		// C'est aussi la sémantique de `${VAR:-défaut}` dans un shell POSIX : le
-		// `:` fait porter le repli sur le vide autant que sur l'absence.
+		// It is also the semantics of `${VAR:-default}` in a POSIX shell: the
+		// `:` makes the fallback apply to the empty value as much as to the
+		// absence.
 		if value, found := os.LookupEnv(name); found && value != "" {
 			return value
 		}
-		// Un défaut explicite, même vide (`${VAR:-}`), est légitime : il signale un
-		// réglage optionnel. Une référence SANS défaut est obligatoire.
+		// An explicit default, even an empty one (`${VAR:-}`), is legitimate: it
+		// signals an optional setting. A reference WITHOUT a default is
+		// mandatory.
 		if optional {
 			return fallback
 		}

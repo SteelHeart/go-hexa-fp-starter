@@ -6,43 +6,43 @@ import (
 	"time"
 )
 
-// Modules porte l'activation et le choix de pilote de chaque module noyau.
+// Modules carries the enabling and the driver choice of each core module.
 //
-// C'est le fichier qui rend vrai « hexa new puis go run, ça démarre » : les
-// pilotes par défaut n'ont aucune dépendance externe
+// This is the file that makes "hexa new then go run, and it starts" true: the
+// default drivers have no external dependency
 // ([ADR 012](documentation/adr/012-anatomie-d-un-module-et-pilotes.md)).
 type Modules map[string]Module
 
-// Module porte la configuration d'un module noyau.
+// Module carries the configuration of a core module.
 type Module struct {
-	// Enabled à false désactive le module : ses ports retournent une erreur
-	// explicite plutôt que de se rabattre sur un comportement inerte. Un module
-	// désactivé qui « marche quand même » est un piège.
+	// Enabled set to false disables the module: its ports return an explicit
+	// error rather than falling back on an inert behaviour. A disabled module
+	// that "works anyway" is a trap.
 	Enabled bool `yaml:"enabled"`
-	// Driver nomme le pilote. Un pilote inconnu refuse le démarrage.
+	// Driver names the driver. An unknown driver refuses to start.
 	Driver string `yaml:"driver"`
-	// Options porte le paramétrage propre au pilote.
+	// Options carries the settings specific to the driver.
 	//
-	// Les VALEURS restent non typées — le catalogue des pilotes évolue plus vite
-	// que le socle, et chaque pilote interprète les siennes à sa construction.
-	// Les CLÉS, elles, sont déclarées par le module dans son `catalog.go`, et
-	// toute clé inconnue refuse le démarrage (#93).
+	// The VALUES stay untyped — the catalogue of drivers evolves faster than
+	// the starter, and each driver interprets its own at its construction. The
+	// KEYS, for their part, are declared by the module in its `catalog.go`, and
+	// any unknown key refuses to start (#93).
 	//
-	// La nuance est le tout du sujet : sans elle, une faute de frappe rendait la
-	// valeur par défaut, sans un mot.
+	// The nuance is the whole subject: without it, a typo returned the default
+	// value, without a word.
 	Options map[string]any `yaml:"options"`
 }
 
-// DurationOption lit une option de durée du pilote.
+// DurationOption reads a duration option of the driver.
 //
-// Les options ne sont pas typées à la lecture du fichier — le catalogue des
-// pilotes évolue plus vite que le socle. Cet accesseur est donc le seul endroit
-// où une durée d'option est interprétée, pour que tous les pilotes acceptent
-// exactement la même écriture : `"24h"` ou un entier de secondes, comme le type
-// Duration des champs typés.
+// Options are not typed when the file is read — the catalogue of drivers
+// evolves faster than the starter. This accessor is therefore the only place
+// where an option duration is interpreted, so that every driver accepts exactly
+// the same spelling: `"24h"` or an integer of seconds, like the Duration type
+// of the typed fields.
 //
-// Une valeur présente mais illisible refuse le démarrage : se rabattre
-// silencieusement sur la valeur par défaut donnerait un TTL surprise.
+// A value that is present but unreadable refuses to start: silently falling
+// back on the default value would give a surprise TTL.
 func (m Module) DurationOption(key string, fallback time.Duration) (time.Duration, error) {
 	raw, found := m.Options[key]
 	if !found || raw == nil {
@@ -54,27 +54,27 @@ func (m Module) DurationOption(key string, fallback time.Duration) (time.Duratio
 	case string:
 		var err error
 		if parsed, err = time.ParseDuration(value); err != nil {
-			return 0, fmt.Errorf("options.%s=%q n'est pas une durée (ex: \"24h\"): %w", key, value, err)
+			return 0, fmt.Errorf("options.%s=%q is not a duration (e.g. \"24h\"): %w", key, value, err)
 		}
 	case int:
 		parsed = time.Duration(value) * time.Second
 	case int64:
 		parsed = time.Duration(value) * time.Second
 	default:
-		return 0, fmt.Errorf("options.%s doit être une durée ou un entier de secondes, reçu %T", key, raw)
+		return 0, fmt.Errorf("options.%s must be a duration or an integer of seconds, got %T", key, raw)
 	}
 
 	if parsed <= 0 {
-		return 0, fmt.Errorf("options.%s doit être strictement positive, reçu %v", key, parsed)
+		return 0, fmt.Errorf("options.%s must be strictly positive, got %v", key, parsed)
 	}
 	return parsed, nil
 }
 
-// IntOption lit une option entière du pilote.
+// IntOption reads an integer option of the driver.
 //
-// Refuse zéro et les valeurs négatives : aucune option entière du socle n'a de
-// sens à zéro — un lot de zéro message ou zéro tentative autorisée décrivent un
-// composant qui ne fait rien, silencieusement.
+// Refuses zero and negative values: no integer option of the starter makes
+// sense at zero — a batch of zero messages, or zero allowed attempts, describe
+// a component that does nothing, silently.
 func (m Module) IntOption(key string, fallback int) (int, error) {
 	raw, found := m.Options[key]
 	if !found || raw == nil {
@@ -88,20 +88,20 @@ func (m Module) IntOption(key string, fallback int) (int, error) {
 	case int64:
 		value = int(typed)
 	default:
-		return 0, fmt.Errorf("options.%s doit être un entier, reçu %T", key, raw)
+		return 0, fmt.Errorf("options.%s must be an integer, got %T", key, raw)
 	}
 
 	if value <= 0 {
-		return 0, fmt.Errorf("options.%s doit être strictement positif, reçu %d", key, value)
+		return 0, fmt.Errorf("options.%s must be strictly positive, got %d", key, value)
 	}
 	return value, nil
 }
 
-// MapOption lit un groupe d'options imbriqué.
+// MapOption reads a nested group of options.
 //
-// Un groupe absent rend une table vide et non une erreur : ne rien déclarer est
-// une configuration valide. C'est une valeur du MAUVAIS type qui est refusée,
-// parce qu'elle trahit une faute de frappe.
+// An absent group returns an empty table and not an error: declaring nothing is
+// a valid configuration. It is a value of the WRONG type that is refused,
+// because it betrays a typo.
 func (m Module) MapOption(key string) (map[string]any, error) {
 	raw, found := m.Options[key]
 	if !found || raw == nil {
@@ -109,15 +109,15 @@ func (m Module) MapOption(key string) (map[string]any, error) {
 	}
 	nested, ok := raw.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("options.%s doit être une table de valeurs, reçu %T", key, raw)
+		return nil, fmt.Errorf("options.%s must be a table of values, got %T", key, raw)
 	}
 	return nested, nil
 }
 
-// StringOption lit une option textuelle du pilote.
+// StringOption reads a textual option of the driver.
 //
-// Une valeur présente mais vide est refusée : elle trahit une variable
-// d'environnement non substituée, pas une intention.
+// A value that is present but empty is refused: it betrays an unsubstituted
+// environment variable, not an intention.
 func (m Module) StringOption(key, fallback string) (string, error) {
 	raw, found := m.Options[key]
 	if !found || raw == nil {
@@ -125,32 +125,32 @@ func (m Module) StringOption(key, fallback string) (string, error) {
 	}
 	text, ok := raw.(string)
 	if !ok {
-		return "", fmt.Errorf("options.%s doit être une chaîne, reçu %T", key, raw)
+		return "", fmt.Errorf("options.%s must be a string, got %T", key, raw)
 	}
 	if text == "" {
-		return "", fmt.Errorf("options.%s est présente mais vide", key)
+		return "", fmt.Errorf("options.%s is present but empty", key)
 	}
 	return text, nil
 }
 
-// Get retourne la configuration d'un module.
+// Get returns the configuration of a module.
 //
-// Un module absent de la configuration est considéré comme DÉSACTIVÉ : on
-// n'active jamais une capacité que personne n'a demandée.
+// A module absent from the configuration is considered DISABLED: one never
+// enables a capability that nobody asked for.
 //
-// Le pilote rendu est celui qui est ÉCRIT dans la valeur. Le défaut du
-// catalogue y est posé par Resolve, que Load appelle — de sorte que cet
-// accesseur ne mente jamais sur ce qu'il a reçu.
+// The driver returned is the one WRITTEN in the value. The default of the
+// catalogue is placed there by Resolve, which Load calls — so that this
+// accessor never lies about what it received.
 func (m Modules) Get(name string) Module {
 	return m[name]
 }
 
-// Resolve rend une copie où chaque module actif porte un pilote explicite.
+// Resolve returns a copy where every active module carries an explicit driver.
 //
-// C'est une fonction PURE : elle ne modifie pas son entrée. Elle existe pour que
-// « appliquer les défauts » soit une étape visible, au lieu d'un effet caché
-// dans un accesseur — le reproche exact qu'on peut faire à un conteneur
-// d'injection (ADR 004).
+// It is a PURE function: it does not modify its input. It exists so that
+// "applying the defaults" is a visible step, instead of a hidden effect inside
+// an accessor — the exact reproach one can make to a dependency injection
+// container (ADR 004).
 func (m Modules) Resolve(catalog ModuleCatalog) Modules {
 	resolved := make(Modules, len(m))
 	for name, mod := range m {
@@ -159,16 +159,16 @@ func (m Modules) Resolve(catalog ModuleCatalog) Modules {
 		}
 		resolved[name] = mod
 	}
-	// Les modules du catalogue que la configuration ne mentionne PAS reçoivent
-	// aussi leur pilote par défaut, désactivés.
+	// The modules of the catalogue that the configuration does NOT mention also
+	// receive their default driver, disabled.
 	//
-	// Sans ça, un module absent du fichier rendrait un pilote vide, et le
-	// composition root — qui monte `outbox` inconditionnellement — le
-	// construirait avec la chaîne vide, donc échouerait sur « pilote inconnu ».
-	// Autrement dit : une configuration MINIMALE cesserait de démarrer, ce qui
-	// contredirait frontalement la promesse de l'ADR 012.
+	// Without that, a module absent from the file would return an empty driver,
+	// and the composition root — which mounts `outbox` unconditionally — would
+	// build it with the empty string, and would therefore fail on "unknown
+	// driver". In other words: a MINIMAL configuration would stop starting,
+	// which would flatly contradict the promise of ADR 012.
 	//
-	// Ils restent désactivés : porter un pilote n'active rien.
+	// They stay disabled: carrying a driver enables nothing.
 	for name, set := range catalog {
 		if _, declared := resolved[name]; declared {
 			continue
@@ -178,35 +178,36 @@ func (m Modules) Resolve(catalog ModuleCatalog) Modules {
 	return resolved
 }
 
-// IsEnabled indique si un module est actif.
+// IsEnabled tells whether a module is active.
 func (m Modules) IsEnabled(name string) bool { return m.Get(name).Enabled }
 
-// DriverOf retourne le pilote retenu pour un module.
+// DriverOf returns the driver retained for a module.
 func (m Modules) DriverOf(name string) string { return m.Get(name).Driver }
 
-// RequiresSQL indique si la configuration exige une base — sans présumer du MOTEUR.
+// RequiresSQL tells whether the configuration requires a database — without
+// presuming the ENGINE.
 //
-// C'est ce qui permet à un binaire de n'ouvrir une connexion que s'il en a
-// besoin, et donc de démarrer sans base quand tous les pilotes actifs vivent en
-// mémoire ou sur fichier (ADR 012).
+// This is what allows a binary to open a connection only if it needs one, and
+// therefore to start without a database when every active driver lives in
+// memory or on file (ADR 012).
 //
-// Le catalogue est un PARAMÈTRE, pas un état caché : la réponse dépend des
-// modules montés, et c'est le composition root qui les connaît (ADR 014). Un
-// appelant qui oublie de le passer obtient `false`, pas un défaut arbitraire —
-// aucun module monté, aucune ressource exigée.
+// The catalogue is a PARAMETER, not a hidden state: the answer depends on the
+// mounted modules, and it is the composition root that knows them (ADR 014). A
+// caller who forgets to pass it gets `false`, not an arbitrary default — no
+// module mounted, no resource required.
 func (m Modules) RequiresSQL(catalog ModuleCatalog) bool {
 	return m.requires(catalog, func(r Resources) bool { return r.SQL })
 }
 
-// RequiresCache indique si la configuration exige un cache réseau.
+// RequiresCache tells whether the configuration requires a network cache.
 func (m Modules) RequiresCache(catalog ModuleCatalog) bool {
 	return m.requires(catalog, func(r Resources) bool { return r.Cache })
 }
 
-// requires factorise les deux questions ci-dessus.
+// requires factors out the two questions above.
 //
-// Elle n'itère que les modules DÉCLARÉS : un module absent de la configuration
-// est désactivé (voir Get), donc il n'exige rien.
+// It only iterates over the DECLARED modules: a module absent from the
+// configuration is disabled (see Get), so it requires nothing.
 func (m Modules) requires(catalog ModuleCatalog, wanted func(Resources) bool) bool {
 	for name := range m {
 		if !m.IsEnabled(name) {
@@ -219,17 +220,19 @@ func (m Modules) requires(catalog ModuleCatalog, wanted func(Resources) bool) bo
 	return false
 }
 
-// validate vérifie que chaque module actif désigne un pilote connu du CATALOGUE.
+// validate checks that every active module designates a driver known to the
+// CATALOGUE.
 //
-// Un catalogue vide refuse tout, et c'est voulu : ce qui n'est pas monté n'est
-// pas configurable. On ne configure pas ce qu'on n'a pas branché (ADR 014).
+// An empty catalogue refuses everything, and that is intended: what is not
+// mounted is not configurable. One does not configure what one has not plugged
+// in (ADR 014).
 func (m Modules) validate(catalog ModuleCatalog) []error {
 	var problems []error
 	for name, mod := range m {
 		allowed := catalog.AllowedDrivers(name)
 		if allowed == nil {
 			problems = append(problems, fmt.Errorf(
-				"modules.%s : module inconnu — aucun module de ce nom n'est monté par le composition root", name))
+				"modules.%s: unknown module — no module of that name is mounted by the composition root", name))
 			continue
 		}
 		if !mod.Enabled {
@@ -241,7 +244,7 @@ func (m Modules) validate(catalog ModuleCatalog) []error {
 		}
 		if !slices.Contains(allowed, driver) {
 			problems = append(problems, fmt.Errorf(
-				"modules.%s.driver=%q inconnu (attendu: %s)", name, driver, join(allowed)))
+				"modules.%s.driver=%q unknown (expected: %s)", name, driver, join(allowed)))
 			continue
 		}
 		problems = append(problems, mod.unknownOptions(name, driver, catalog)...)
@@ -249,59 +252,59 @@ func (m Modules) validate(catalog ModuleCatalog) []error {
 	return problems
 }
 
-// unknownOptions refuse toute clé d'option que le pilote ne lit pas.
+// unknownOptions refuses any option key that the driver does not read.
 //
-// # Le trou que cette fonction ferme
+// # The hole this function closes
 //
-// Le deny-par-défaut s'arrêtait au nom du pilote. Ses OPTIONS passaient sans
-// contrôle, parce que les accesseurs — `IntOption`, `DurationOption`… — rendent
-// la valeur par défaut quand la clé est absente. Correct pris isolément : une
-// option absente EST valide. Mais rien n'énumérait les clés connues, donc
-// « absente » et « mal orthographiée » étaient indiscernables.
+// Deny-by-default stopped at the name of the driver. Its OPTIONS went through
+// unchecked, because the accessors — `IntOption`, `DurationOption`… — return
+// the default value when the key is absent. Correct taken in isolation: an
+// absent option IS valid. But nothing enumerated the known keys, so "absent"
+// and "misspelt" were indistinguishable.
 //
-// Mesuré (#93) : `bath_size` au lieu de `batch_size` laissait le serveur
-// démarrer, monter le module, et n'en rien dire. Le dépileur tournait avec un
-// réglage que personne n'avait demandé — et sur `max_attempts` ou
-// `base_backoff`, l'écart serait resté invisible et durable.
+// Measured (#93): `bath_size` instead of `batch_size` let the server start,
+// mount the module, and say nothing about it. The dispatcher ran with a setting
+// nobody had asked for — and on `max_attempts` or `base_backoff`, the
+// discrepancy would have stayed invisible and lasting.
 //
-// Les clés admises sont déclarées par le module lui-même, dans son `catalog.go`,
-// à côté du code qui les lit et en partageant ses constantes (ADR 014). Aucun
-// fichier du framework ne les nomme.
+// The admitted keys are declared by the module itself, in its `catalog.go`,
+// next to the code that reads them and sharing its constants (ADR 014). No file
+// of the framework names them.
 func (m Module) unknownOptions(name, driver string, catalog ModuleCatalog) []error {
-	admises := catalog.AllowedOptions(name, driver)
+	allowed := catalog.AllowedOptions(name, driver)
 
-	// Trier les clés fautives : sans cela, l'ordre de map ferait varier le
-	// message d'une exécution à l'autre, et deux traces cesseraient d'être
-	// comparables.
-	var fautives []string
+	// Sort the offending keys: without that, the map order would make the
+	// message vary from one run to the next, and two traces would stop being
+	// comparable.
+	var offending []string
 	for key := range m.Options {
-		if !slices.Contains(admises, key) {
-			fautives = append(fautives, key)
+		if !slices.Contains(allowed, key) {
+			offending = append(offending, key)
 		}
 	}
-	slices.Sort(fautives)
+	slices.Sort(offending)
 
-	// Un pilote sans aucune option admise mérite sa propre phrase : « admises: »
-	// suivi du vide se lit comme un message tronqué, et envoie chercher un défaut
-	// de l'outil plutôt que la faute de frappe.
-	attendues := "ce pilote n'accepte aucune option"
-	if len(admises) > 0 {
-		attendues = "admises: " + join(admises)
+	// A driver with no admitted option at all deserves its own sentence:
+	// "expected: " followed by nothing reads like a truncated message, and
+	// sends people looking for a defect in the tool rather than for the typo.
+	expected := "this driver accepts no option"
+	if len(allowed) > 0 {
+		expected = "expected: " + join(allowed)
 	}
 
-	problems := make([]error, 0, len(fautives))
-	for _, key := range fautives {
+	problems := make([]error, 0, len(offending))
+	for _, key := range offending {
 		problems = append(problems, fmt.Errorf(
-			"modules.%s.options.%s inconnue du pilote %q (%s)", name, key, driver, attendues))
+			"modules.%s.options.%s unknown to driver %q (%s)", name, key, driver, expected))
 	}
 	return problems
 }
 
-// Interop porte les modes de communication ENTRE modules.
+// Interop carries the communication modes BETWEEN modules.
 //
-// Distinct de Modules : ici on décide comment deux modules se parlent, pas
-// comment un module s'implémente. Un module n'accède JAMAIS aux tables d'un
-// autre (ADR 011).
+// Distinct from Modules: here one decides how two modules talk to each other,
+// not how a module implements itself. A module NEVER accesses the tables of
+// another one (ADR 011).
 type Interop struct {
 	DefaultTransport string            `yaml:"default_transport"`
 	CallTimeout      Duration          `yaml:"call_timeout"`
@@ -309,10 +312,10 @@ type Interop struct {
 	BaseURLs         map[string]string `yaml:"base_urls"`
 }
 
-// Modes de communication entre modules.
+// Communication modes between modules.
 //
-// Homonymie assumée avec relayInproc : ici « inproc » qualifie un APPEL direct
-// entre deux modules du même binaire, là un relais d'événements.
+// Homonymy assumed with relayInproc: here "inproc" qualifies a direct CALL
+// between two modules of the same binary, there an event relay.
 const (
 	transportInproc   = "inproc"
 	transportHTTP     = "http"
@@ -320,7 +323,7 @@ const (
 	transportDisabled = "disabled"
 )
 
-// TransportFor résout le mode applicable à un module.
+// TransportFor resolves the mode applicable to a module.
 func (i Interop) TransportFor(module string) string {
 	if raw, found := i.Transports[module]; found && raw != "" {
 		return raw
@@ -331,23 +334,23 @@ func (i Interop) TransportFor(module string) string {
 	return i.DefaultTransport
 }
 
-// validate vérifie la cohérence des modes de communication.
+// validate checks the coherence of the communication modes.
 func (i Interop) validate() []error {
 	var problems []error
 	allowed := []string{transportInproc, transportHTTP, transportEvent, transportDisabled}
 	if !slices.Contains(allowed, i.TransportFor("")) {
 		problems = append(problems, fmt.Errorf(
-			"interop.default_transport=%q inconnu (attendu: %s)", i.DefaultTransport, join(allowed)))
+			"interop.default_transport=%q unknown (expected: %s)", i.DefaultTransport, join(allowed)))
 	}
 	for module, mode := range i.Transports {
 		if !slices.Contains(allowed, mode) {
 			problems = append(problems, fmt.Errorf(
-				"interop.transports.%s=%q inconnu (attendu: %s)", module, mode, join(allowed)))
+				"interop.transports.%s=%q unknown (expected: %s)", module, mode, join(allowed)))
 			continue
 		}
 		if mode == "http" && i.BaseURLs[module] == "" {
 			problems = append(problems, fmt.Errorf(
-				"interop.base_urls.%s est requis quand le transport est http", module))
+				"interop.base_urls.%s is required when the transport is http", module))
 		}
 	}
 	return problems

@@ -1,36 +1,37 @@
-// Package ressources ouvre les connexions que les modules ACTIVÉS réclament, et
-// aucune autre.
+// Package ressources opens the connections that the ENABLED modules require,
+// and no others.
 //
-// # Le défaut que ce paquet corrige — #103
+// # The defect this package fixes — #103
 //
-// `database.New` n'était appelée par AUCUN binaire. Ni `cmd/server`, ni
-// `cmd/worker`. Conséquence mesurée : le dépileur refusait le pilote `memory`
-// par conception — il dépilerait un magasin que le serveur ne partage pas — et
-// ne pouvait pas utiliser `postgres` faute de pool. **Il ne démarrait dans
-// aucune configuration.**
+// `database.New` was called by NO binary. Neither `cmd/server`, nor
+// `cmd/worker`. Measured consequence: the dispatcher refused the `memory`
+// driver by design — it would dispatch a store the server does not share — and
+// could not use `postgres` for lack of a pool. **It started in no
+// configuration at all.**
 //
-// Par extension, aucun pilote `postgres` du dépôt n'était atteignable depuis un
-// binaire : `audit`, `dynconf`, `idempotency`, `outbox`, `scheduler` en ont tous
-// un, tous inaccessibles. Ils ont des tests d'intégration (#37) et rien ne les
-// montait.
+// By extension, no `postgres` driver of the repository was reachable from a
+// binary: `audit`, `dynconf`, `idempotency`, `outbox`, `scheduler` all have
+// one, all unreachable. They have integration tests (#37) and nothing mounted
+// them.
 //
-// Personne ne l'avait vu parce que le seul chemin jamais exercé était celui du
-// REFUS : le job CI vérifie que le dépileur refuse une outbox non partagée, ce
-// qui est une bonne garde — mais le chemin nominal n'était exécuté nulle part.
+// Nobody had seen it because the only path ever exercised was the REFUSAL one:
+// the CI job checks that the dispatcher refuses an unshared outbox, which is a
+// good guard — but the nominal path was executed nowhere.
 //
-// # Pourquoi ce paquet, et pas cinq lignes dans chaque composition root
+// # Why this package, and not five lines in each composition root
 //
-// Parce qu'il y en a DEUX, et que ce dépôt a déjà payé trois fois la divergence
-// entre `cmd/server` et `cmd/worker`. Une ouverture de pool qui diffère d'un
-// binaire à l'autre produit un serveur qui écrit et un dépileur qui ne lit pas —
-// exactement le défaut qu'on vient de corriger, sous une autre forme.
+// Because there are TWO of them, and this repository has already paid three
+// times for the divergence between `cmd/server` and `cmd/worker`. A pool
+// opening that differs from one binary to the other produces a server that
+// writes and a dispatcher that does not read — exactly the defect that has just
+// been fixed, under another form.
 //
-// # Ce que ce paquet NE fait pas
+// # What this package does NOT do
 //
-// Il n'ouvre rien « au cas où ». C'est la promesse de l'ADR 012 : avec la
-// configuration livrée, tous les pilotes sont sans dépendance, donc **aucune
-// connexion n'est ouverte** et `go run ./cmd/server` démarre sur une machine
-// vierge. Corriger #103 ne devait pas coûter cette promesse.
+// It opens nothing "just in case". That is the promise of ADR 012: with the
+// shipped configuration, every driver is dependency-free, so **no connection is
+// opened** and `go run ./cmd/server` starts on a bare machine. Fixing #103 was
+// not to cost that promise.
 package ressources
 
 import (
@@ -46,68 +47,68 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/database"
 )
 
-// Connexions porte ce qui a été ouvert, et de quoi le refermer.
+// Connexions carries what has been opened, and the means to close it again.
 //
-// Une structure plutôt que trois retours : `Open` rendrait
-// `(*pgxpool.Pool, *goredis.Client, error)`, et la règle d'architecture le
-// refuse. Elle a raison ici pour une raison propre au sujet — c'est la SIXIÈME
-// occurrence de la même leçon dans ce dépôt, après `election`, `decodedHash`,
-// `RetryPolicy`, `messaging.Broker` et `worker`.
+// A struct rather than three returns: `Open` would return
+// `(*pgxpool.Pool, *goredis.Client, error)`, and the architecture rule refuses
+// it. It is right here for a reason proper to the subject — this is the SIXTH
+// occurrence of the same lesson in this repository, after `election`,
+// `decodedHash`, `RetryPolicy`, `messaging.Broker` and `worker`.
 //
-// ⚠️ **Les deux champs peuvent être nil, légitimement.** Un nil ne signale pas
-// un échec : il signale qu'aucun module activé ne réclamait cette ressource. Les
-// modules qui n'en ont pas besoin reçoivent ce nil sans jamais le déréférencer,
-// et ceux qui en ont besoin refusent le démarrage en le disant.
+// ⚠️ **Both fields can be nil, legitimately.** A nil does not signal a failure:
+// it signals that no enabled module required that resource. The modules that do
+// not need it receive that nil without ever dereferencing it, and those that do
+// need it refuse to start, saying so.
 type Connexions struct {
 	Pool  *pgxpool.Pool
 	Cache *goredis.Client
 }
 
-// Open ouvre ce que la configuration réclame, et rien de plus.
+// Open opens what the configuration requires, and nothing more.
 //
-// La décision vient de `config.Modules.RequiresSQL` et `RequiresCache`, qui
-// n'interrogent que les modules ACTIVÉS et le pilote réellement retenu. Ces deux
-// fonctions existaient et n'étaient appelées par aucun binaire : la promesse
-// « démarre sans base » était *assertée* par des tests, jamais *exercée*.
+// The decision comes from `config.Modules.RequiresSQL` and `RequiresCache`,
+// which only interrogate the ENABLED modules and the driver actually retained.
+// Those two functions existed and were called by no binary: the "starts without
+// a database" promise was *asserted* by tests, never *exercised*.
 //
-// L'ouverture VÉRIFIE que la connexion répond — `database.New` fait un ping,
-// `cache.New` aussi. C'est délibéré : un service qui démarre sans base signale
-// son défaut à la première requête utilisateur, c'est-à-dire trop tard, et
-// depuis un endroit qui n'accuse pas la bonne cause.
+// Opening CHECKS that the connection answers — `database.New` does a ping, and
+// so does `cache.New`. That is deliberate: a service that starts without a
+// database signals its defect on the first user request, that is to say too
+// late, and from a place that does not blame the right cause.
 func Open(ctx context.Context, cfg config.Config, catalog config.ModuleCatalog) (Connexions, error) {
-	var ouvertes Connexions
+	var opened Connexions
 
 	if cfg.Modules.RequiresSQL(catalog) {
 		pool, err := database.New(ctx, cfg.Database)
 		if err != nil {
-			return Connexions{}, fmt.Errorf("un module activé exige une base: %w", err)
+			return Connexions{}, fmt.Errorf("an enabled module requires a database: %w", err)
 		}
-		ouvertes.Pool = pool
+		opened.Pool = pool
 	}
 
 	if cfg.Modules.RequiresCache(catalog) {
 		client, err := cache.New(ctx, cfg.Cache)
 		if err != nil {
-			// Le pool déjà ouvert est refermé avant de remonter : sans cela, un
-			// démarrage qui échoue à mi-chemin laisserait des connexions
-			// pendantes, et un redémarrage en boucle les accumulerait jusqu'à
-			// saturer le serveur de base.
-			ouvertes.Close()
-			return Connexions{}, fmt.Errorf("un module activé exige un cache: %w", err)
+			// The already opened pool is closed before returning: without that,
+			// a start-up that fails halfway would leave connections dangling,
+			// and a restart loop would accumulate them until the database
+			// server saturates.
+			opened.Close()
+			return Connexions{}, fmt.Errorf("an enabled module requires a cache: %w", err)
 		}
-		ouvertes.Cache = client
+		opened.Cache = client
 	}
 
-	return ouvertes, nil
+	return opened, nil
 }
 
-// Close referme ce qui a été ouvert. Sûre sur une valeur zéro.
+// Close closes again what has been opened. Safe on a zero value.
 //
-// Ne rend PAS d'erreur, délibérément. Elle est appelée en `defer` au moment de
-// l'arrêt, où il n'existe plus personne à qui rendre compte : un appelant qui
-// recevrait une erreur ne pourrait qu'ignorer ou journaliser, et l'obligation de
-// la traiter pousse à écrire `defer func() { _ = c.Close() }()` — donc à
-// masquer, plutôt qu'à décider.
+// It does NOT return an error, deliberately. It is called in a `defer` at
+// shutdown time, where there is no longer anyone to account to: a caller
+// receiving an error could only ignore or log it, and the obligation to handle
+// it pushes towards writing `defer func() { _ = c.Close() }()` — hence towards
+// hiding, rather than deciding.
 func (c Connexions) Close() {
 	if c.Pool != nil {
 		c.Pool.Close()

@@ -11,12 +11,12 @@ func TestIsEnabled(t *testing.T) {
 
 	modules := config.Modules{"outbox": {Enabled: true}, "audit": {Enabled: false}}
 	if !modules.IsEnabled("outbox") {
-		t.Error("outbox devrait être actif")
+		t.Error("outbox should be active")
 	}
 	if modules.IsEnabled("audit") {
-		t.Error("audit devrait être inactif")
+		t.Error("audit should be inactive")
 	}
-	if modules.IsEnabled("inexistant") {
-		t.Error("un module inconnu ne peut pas être actif")
+	if modules.IsEnabled("nonexistent") {
+		t.Error("an unknown module cannot be active")
 	}
 }

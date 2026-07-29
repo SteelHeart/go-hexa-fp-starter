@@ -10,33 +10,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 )
 
-// TestHealthzNeverTouchesADependency : /healthz est INDÉPENDANT des dépendances.
+// TestHealthzNeverTouchesADependency: /healthz is INDEPENDENT of the dependencies.
 //
-// # Le défaut que ce test attrape, et il transforme une panne partielle en panne totale
+// # The defect this test catches, and it turns a partial outage into a total one
 //
-// C'est l'erreur la plus tentante de tout le montage HTTP : « autant vérifier la
-// base dans /healthz aussi, c'est plus complet ». Elle est catastrophique.
+// It is the most tempting mistake of the whole HTTP mounting: "we may as well
+// check the database in /healthz too, it is more complete". It is catastrophic.
 //
-// /healthz est la sonde de VIVACITÉ : l'orchestrateur tue et redémarre le
-// conteneur qui y répond mal. Si elle interroge la base, alors une panne de base
-// fait échouer la sonde sur TOUTES les répliques à la fois. Kubernetes les tue
-// toutes, les redémarre, elles échouent encore, il les tue encore.
+// /healthz is the LIVENESS probe: the orchestrator kills and restarts the
+// container that answers it badly. If it queries the database, then a database
+// outage makes the probe fail on ALL the replicas at once. Kubernetes kills
+// them all, restarts them, they fail again, it kills them again.
 //
-// Résultat : une base momentanément indisponible — dont on se relève — devient un
-// service entièrement mort, en boucle de redémarrage, incapable même de servir ce
-// qui ne dépendait pas de la base. Le remède aggrave la maladie.
+// Result: a momentarily unavailable database — from which one recovers —
+// becomes an entirely dead service, in a restart loop, incapable even of
+// serving what did not depend on the database. The remedy worsens the illness.
 //
-// La distinction est nette et doit rester outillée :
+// The distinction is sharp and must stay tooled:
 //
-//	/healthz  suis-je VIVANT ?      aucune dépendance      → sinon on me tue
-//	/readyz   puis-je SERVIR ?      toutes les dépendances → sinon on me retire du trafic
+//	/healthz  am I ALIVE?        no dependency         → otherwise I get killed
+//	/readyz   can I SERVE?       every dependency      → otherwise I am pulled out of the traffic
 func TestHealthzNeverTouchesADependency(t *testing.T) {
 	t.Parallel()
 
 	var probeCalls atomic.Int64
 	watched := map[string]httpserver.Probe{
-		// Une sonde qui compte ses appels ET qui échoue : si /healthz la
-		// consultait, le test le verrait deux fois.
+		// A probe that counts its calls AND that fails: if /healthz consulted
+		// it, the test would see it twice over.
 		"database": func(context.Context) error {
 			probeCalls.Add(1)
 			return errNotAvailable
@@ -46,28 +46,28 @@ func TestHealthzNeverTouchesADependency(t *testing.T) {
 	rec := get(t, config.EnvProduction, watched, "/healthz")
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("/healthz = %d alors qu'une dépendance est en panne, attendu 200 — "+
-			"l'orchestrateur tuerait toutes les répliques en boucle", rec.Code)
+		t.Errorf("/healthz = %d while a dependency is down, want 200 — "+
+			"the orchestrator would kill every replica in a loop", rec.Code)
 	}
 	if calls := probeCalls.Load(); calls != 0 {
-		t.Errorf("/healthz a consulté %d sonde(s) — il ne doit en consulter AUCUNE", calls)
+		t.Errorf("/healthz consulted %d probe(s) — it must consult NONE", calls)
 	}
 }
 
-// TestHealthzAnswersJSON : le corps est du JSON, avec son type de contenu.
+// TestHealthzAnswersJSON: the body is JSON, with its content type.
 //
-// Une sonde qui rend du texte brut annoncé `text/plain` casse les collecteurs qui
-// désérialisent la réponse — et personne ne le remarque avant la mise en place de
-// la supervision, c'est-à-dire trop tard.
+// A probe that returns raw text announced as `text/plain` breaks the collectors
+// that deserialise the response — and nobody notices before the monitoring is
+// put in place, that is to say too late.
 func TestHealthzAnswersJSON(t *testing.T) {
 	t.Parallel()
 
 	rec := get(t, config.EnvProduction, nil, "/healthz")
 
 	if got := rec.Header().Get("Content-Type"); got != "application/json" {
-		t.Errorf("Content-Type = %q, attendu application/json", got)
+		t.Errorf("Content-Type = %q, want application/json", got)
 	}
 	if body := rec.Body.String(); body != `{"status":"ok"}` {
-		t.Errorf("corps = %q", body)
+		t.Errorf("body = %q", body)
 	}
 }

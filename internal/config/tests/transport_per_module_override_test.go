@@ -21,7 +21,7 @@ func TestTransportPerModuleOverride(t *testing.T) {
 	}
 	for module, want := range cases {
 		if got := interop.TransportFor(module); got != want {
-			t.Errorf("transport de %s = %q, attendu %q", module, got, want)
+			t.Errorf("transport of %s = %q, want %q", module, got, want)
 		}
 	}
 }

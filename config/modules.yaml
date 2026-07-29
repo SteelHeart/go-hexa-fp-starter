@@ -179,7 +179,7 @@ modules:
   #
   # Ils se déclarent ici exactement comme les modules noyau, et c'est le sens de
   # l'ADR 014. Avant elle, ce bloc faisait REFUSER le démarrage avec
-  # `modules.user_registration : module inconnu` : la seule table de modules
+  # `modules.user_registration: unknown module` : la seule table de modules
   # vivait dans `internal/config/modules.go`, un fichier du framework.
   #
   # Écrire son propre module `billing` demande la même chose : un `catalog.go`

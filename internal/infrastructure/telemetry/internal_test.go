@@ -13,10 +13,10 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Ces tests visent des identifiants NON EXPORTÉS — `newLoggerTo`, `parseLevel`,
-// `traceHandler` — donc un `internal_test.go` (rules/tests.md §2). Le journal
-// écrit dans un tampon, jamais sur la sortie standard : un test qui polluerait la
-// sortie rendrait la lecture des autres impossible.
+// These tests target NON-EXPORTED identifiers — `newLoggerTo`, `parseLevel`,
+// `traceHandler` — hence an `internal_test.go` (rules/tests.md §2). The log
+// writes into a buffer, never on the standard output: a test that polluted the
+// output would make the others unreadable.
 
 func loggerConfig(env config.Environment, format, level string) config.Config {
 	var cfg config.Config
@@ -28,60 +28,60 @@ func loggerConfig(env config.Environment, format, level string) config.Config {
 	return cfg
 }
 
-// TestNonDevelopmentAlwaysLogsJSON : hors développement, le format est imposé.
+// TestNonDevelopmentAlwaysLogsJSON: outside development, the format is imposed.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// La condition est `format == "json" || !env.IsDevelopment()`. Le second terme
-// est ce qui compte : il IMPOSE le JSON hors développement, même si la
-// configuration demande du texte.
+// The condition is `format == "json" || !env.IsDevelopment()`. The second term
+// is what counts: it IMPOSES JSON outside development, even if the
+// configuration asks for text.
 //
-// Sans lui, un `log_format: text` recopié depuis un fichier de développement vers
-// la production produirait des journaux que le collecteur ne sait pas
-// désérialiser. Ils continueraient d'être émis, la supervision resterait verte —
-// et le jour de l'incident, plus rien n'est requêtable. On ne s'en aperçoit qu'au
-// moment où on en a besoin.
+// Without it, a `log_format: text` copied over from a development file towards
+// production would produce logs that the collector does not know how to
+// deserialise. They would keep being emitted, the supervision would stay green
+// — and on the day of the incident, nothing is queryable any more. It is only
+// noticed at the moment it is needed.
 func TestNonDevelopmentAlwaysLogsJSON(t *testing.T) {
 	t.Parallel()
 
 	for _, env := range []config.Environment{
-		config.EnvTest, config.EnvUAT, config.EnvProduction, "inconnu",
+		config.EnvTest, config.EnvUAT, config.EnvProduction, "unknown",
 	} {
 		var buf bytes.Buffer
-		// La configuration demande explicitement du TEXTE : elle doit être
-		// ignorée.
+		// The configuration explicitly asks for TEXT: it must be ignored.
 		newLoggerTo(loggerConfig(env, "text", "info"), &buf).Info("message")
 
 		var decoded map[string]any
 		if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &decoded); err != nil {
-			t.Errorf("env=%q, format=text : la sortie n'est pas du JSON (%v): %s",
+			t.Errorf("env=%q, format=text: the output is not JSON (%v): %s",
 				env, err, buf.String())
 		}
 	}
 }
 
-// TestDevelopmentLogsTextUnlessJSONIsAsked : en local, l'humain d'abord.
+// TestDevelopmentLogsTextUnlessJSONIsAsked: locally, the human first.
 func TestDevelopmentLogsTextUnlessJSONIsAsked(t *testing.T) {
 	t.Parallel()
 
 	var text bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvDevelopment, "", "info"), &text).Info("message")
 	if json.Valid(bytes.TrimSpace(text.Bytes())) {
-		t.Errorf("development sans format demandé produit du JSON: %s", text.String())
+		t.Errorf("development without a requested format produces JSON: %s", text.String())
 	}
 
 	var asJSON bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvDevelopment, "json", "info"), &asJSON).Info("message")
 	if !json.Valid(bytes.TrimSpace(asJSON.Bytes())) {
-		t.Errorf("development avec format=json ne produit pas du JSON: %s", asJSON.String())
+		t.Errorf("development with format=json does not produce JSON: %s", asJSON.String())
 	}
 }
 
-// TestEveryRecordCarriesTheServiceIdentity : service, env et version, toujours.
+// TestEveryRecordCarriesTheServiceIdentity: service, env and version, always.
 //
-// Un journal agrégé mélange les services et les versions. Sans ces trois
-// attributs, une ligne d'erreur ne dit pas QUI l'a émise ni QUELLE version — donc
-// on ne peut ni corréler à un déploiement, ni écarter les répliques saines.
+// An aggregated log mixes services and versions. Without these three
+// attributes, an error line says neither WHO emitted it nor WHICH version —
+// hence one can neither correlate it to a deployment, nor rule out the healthy
+// replicas.
 func TestEveryRecordCarriesTheServiceIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -90,7 +90,7 @@ func TestEveryRecordCarriesTheServiceIdentity(t *testing.T) {
 
 	var decoded map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &decoded); err != nil {
-		t.Fatalf("sortie illisible: %v", err)
+		t.Fatalf("unreadable output: %v", err)
 	}
 	for field, want := range map[string]string{
 		"service": "hexa-tests",
@@ -98,21 +98,21 @@ func TestEveryRecordCarriesTheServiceIdentity(t *testing.T) {
 		"version": "1.2.3",
 	} {
 		if got, _ := decoded[field].(string); got != want {
-			t.Errorf("%s = %q, attendu %q", field, got, want)
+			t.Errorf("%s = %q, want %q", field, got, want)
 		}
 	}
 }
 
-// TestAnUnknownLevelFallsBackToInfo : un niveau illisible ne coupe pas le journal.
+// TestAnUnknownLevelFallsBackToInfo: an unreadable level does not cut the log.
 //
-// # Pourquoi le repli va vers Info et pas vers Error
+// # Why the fallback goes towards Info and not towards Error
 //
-// C'est le seul repli du dépôt qui n'est PAS un refus, et c'est justifié : replier
-// vers Error rendrait un service muet sur une faute de frappe
-// (`log_level: infoo`), et un service muet est indiagnosticable. Replier vers
-// Debug inonderait la production.
+// It is the only fallback of the repository that is NOT a refusal, and it is
+// justified: falling back to Error would make a service mute on a typo
+// (`log_level: infoo`), and a mute service cannot be diagnosed. Falling back to
+// Debug would flood production.
 //
-// Info est le seul choix qui garde le journal utilisable dans les deux sens.
+// Info is the only choice that keeps the log usable in both directions.
 func TestAnUnknownLevelFallsBackToInfo(t *testing.T) {
 	t.Parallel()
 
@@ -129,68 +129,68 @@ func TestAnUnknownLevelFallsBackToInfo(t *testing.T) {
 		"trace":   slog.LevelInfo,
 	} {
 		if got := parseLevel(raw); got != want {
-			t.Errorf("parseLevel(%q) = %v, attendu %v", raw, got, want)
+			t.Errorf("parseLevel(%q) = %v, want %v", raw, got, want)
 		}
 	}
 }
 
-// TestTheSourceIsAttachedOnlyAtDebug : l'emplacement du code suit le niveau.
+// TestTheSourceIsAttachedOnlyAtDebug: the code location follows the level.
 //
-// # Ce que ce test verrouille, dans les deux sens
+// # What this test locks down, in both directions
 //
-// `AddSource: level == slog.LevelDebug` lie deux réglages qui n'ont aucune raison
-// évidente d'être liés. Les deux sens comptent :
+// `AddSource: level == slog.LevelDebug` links two settings that have no obvious
+// reason to be linked. Both directions count:
 //
-//   - Toujours ACTIF, il ferait payer à chaque ligne de production la capture
-//     d'une trace d'appel — le coût de `runtime.Callers`, sur le chemin le plus
-//     chaud du service — et publierait l'arborescence des sources dans les
-//     journaux.
-//   - Jamais actif, le mode debug perdrait ce qui le rend utile : savoir QUELLE
-//     ligne a émis le message. On active debug pour comprendre, pas pour avoir
-//     plus de texte.
+//   - Always ACTIVE, it would make every production line pay for the capture of
+//     a call trace — the cost of `runtime.Callers`, on the hottest path of the
+//     service — and would publish the source tree in the logs.
+//   - Never active, debug mode would lose what makes it useful: knowing WHICH
+//     line emitted the message. Debug is enabled to understand, not to get more
+//     text.
 //
-// Ce couplage n'est écrit nulle part ailleurs qu'ici.
+// This coupling is written nowhere else but here.
 func TestTheSourceIsAttachedOnlyAtDebug(t *testing.T) {
 	t.Parallel()
 
 	var atDebug bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvProduction, "json", "debug"), &atDebug).Debug("message")
 	if !strings.Contains(atDebug.String(), "source") {
-		t.Errorf("niveau debug SANS emplacement de source : %s — "+
-			"le mode debug perd ce qui le rend utile", atDebug.String())
+		t.Errorf("debug level WITHOUT a source location: %s — "+
+			"debug mode loses what makes it useful", atDebug.String())
 	}
 
 	var atInfo bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvProduction, "json", "info"), &atInfo).Info("message")
 	if strings.Contains(atInfo.String(), "source") {
-		t.Errorf("niveau info AVEC emplacement de source : %s — "+
-			"chaque ligne de production paierait une capture de pile", atInfo.String())
+		t.Errorf("info level WITH a source location: %s — "+
+			"every production line would pay for a stack capture", atInfo.String())
 	}
 }
 
-// TestATraceIsAttachedToEveryRecordThatHasOne : le trace_id est injecté par le
-// gestionnaire, pas par les appelants.
+// TestATraceIsAttachedToEveryRecordThatHasOne: the trace_id is injected by the
+// handler, not by the callers.
 //
-// # Pourquoi ça vaut un test
+// # Why this is worth a test
 //
-// « Un log sans trace_id est un log qu'on ne pourra pas recouper en incident. »
-// Compter sur les appelants pour l'ajouter garantit qu'il manquera exactement là
-// où il sert — dans le chemin d'erreur que personne n'a relu.
+// "A log without a trace_id is a log that cannot be cross-checked during an
+// incident." Relying on the callers to add it guarantees that it will be
+// missing exactly where it serves — in the error path nobody has reread.
 //
-// Le gestionnaire le lit donc du contexte. Ce test vérifie les DEUX sens : présent
-// quand il y a un span, ET ABSENT quand il n'y en a pas. Le second compte autant :
-// écrire `trace_id: "00000000000000000000000000000000"` sur chaque ligne hors
-// requête pollue les index et fait correspondre des lignes sans rapport.
+// The handler therefore reads it from the context. This test checks BOTH
+// directions: present when there is a span, AND ABSENT when there is none. The
+// second counts just as much: writing
+// `trace_id: "00000000000000000000000000000000"` on every line outside a
+// request pollutes the indexes and makes unrelated lines match.
 func TestATraceIsAttachedToEveryRecordThatHasOne(t *testing.T) {
 	t.Parallel()
 
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	if err != nil {
-		t.Fatalf("identifiant de trace de test invalide: %v", err)
+		t.Fatalf("invalid test trace identifier: %v", err)
 	}
 	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
 	if err != nil {
-		t.Fatalf("identifiant de span de test invalide: %v", err)
+		t.Fatalf("invalid test span identifier: %v", err)
 	}
 	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(
 		trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled},
@@ -198,43 +198,43 @@ func TestATraceIsAttachedToEveryRecordThatHasOne(t *testing.T) {
 
 	var withTrace bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvProduction, "json", "info"), &withTrace).
-		InfoContext(ctx, "dans une requête")
+		InfoContext(ctx, "inside a request")
 
 	emitted := withTrace.String()
 	if !strings.Contains(emitted, "4bf92f3577b34da6a3ce929d0e0e4736") {
-		t.Errorf("trace_id absent: %s", emitted)
+		t.Errorf("trace_id missing: %s", emitted)
 	}
 	if !strings.Contains(emitted, "00f067aa0ba902b7") {
-		t.Errorf("span_id absent: %s", emitted)
+		t.Errorf("span_id missing: %s", emitted)
 	}
 
 	var withoutTrace bytes.Buffer
 	newLoggerTo(loggerConfig(config.EnvProduction, "json", "info"), &withoutTrace).
-		InfoContext(context.Background(), "hors requête")
+		InfoContext(context.Background(), "outside a request")
 
 	if strings.Contains(withoutTrace.String(), "trace_id") {
-		t.Errorf("trace_id écrit sans span : %s — "+
-			"un identifiant nul ferait correspondre des lignes sans rapport", withoutTrace.String())
+		t.Errorf("trace_id written without a span: %s — "+
+			"a null identifier would make unrelated lines match", withoutTrace.String())
 	}
 }
 
-// TestTheTraceHandlerSurvivesAttrsAndGroups : la décoration ne perd pas le span.
+// TestTheTraceHandlerSurvivesAttrsAndGroups: decoration does not lose the span.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// `WithAttrs` et `WithGroup` doivent RÉENVELOPPER. Rendre `h.inner.WithAttrs(...)`
-// directement — l'oubli naturel — retirerait le `traceHandler` de la chaîne, et
-// le trace_id disparaîtrait de tout journal décoré.
+// `WithAttrs` and `WithGroup` must REWRAP. Returning `h.inner.WithAttrs(...)`
+// directly — the natural oversight — would remove the `traceHandler` from the
+// chain, and the trace_id would disappear from every decorated log.
 //
-// Or `NewLogger` appelle lui-même `.With(service, env, version)` : le défaut
-// toucherait donc la TOTALITÉ des journaux du dépôt, immédiatement, sans que rien
-// ne le signale — la ligne serait simplement un peu plus courte.
+// Now `NewLogger` itself calls `.With(service, env, version)`: the defect would
+// therefore touch the WHOLE of the repository's logs, immediately, without
+// anything signalling it — the line would simply be a bit shorter.
 func TestTheTraceHandlerSurvivesAttrsAndGroups(t *testing.T) {
 	t.Parallel()
 
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	if err != nil {
-		t.Fatalf("identifiant de trace de test invalide: %v", err)
+		t.Fatalf("invalid test trace identifier: %v", err)
 	}
 	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(
 		trace.SpanContextConfig{
@@ -245,28 +245,29 @@ func TestTheTraceHandlerSurvivesAttrsAndGroups(t *testing.T) {
 	))
 
 	var buf bytes.Buffer
-	// .With() puis .WithGroup() : les deux chemins de décoration, enchaînés.
+	// .With() then .WithGroup(): both decoration paths, chained.
 	newLoggerTo(loggerConfig(config.EnvProduction, "json", "info"), &buf).
 		With(slog.String("module", "user_registration")).
 		WithGroup("request").
-		InfoContext(ctx, "décoré deux fois")
+		InfoContext(ctx, "decorated twice")
 
 	if !strings.Contains(buf.String(), "4bf92f3577b34da6a3ce929d0e0e4736") {
-		t.Errorf("trace_id perdu après décoration: %s — "+
-			"WithAttrs ou WithGroup ne réenveloppe pas le gestionnaire", buf.String())
+		t.Errorf("trace_id lost after decoration: %s — "+
+			"WithAttrs or WithGroup does not rewrap the handler", buf.String())
 	}
 }
 
-// TestDisabledTelemetryYieldsAnInertShutdown : désactivée, l'arrêt réussit.
+// TestDisabledTelemetryYieldsAnInertShutdown: disabled, the shutdown succeeds.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// C'est la configuration PAR DÉFAUT du socle : `telemetry.enabled: false`, aucun
-// collecteur. L'arrêt doit rendre nil, sinon chaque arrêt propre d'un binaire
-// remonterait une erreur et l'orchestrateur compterait le déploiement en échec.
+// This is the DEFAULT configuration of the starter: `telemetry.enabled: false`,
+// no collector. The shutdown must return nil, otherwise every graceful shutdown
+// of a binary would return an error and the orchestrator would count the
+// deployment as a failure.
 //
-// Le contrat est aussi que l'appelant n'ait PAS à savoir si la télémétrie est
-// active : la fonction d'arrêt n'est jamais nil.
+// The contract is also that the caller does NOT have to know whether telemetry
+// is active: the shutdown function is never nil.
 func TestDisabledTelemetryYieldsAnInertShutdown(t *testing.T) {
 	t.Parallel()
 
@@ -275,58 +276,59 @@ func TestDisabledTelemetryYieldsAnInertShutdown(t *testing.T) {
 
 	shutdown, err := Setup(context.Background(), cfg)
 	if err != nil {
-		t.Fatalf("Setup désactivé a rendu une erreur: %v", err)
+		t.Fatalf("disabled Setup returned an error: %v", err)
 	}
 	if shutdown == nil {
-		t.Fatal("fonction d'arrêt nil — l'appelant devrait tester avant d'appeler")
+		t.Fatal("nil shutdown function — the caller would have to test before calling")
 	}
 	if err := shutdown(context.Background()); err != nil {
-		t.Errorf("l'arrêt inerte a rendu %v — chaque déploiement serait compté en échec", err)
+		t.Errorf("the inert shutdown returned %v — every deployment would be counted as a failure", err)
 	}
 }
 
-// TestASuccessfulShutdownReportsNoError : un arrêt RÉUSSI rend nil.
+// TestASuccessfulShutdownReportsNoError: a SUCCESSFUL shutdown returns nil.
 //
-// # Le défaut que ce test a mis au jour
+// # The defect this test brought to light
 //
-// L'arrêt enveloppait inconditionnellement : `fmt.Errorf("arrêt de la
-// télémétrie: %w", errJoin(...))`. Avec `%w` sur un nil, `fmt.Errorf` ne rend
-// PAS nil — il rend une erreur portant littéralement « %!w(<nil>) ».
+// The shutdown wrapped unconditionally: `fmt.Errorf("telemetry shutdown: %w",
+// errJoin(...))`. With a `%w` on a nil, `fmt.Errorf` does NOT return nil — it
+// returns an error carrying literally "%!w(<nil>)".
 //
-// Un arrêt parfaitement réussi remontait donc une erreur. Le défaut était encore
-// LATENT — `Setup` n'est appelée nulle part, la télémétrie n'est pas branchée
-// (#13) — mais il se serait déclenché le jour du branchement, sur le chemin le
-// plus fréquent qui existe : l'arrêt normal, à chaque déploiement.
+// A perfectly successful shutdown therefore returned an error. The defect was
+// still LATENT — `Setup` is called nowhere, telemetry is not wired in (#13) —
+// but it would have been triggered on the day of the wiring, on the most
+// frequent path there is: the normal shutdown, at every deployment.
 //
-// Une seconde faute vivait à côté : l'aide s'appelait `errJoin` et ne joignait
-// rien, elle rendait la première erreur et jetait la seconde. Les deux sont
-// remplacées par `errors.Join`.
+// A second fault lived next to it: the helper was called `errJoin` and joined
+// nothing, it returned the first error and threw away the second. Both are
+// replaced by `errors.Join`.
 //
-// # Pourquoi ce test tourne SANS collecteur
+// # Why this test runs WITHOUT a collector
 //
-// gRPC se connecte PARESSEUSEMENT : `otlptracegrpc.New` réussit sans qu'aucun
-// collecteur n'écoute, et l'arrêt rend la main en moins d'une milliseconde. Le
-// chemin activé est donc exerçable sans infrastructure — ce qui ne rend pas pour
-// autant l'EXPORT prouvé : personne n'a vérifié qu'un span arrive réellement à
-// un collecteur. Cela reste du ressort de #13.
+// gRPC connects LAZILY: `otlptracegrpc.New` succeeds without any collector
+// listening, and the shutdown returns in under a millisecond. The enabled path
+// is therefore exercisable without infrastructure — which does not for all that
+// make the EXPORT proven: nobody has checked that a span really reaches a
+// collector. That remains a matter for #13.
 //
-// Pas de `t.Parallel()` : `Setup` installe les fournisseurs GLOBAUX d'OpenTelemetry.
-// Un test parallèle qui les lirait verrait un état modifié sous lui.
+// No `t.Parallel()`: `Setup` installs the GLOBAL OpenTelemetry providers. A
+// parallel test reading them would see a state modified under it.
 func TestASuccessfulShutdownReportsNoError(t *testing.T) {
 	var cfg config.Config
 	cfg.Telemetry.Enabled = true
 	cfg.Telemetry.ServiceName = "hexa-tests"
-	// Adresse plausible mais sans rien derrière : c'est le point du test.
+	// Plausible address but with nothing behind it: that is the point of the
+	// test.
 	cfg.Telemetry.OTLPEndpoint = "127.0.0.1:4317"
 
 	shutdown, err := Setup(context.Background(), cfg)
 	if err != nil {
-		t.Fatalf("Setup activé a rendu une erreur: %v", err)
+		t.Fatalf("enabled Setup returned an error: %v", err)
 	}
 
 	if err := shutdown(context.Background()); err != nil {
-		t.Errorf("un arrêt réussi a rendu %v — attendu nil.\n"+
-			"C'est le défaut du `fmt.Errorf(\"...: %%w\", nil)` : il ne rend pas nil, "+
-			"et chaque arrêt propre serait compté en échec", err)
+		t.Errorf("a successful shutdown returned %v — want nil.\n"+
+			"This is the defect of `fmt.Errorf(\"...: %%w\", nil)`: it does not return nil, "+
+			"and every graceful shutdown would be counted as a failure", err)
 	}
 }

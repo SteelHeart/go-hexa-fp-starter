@@ -11,16 +11,16 @@ func TestRequiresCache(t *testing.T) {
 
 	defaults := config.Modules{"idempotency": {Enabled: true}}
 	if defaults.RequiresCache(shippedCatalog(t)) {
-		t.Error("les pilotes par défaut ne doivent exiger aucun cache")
+		t.Error("the default drivers must require no cache")
 	}
 
 	withRedis := config.Modules{"idempotency": {Enabled: true, Driver: "redis"}}
 	if !withRedis.RequiresCache(shippedCatalog(t)) {
-		t.Error("un pilote redis actif doit exiger le cache")
+		t.Error("an active redis driver must require the cache")
 	}
 
 	disabled := config.Modules{"idempotency": {Enabled: false, Driver: "redis"}}
 	if disabled.RequiresCache(shippedCatalog(t)) {
-		t.Error("un module désactivé n'exige rien")
+		t.Error("a disabled module requires nothing")
 	}
 }

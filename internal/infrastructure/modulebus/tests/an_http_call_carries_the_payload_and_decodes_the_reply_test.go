@@ -8,22 +8,22 @@ import (
 	"testing"
 )
 
-// TestAnHTTPCallCarriesThePayloadAndDecodesTheReply : l'appel distant est complet.
+// TestAnHTTPCallCarriesThePayloadAndDecodesTheReply: the remote call is complete.
 //
-// # Ce que ce test verrouille, et pourquoi chaque point compte
+// # What this test locks down, and why each point matters
 //
-//   - La MÉTHODE et le CHEMIN viennent de la Route. Une route ignorée enverrait
-//     un GET là où le module distant attend un POST : 405, sur toutes les
-//     capacités d'un coup, et seulement après déploiement séparé.
-//   - Le corps est la requête sérialisée. C'est la seule chose que le module
-//     distant reçoit.
-//   - `Content-Type: application/json` est posé. Sans lui, un serveur strict —
-//     et huma l'est — refuse le corps avant de l'avoir lu.
-//   - L'adresse de base est jointe au chemin SANS barre oblique doublée. Une
-//     adresse terminée par `/` est ce que produit n'importe quelle configuration
-//     écrite à la main ; `//v1/things` n'est pas la même route pour un routeur.
-//   - La réponse est décodée dans le type de sortie. Un appel qui réussirait en
-//     rendant la valeur zéro serait le pire des deux mondes.
+//   - The METHOD and the PATH come from the Route. An ignored route would send
+//     a GET where the remote module expects a POST: 405, on every capability at
+//     once, and only after a separate deployment.
+//   - The body is the serialised request. It is the only thing the remote
+//     module receives.
+//   - `Content-Type: application/json` is set. Without it, a strict server —
+//     and huma is one — refuses the body before having read it.
+//   - The base address is joined to the path WITHOUT a doubled slash. An
+//     address ending with `/` is what any hand-written configuration produces;
+//     `//v1/things` is not the same route to a router.
+//   - The reply is decoded into the output type. A call that succeeded while
+//     returning the zero value would be the worst of both worlds.
 func TestAnHTTPCallCarriesThePayloadAndDecodesTheReply(t *testing.T) {
 	t.Parallel()
 
@@ -45,31 +45,31 @@ func TestAnHTTPCallCarriesThePayloadAndDecodesTheReply(t *testing.T) {
 	defer remote.Close()
 
 	var localCalls int
-	// Adresse terminée par une barre oblique, volontairement.
+	// Address ending with a slash, deliberately.
 	cfg := interop("http", map[string]string{someModule: remote.URL + "/"})
 	call := resolve(t, cfg, noPublisher(t), localCaller(&localCalls))
 
 	got, err := call(context.Background(), request{Ref: "r-42"})
 	if err != nil {
-		t.Fatalf("appel distant en échec: %v", err)
+		t.Fatalf("remote call failed: %v", err)
 	}
 
 	if gotMethod != "POST" {
-		t.Errorf("méthode reçue = %q, attendu POST — la Route n'est pas respectée", gotMethod)
+		t.Errorf("method received = %q, want POST — the Route is not honoured", gotMethod)
 	}
 	if gotPath != "/v1/things" {
-		t.Errorf("chemin reçu = %q, attendu /v1/things — barre oblique doublée ?", gotPath)
+		t.Errorf("path received = %q, want /v1/things — doubled slash?", gotPath)
 	}
 	if gotContentType != "application/json" {
-		t.Errorf("Content-Type reçu = %q — un serveur strict refuserait le corps", gotContentType)
+		t.Errorf("Content-Type received = %q — a strict server would refuse the body", gotContentType)
 	}
 	if gotBody.Ref != "r-42" {
-		t.Errorf("corps reçu = %+v, la requête n'a pas traversé", gotBody)
+		t.Errorf("body received = %+v, the request did not cross over", gotBody)
 	}
 	if !got.Accepted {
-		t.Error("la réponse distante n'a pas été décodée — la valeur zéro a été rendue")
+		t.Error("the remote reply was not decoded — the zero value was returned")
 	}
 	if localCalls != 0 {
-		t.Errorf("l'implémentation locale a été appelée %d fois en mode http", localCalls)
+		t.Errorf("the local implementation was called %d times in http mode", localCalls)
 	}
 }

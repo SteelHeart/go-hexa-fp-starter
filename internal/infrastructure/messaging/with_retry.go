@@ -6,19 +6,19 @@ import (
 	"time"
 )
 
-// Réessai appliqué aux deux relais réseau.
+// Retry applied to both network relays.
 //
-// Il absorbe la coupure d'une seconde ; il ne remplace PAS le recul de l'outbox,
-// qui se compte en minutes et survit à un redémarrage du processus.
+// It absorbs a one-second outage; it does NOT replace the backoff of the
+// outbox, which is counted in minutes and survives a restart of the process.
 const (
 	publishAttempts = 3
 	publishBackoff  = 200 * time.Millisecond
 )
 
-// WithRetry enveloppe un publieur d'un réessai borné.
+// WithRetry wraps a publisher in a bounded retry.
 //
-// Utile pour les transports réseau : une coupure d'une seconde ne doit pas
-// consommer une tentative de l'outbox, dont le recul est bien plus long.
+// Useful for network transports: a one-second outage must not consume an
+// attempt of the outbox, whose backoff is far longer.
 func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher {
 	return func(ctx context.Context, env Envelope) error {
 		var last error
@@ -35,6 +35,6 @@ func WithRetry(publisher Publisher, attempts int, wait time.Duration) Publisher 
 				return nil
 			}
 		}
-		return fmt.Errorf("publication échouée après %d tentatives: %w", attempts, last)
+		return fmt.Errorf("publication failed after %d attempts: %w", attempts, last)
 	}
 }

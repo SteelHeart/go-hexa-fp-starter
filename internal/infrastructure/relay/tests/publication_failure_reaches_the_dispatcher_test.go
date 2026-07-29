@@ -10,24 +10,24 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/relay"
 )
 
-// TestPublicationFailureReachesTheDispatcher : un échec de publication remonte
-// intact.
+// TestPublicationFailureReachesTheDispatcher: a publication failure goes back
+// up intact.
 //
-// Le recul exponentiel et l'abandon après N essais sont décidés par une
-// politique PURE et testée, dans outbox/application. Ce pont n'a donc rien à
-// décider.
+// The exponential backoff and the abandonment after N attempts are decided by a
+// PURE and tested policy, in outbox/application. This bridge therefore has
+// nothing to decide.
 //
-// Les deux façons de se tromper ici sont graves et opposées :
+// The two ways of getting it wrong here are serious and opposite:
 //
-//   - Avaler l'erreur ferait marquer le message comme TRAITÉ alors que rien
-//     n'est parti. L'événement serait perdu définitivement, sans aucune trace —
-//     le seul défaut que l'outbox existe précisément pour rendre impossible.
-//   - La rattraper pour décider soi-même dupliquerait la politique de recul, et
-//     les deux divergeraient au premier ajustement.
+//   - Swallowing the error would mark the message as HANDLED although nothing
+//     has left. The event would be definitively lost, without any trace — the
+//     very defect the outbox exists precisely to make impossible.
+//   - Catching it to decide by itself would duplicate the backoff policy, and
+//     the two would diverge on the first adjustment.
 func TestPublicationFailureReachesTheDispatcher(t *testing.T) {
 	t.Parallel()
 
-	unreachable := errors.New("courtier injoignable")
+	unreachable := errors.New("broker unreachable")
 	handle := relay.FromOutbox(func(context.Context, messaging.Envelope) error {
 		return unreachable
 	})
@@ -38,9 +38,9 @@ func TestPublicationFailureReachesTheDispatcher(t *testing.T) {
 	})
 
 	if err == nil {
-		t.Fatal("un échec de publication ne doit JAMAIS être avalé : le message serait marqué traité")
+		t.Fatal("a publication failure must NEVER be swallowed: the message would be marked as handled")
 	}
 	if !errors.Is(err, unreachable) {
-		t.Errorf("erreur = %v, la cause doit remonter intacte au dépileur", err)
+		t.Errorf("error = %v, the cause must reach the dispatcher intact", err)
 	}
 }

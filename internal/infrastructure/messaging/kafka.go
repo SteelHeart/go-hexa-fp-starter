@@ -12,43 +12,43 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// newKafka construit le relais Kafka.
+// newKafka builds the Kafka relay.
 //
-// ⚠️ ÉCRIT, NON PROUVÉ : aucune exécution contre un Kafka réel n'a eu lieu.
-// Ne pas le présenter comme fonctionnel (rules/README.md § règle d'or 2).
+// ⚠️ WRITTEN, UNPROVEN: no run against a real Kafka has ever taken place.
+// Do not present it as working (rules/README.md § golden rule 2).
 func newKafka(cfg config.Messaging, logger *slog.Logger) (Broker, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: kafka.RequireAll,
 		WriteTimeout: cfg.PublishTimeout.Duration(),
-		// Allow n'écrit pas les topics manquants en production : les créer à la
-		// volée masque une erreur de configuration. Vrai en dev uniquement.
+		// Allow does not write the missing topics in production: creating them
+		// on the fly hides a configuration error. True in dev only.
 		AllowAutoTopicCreation: cfg.Kafka.AllowAutoTopicCreation,
 	}
 
 	publish := func(ctx context.Context, env Envelope) error {
 		raw, err := json.Marshal(env)
 		if err != nil {
-			return fmt.Errorf("sérialisation de l'enveloppe: %w", err)
+			return fmt.Errorf("serialisation of the envelope: %w", err)
 		}
 		msg := kafka.Message{
 			Topic: cfg.Topic(env.Type),
-			// La clé est l'agrégat : Kafka garantit l'ordre par partition, donc
-			// tous les événements d'un même agrégat restent ordonnés.
+			// The key is the aggregate: Kafka guarantees ordering per
+			// partition, so all the events of one aggregate stay ordered.
 			Key:     []byte(env.AggregateID),
 			Value:   raw,
 			Headers: kafkaHeaders(env),
 		}
 		if err := writer.WriteMessages(ctx, msg); err != nil {
-			return fmt.Errorf("publication Kafka sur %s: %w", msg.Topic, err)
+			return fmt.Errorf("publication to Kafka on %s: %w", msg.Topic, err)
 		}
 		return nil
 	}
 
 	closer := func() error {
 		if err := writer.Close(); err != nil {
-			return fmt.Errorf("fermeture du writer Kafka: %w", err)
+			return fmt.Errorf("closing of the Kafka writer: %w", err)
 		}
 		return nil
 	}
@@ -80,11 +80,11 @@ func (c *kafkaConsumer) Subscribe(eventType string, handler Handler) {
 	c.handlers[eventType] = handler
 }
 
-// Run ouvre un lecteur par type d'événement.
+// Run opens one reader per event type.
 //
-// Un lecteur par topic plutôt qu'un lecteur multi-topics : le décalage
-// (« offset ») est commité par topic, donc un consommateur lent n'empêche pas
-// les autres d'avancer.
+// One reader per topic rather than one multi-topic reader: the offset is
+// committed per topic, so a slow consumer does not prevent the others from
+// moving forward.
 func (c *kafkaConsumer) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	for eventType, handler := range c.handlers {
@@ -112,19 +112,19 @@ func (c *kafkaConsumer) consume(ctx context.Context, eventType string, handler H
 			if ctx.Err() != nil {
 				return
 			}
-			c.logger.ErrorContext(ctx, "lecture Kafka en échec",
+			c.logger.ErrorContext(ctx, "Kafka read failed",
 				slog.String("event_type", eventType), slog.Any("error", err))
 			continue
 		}
 		if err := c.handle(ctx, msg, handler); err != nil {
-			// Pas de commit : le message sera relivré. Le consommateur étant
-			// idempotent, c'est le comportement souhaité.
-			c.logger.ErrorContext(ctx, "consommation en échec, message non commité",
+			// No commit: the message will be redelivered. The consumer being
+			// idempotent, this is the desired behaviour.
+			c.logger.ErrorContext(ctx, "consumption failed, message not committed",
 				slog.String("event_type", eventType), slog.Any("error", err))
 			continue
 		}
 		if err := reader.CommitMessages(ctx, msg); err != nil {
-			c.logger.ErrorContext(ctx, "commit Kafka en échec", slog.Any("error", err))
+			c.logger.ErrorContext(ctx, "Kafka commit failed", slog.Any("error", err))
 		}
 	}
 }
@@ -132,9 +132,9 @@ func (c *kafkaConsumer) consume(ctx context.Context, eventType string, handler H
 func (c *kafkaConsumer) handle(ctx context.Context, msg kafka.Message, handler Handler) error {
 	var env Envelope
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
-		// Message illisible : le rejouer ne servira à rien. On le commite pour
-		// ne pas bloquer la partition, mais on journalise en Error.
-		c.logger.ErrorContext(ctx, "enveloppe Kafka illisible", slog.Any("error", err))
+		// Unreadable message: replaying it will serve no purpose. We commit it
+		// so as not to block the partition, but we log at Error.
+		c.logger.ErrorContext(ctx, "unreadable Kafka envelope", slog.Any("error", err))
 		return nil
 	}
 	return handler(ctx, env)

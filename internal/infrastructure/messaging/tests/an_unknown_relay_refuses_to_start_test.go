@@ -7,27 +7,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestAnUnknownRelayRefusesToStart : deny par défaut sur le choix du transport.
+// TestAnUnknownRelayRefusesToStart: deny by default on the choice of transport.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un relais inconnu qui se rabattrait sur « noop » produirait le pire défaut
-// possible de ce socle : le service démarre, répond, l'outbox se remplit, le
-// dépileur la vide, tout est marqué publié — et AUCUN événement ne sort. Le
-// courriel de bienvenue ne part jamais, et rien, nulle part, ne le signale.
+// An unknown relay that fell back on "noop" would produce the worst possible
+// defect of this starter: the service starts, answers, the outbox fills up, the
+// dispatcher empties it, everything is marked as published — and NO event goes
+// out. The welcome email never leaves, and nothing, nowhere, signals it.
 //
-// Une faute de frappe dans `messaging.driver` suffit. Elle doit coûter un refus
-// de démarrage bruyant, jamais une perte silencieuse.
+// A typo in `messaging.driver` is enough. It must cost a noisy refusal to
+// start, never a silent loss.
 func TestAnUnknownRelayRefusesToStart(t *testing.T) {
 	t.Parallel()
 
-	// Y compris des valeurs qui « ressemblent » : un repli sur le plus proche
-	// serait une interprétation, et on n'interprète pas une configuration.
+	// Including values that "look alike": a fallback on the closest one would
+	// be an interpretation, and one does not interpret a configuration.
 	for _, driver := range []string{"", "kafka2", "Inproc", "in-proc", "amqp", "none"} {
 		if _, err := messaging.New(relayConfig(driver), quietLogger()); err == nil {
-			t.Errorf("driver=%q accepté — un relais non prévu doit refuser le démarrage", driver)
+			t.Errorf("driver=%q accepted — an unplanned relay must refuse to start", driver)
 		} else if !errors.Is(err, messaging.ErrUnknownDriver) {
-			t.Errorf("driver=%q rendu avec %v, attendu ErrUnknownDriver", driver, err)
+			t.Errorf("driver=%q returned with %v, want ErrUnknownDriver", driver, err)
 		}
 	}
 }

@@ -6,8 +6,9 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestMissingDriverFallsBackToZeroDependencyDefault : un module activé sans
-// pilote explicite prend le pilote sans dépendance, jamais le plus complet.
+// TestMissingDriverFallsBackToZeroDependencyDefault: a module enabled without
+// an explicit driver takes the dependency-free driver, never the most complete
+// one.
 func TestMissingDriverFallsBackToZeroDependencyDefault(t *testing.T) {
 	t.Parallel()
 
@@ -25,7 +26,7 @@ func TestMissingDriverFallsBackToZeroDependencyDefault(t *testing.T) {
 			t.Parallel()
 			modules := config.Modules{module: {Enabled: true}}
 			if got := modules.Resolve(shippedCatalog(t)).DriverOf(module); got != want {
-				t.Errorf("pilote par défaut de %s = %q, attendu %q", module, got, want)
+				t.Errorf("default driver of %s = %q, want %q", module, got, want)
 			}
 		})
 	}

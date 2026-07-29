@@ -6,18 +6,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestAMountedRelayIsNeverHalfBuilt : les trois faces d'un Broker sont toujours là.
+// TestAMountedRelayIsNeverHalfBuilt: the three faces of a Broker are always there.
 //
-// # Pourquoi ce test existe
+// # Why this test exists
 //
-// `New` rendait autrefois quatre valeurs séparées. L'appelant pouvait en oublier
-// une — typiquement Close — et l'oubli ne se voit qu'au moment où les connexions
-// au broker fuient en production, des semaines plus tard.
+// `New` used to return four separate values. The caller could forget one —
+// typically Close — and the omission only shows up the moment connections to
+// the broker leak in production, weeks later.
 //
-// Le type `Broker` a supprimé cette possibilité, mais seulement si CHAQUE relais
-// remplit les trois champs. Un relais sans ressource externe est justement celui
-// qu'on est tenté de laisser avec un Close nil : ce test l'interdit, parce que
-// l'appelant ne doit jamais avoir à tester avant d'appeler.
+// The `Broker` type removed that possibility, but only if EVERY relay fills the
+// three fields. A relay without an external resource is precisely the one we
+// are tempted to leave with a nil Close: this test forbids it, because the
+// caller must never have to test before calling.
 func TestAMountedRelayIsNeverHalfBuilt(t *testing.T) {
 	t.Parallel()
 
@@ -28,16 +28,16 @@ func TestAMountedRelayIsNeverHalfBuilt(t *testing.T) {
 		broker := mustBroker(t, driver)
 
 		if broker.Publish == nil {
-			t.Errorf("%s: Publish est nil", driver)
+			t.Errorf("%s: Publish is nil", driver)
 		}
 		if broker.Consume == nil {
-			t.Errorf("%s: Consume est nil", driver)
+			t.Errorf("%s: Consume is nil", driver)
 		}
 		if broker.Close == nil {
-			t.Fatalf("%s: Close est nil — l'appelant ne doit pas avoir à tester", driver)
+			t.Fatalf("%s: Close is nil — the caller must not have to test", driver)
 		}
 		if err := broker.Close(); err != nil {
-			t.Errorf("%s: Close d'un relais sans ressource externe a rendu %v", driver, err)
+			t.Errorf("%s: Close of a relay without an external resource returned %v", driver, err)
 		}
 	}
 }

@@ -9,29 +9,29 @@ import (
 	"testing"
 )
 
-// TestAnHTTPFailureNeverLeaksTheRemoteBody : un échec distant reste un statut.
+// TestAnHTTPFailureNeverLeaksTheRemoteBody: a remote failure stays a status.
 //
-// # Le défaut que ce test attrape — et c'est une fuite de données
+// # The defect this test catches — and it is a data leak
 //
-// Le réflexe, en déboguant un appel inter-module, est de recopier le corps de la
-// réponse distante dans le message d'erreur : « ça aide à diagnostiquer ». Ce
-// corps est le message d'erreur d'UN AUTRE module, sur SES données. Il contient
-// couramment l'adresse électronique refusée, l'identifiant du client, la raison
-// métier du rejet.
+// The reflex, when debugging an inter-module call, is to copy the body of the
+// remote reply into the error message: "it helps to diagnose". That body is the
+// error message of ANOTHER module, about ITS data. It commonly contains the
+// email address that was refused, the customer identifier, the business reason
+// for the rejection.
 //
-// Cette erreur remonte à l'appelant, est journalisée par lui, et part vers le
-// puits d'observabilité. Des données personnelles d'un module traversent alors la
-// frontière d'un autre et atterrissent dans les journaux — exactement ce que
-// rules/securite.md 5 interdit, et par le chemin le plus banal qui soit.
+// This error travels back to the caller, is logged by it, and goes off to the
+// observability sink. Personal data from one module then crosses another one's
+// boundary and lands in the logs — exactly what rules/securite.md 5 forbids,
+// and by the most mundane path there is.
 //
-// La règle est donc : le statut, le point d'entrée, rien d'autre. Un module
-// appelant n'a pas à connaître la taxonomie d'erreurs interne d'un autre ; il
-// traduit lui-même à partir du statut.
+// The rule is therefore: the status, the endpoint, nothing else. A calling
+// module has no business knowing another one's internal error taxonomy; it
+// translates for itself from the status.
 func TestAnHTTPFailureNeverLeaksTheRemoteBody(t *testing.T) {
 	t.Parallel()
 
-	// Un corps qui ressemble à ce qu'un vrai module rendrait sur un 422.
-	const secretish = `{"detail":"adresse alice@example.com deja enregistree","customer":"cus_00042"}`
+	// A body that looks like what a real module would return on a 422.
+	const secretish = `{"detail":"address alice@example.com already registered","customer":"cus_00042"}`
 
 	for _, status := range []int{
 		http.StatusBadRequest,
@@ -53,28 +53,28 @@ func TestAnHTTPFailureNeverLeaksTheRemoteBody(t *testing.T) {
 		remote.Close()
 
 		if err == nil {
-			t.Errorf("statut %d accepté comme un succès", status)
+			t.Errorf("status %d accepted as a success", status)
 			continue
 		}
 		message := err.Error()
 
 		if strings.Contains(message, "alice@example.com") ||
 			strings.Contains(message, "cus_00042") ||
-			strings.Contains(message, "deja enregistree") {
-			t.Errorf("statut %d: le corps distant a fuité dans l'erreur: %s", status, message)
+			strings.Contains(message, "already registered") {
+			t.Errorf("status %d: the remote body leaked into the error: %s", status, message)
 		}
-		// Le statut doit y être : sans lui, l'appelant ne peut pas traduire.
+		// The status must be there: without it, the caller cannot translate.
 		if !strings.Contains(message, strconv.Itoa(status)) {
-			t.Errorf("statut %d absent du message %q — l'appelant ne peut pas traduire", status, message)
+			t.Errorf("status %d missing from the message %q — the caller cannot translate", status, message)
 		}
 	}
 }
 
-// TestAnUnreadableReplyIsAFailure : un corps illisible n'est pas un succès.
+// TestAnUnreadableReplyIsAFailure: an unreadable body is not a success.
 //
-// Un 200 dont le corps n'est pas le JSON attendu — module de la mauvaise version,
-// mandataire qui insère une page d'erreur — doit échouer. Rendre la valeur zéro
-// ferait lire « refusé » à l'appelant sur une réponse qu'il n'a jamais reçue.
+// A 200 whose body is not the expected JSON — module of the wrong version,
+// proxy inserting an error page — must fail. Returning the zero value would
+// make the caller read "refused" on a reply it never received.
 func TestAnUnreadableReplyIsAFailure(t *testing.T) {
 	t.Parallel()
 
@@ -88,6 +88,6 @@ func TestAnUnreadableReplyIsAFailure(t *testing.T) {
 	call := resolve(t, cfg, noPublisher(t), localCaller(&localCalls))
 
 	if _, err := call(context.Background(), request{Ref: "r-1"}); err == nil {
-		t.Error("une réponse illisible a été acceptée — l'appelant lirait la valeur zéro")
+		t.Error("an unreadable reply was accepted — the caller would read the zero value")
 	}
 }

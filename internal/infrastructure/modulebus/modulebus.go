@@ -1,20 +1,20 @@
-// Package modulebus choisit COMMENT un module en appelle un autre, par
-// configuration et sans changement de code.
+// Package modulebus chooses HOW one module calls another, by configuration and
+// without a code change.
 //
-// Trois modes, un par cycle de vie de déploiement :
+// Three modes, one per deployment lifecycle:
 //
-//	inproc   appel de fonction direct — même binaire (défaut, le moins coûteux)
-//	http     appel réseau au module distant — déploiements séparés
-//	event    dépôt d'un événement — asynchrone, sans réponse
+//	inproc   direct function call — same binary (default, the cheapest)
+//	http     network call to the remote module — separate deployments
+//	event    posting an event — asynchronous, no reply
 //
-// Le passage de l'un à l'autre est une variable d'environnement :
+// Switching from one to another is an environment variable:
 //
 //	MODULE_TRANSPORT_DEFAULT=inproc
 //	MODULE_TRANSPORT=user_registration:http,billing:event
 //	MODULE_BASE_URL=user_registration:http://user-registration:8080
 //
-// Ce paquet ne connaît AUCUN module en particulier : il manipule des types
-// génériques et des contrats publiés (ADR 010).
+// This package knows NO module in particular: it handles generic types and
+// published contracts (ADR 010).
 package modulebus
 
 import (
@@ -33,10 +33,10 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// Mode nomme un mode de communication inter-module.
+// Mode names an inter-module communication mode.
 type Mode string
 
-// Les modes disponibles.
+// The available modes.
 const (
 	ModeInproc   Mode = "inproc"
 	ModeHTTP     Mode = "http"
@@ -44,32 +44,32 @@ const (
 	ModeDisabled Mode = "disabled"
 )
 
-// Route décrit l'exposition HTTP d'une capacité.
+// Route describes the HTTP exposure of a capability.
 type Route struct {
 	Method string
 	Path   string
 }
 
-// Caller est une capacité appelable. Types primitifs ou contrats publiés
-// uniquement : jamais un type du domaine d'un module.
+// Caller is a callable capability. Primitive types or published contracts
+// only: never a type from a module's domain.
 type Caller[I any, O any] = func(ctx context.Context, in I) (O, error)
 
-// Erreurs de résolution. Elles refusent le démarrage plutôt que de se rabattre
-// silencieusement sur un mode qui n'était pas demandé — deny par défaut.
+// Resolution errors. They refuse start-up rather than silently falling back on
+// a mode that was not asked for — deny by default.
 var (
-	ErrNoBaseURL   = errors.New("aucune adresse configurée pour ce module")
-	ErrUnknownMode = errors.New("mode de communication inter-module inconnu")
-	ErrDisabled    = errors.New("communication désactivée pour ce module")
+	ErrNoBaseURL   = errors.New("no address configured for this module")
+	ErrUnknownMode = errors.New("unknown inter-module communication mode")
+	ErrDisabled    = errors.New("communication disabled for this module")
 )
 
-// Bus résout les capacités selon la configuration.
+// Bus resolves capabilities according to the configuration.
 type Bus struct {
 	cfg       config.Interop
 	client    *http.Client
 	publisher messaging.Publisher
 }
 
-// New construit le bus.
+// New builds the bus.
 func New(cfg config.Interop, publisher messaging.Publisher) *Bus {
 	return &Bus{
 		cfg:       cfg,
@@ -78,14 +78,14 @@ func New(cfg config.Interop, publisher messaging.Publisher) *Bus {
 	}
 }
 
-// Mode expose le mode retenu pour un module, à des fins de journalisation.
+// Mode exposes the mode selected for a module, for logging purposes.
 func (b *Bus) Mode(module string) Mode { return Mode(b.cfg.TransportFor(module)) }
 
-// Resolve retourne l'appelable correspondant au mode configuré.
+// Resolve returns the callable matching the configured mode.
 //
-// `local` est l'implémentation en processus : elle n'est utilisée qu'en mode
-// inproc, mais elle est toujours passée, ce qui garantit que le module local
-// reste compilable et testable indépendamment du mode.
+// `local` is the in-process implementation: it is only used in inproc mode, but
+// it is always passed, which guarantees that the local module stays compilable
+// and testable independently of the mode.
 func Resolve[I, O any](
 	bus *Bus,
 	module string,
@@ -110,58 +110,58 @@ func Resolve[I, O any](
 			return zero, fmt.Errorf("%w: %s", ErrDisabled, module)
 		}, nil
 	default:
-		return nil, fmt.Errorf("%w: %q pour %s", ErrUnknownMode, mode, module)
+		return nil, fmt.Errorf("%w: %q for %s", ErrUnknownMode, mode, module)
 	}
 }
 
-// httpCaller appelle le module distant.
+// httpCaller calls the remote module.
 //
-// Le corps d'erreur n'est PAS interprété : un module appelant n'a pas à
-// connaître la taxonomie d'erreurs interne d'un autre. Il obtient le statut et
-// le corps brut, et traduit lui-même.
+// The error body is NOT interpreted: a calling module has no business knowing
+// another one's internal error taxonomy. It gets the status and the raw body,
+// and translates it itself.
 func httpCaller[I, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {
 	endpoint := strings.TrimSuffix(baseURL, "/") + route.Path
 	return func(ctx context.Context, in I) (O, error) {
 		var zero O
 		body, err := json.Marshal(in)
 		if err != nil {
-			return zero, fmt.Errorf("sérialisation de la requête inter-module: %w", err)
+			return zero, fmt.Errorf("serialising the inter-module request: %w", err)
 		}
 		req, err := http.NewRequestWithContext(ctx, route.Method, endpoint, bytes.NewReader(body))
 		if err != nil {
-			return zero, fmt.Errorf("construction de la requête inter-module: %w", err)
+			return zero, fmt.Errorf("building the inter-module request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return zero, fmt.Errorf("appel inter-module %s: %w", endpoint, err)
+			return zero, fmt.Errorf("inter-module call %s: %w", endpoint, err)
 		}
 		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode >= http.StatusBadRequest {
-			return zero, fmt.Errorf("appel inter-module %s: statut %d", endpoint, resp.StatusCode)
+			return zero, fmt.Errorf("inter-module call %s: status %d", endpoint, resp.StatusCode)
 		}
 		var out O
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			return zero, fmt.Errorf("lecture de la réponse inter-module: %w", err)
+			return zero, fmt.Errorf("reading the inter-module reply: %w", err)
 		}
 		return out, nil
 	}
 }
 
-// eventCaller dépose un événement et retourne la valeur zéro.
+// eventCaller posts an event and returns the zero value.
 //
-// ⚠️ Mode ASYNCHRONE : il n'y a pas de réponse. Ne l'activer que pour une
-// capacité dont l'appelant ignore le résultat. Le choix est explicite dans la
-// configuration, donc auditable.
+// ⚠️ ASYNCHRONOUS mode: there is no reply. Only enable it for a capability
+// whose caller ignores the result. The choice is explicit in the configuration,
+// hence auditable.
 func eventCaller[I, O any](publisher messaging.Publisher, eventType string) Caller[I, O] {
 	return func(ctx context.Context, in I) (O, error) {
 		var zero O
 		payload, err := json.Marshal(in)
 		if err != nil {
-			return zero, fmt.Errorf("sérialisation de l'événement inter-module: %w", err)
+			return zero, fmt.Errorf("serialising the inter-module event: %w", err)
 		}
 		env := messaging.Envelope{
 			ID:         uuid.NewString(),
@@ -170,7 +170,7 @@ func eventCaller[I, O any](publisher messaging.Publisher, eventType string) Call
 			OccurredAt: time.Now().UTC(),
 		}
 		if err := publisher(ctx, env); err != nil {
-			return zero, fmt.Errorf("publication de l'événement inter-module: %w", err)
+			return zero, fmt.Errorf("publishing the inter-module event: %w", err)
 		}
 		return zero, nil
 	}

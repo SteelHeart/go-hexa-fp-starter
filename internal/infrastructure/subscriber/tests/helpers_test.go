@@ -1,15 +1,15 @@
-// Package tests éprouve le branchement d'un consommateur sur les garanties du
-// noyau.
+// Package tests exercises the wiring of a consumer onto the guarantees of the
+// core.
 //
-// # Le module d'idempotence est le VRAI, pas un double
+// # The idempotency module is the REAL one, not a double
 //
-// Le pilote `memory` est celui qui tourne en développement, et ses 24 tests
-// prouvent l'exclusivité sous concurrence. Le doubler ici ferait éprouver le
-// double : le décorateur pourrait respecter un contrat que le vrai module ne
-// tient pas, et le rejeu passerait quand même en production.
+// The `memory` driver is the one that runs in development, and its 24 tests
+// prove exclusivity under concurrency. Doubling it here would exercise the
+// double: the decorator could respect a contract that the real module does not
+// keep, and the replay would still get through in production.
 //
-// Ce qui EST doublé, c'est le gestionnaire — parce que ce qu'on mesure est
-// justement le nombre de fois où il est appelé.
+// What IS doubled is the handler — because what is being measured is precisely
+// the number of times it is called.
 package tests
 
 import (
@@ -24,10 +24,10 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/subscriber"
 )
 
-// eventType est le type d'événement utilisé par les tests.
+// eventType is the event type used by the tests.
 const eventType = "user.registered.v1"
 
-// newGuard monte le VRAI module d'idempotence sur son pilote par défaut.
+// newGuard mounts the REAL idempotency module on its default driver.
 func newGuard(t *testing.T) subscriber.Guard {
 	t.Helper()
 
@@ -36,63 +36,63 @@ func newGuard(t *testing.T) subscriber.Guard {
 		idempotency.Deps{Now: time.Now},
 	)
 	if err != nil {
-		t.Fatalf("montage de l'idempotence: %v", err)
+		t.Fatalf("mounting idempotency: %v", err)
 	}
 	return subscriber.Guard{Reserve: mod.Reserve, Complete: mod.Complete, Release: mod.Release}
 }
 
-// envelope forge une enveloppe de transport.
+// envelope forges a transport envelope.
 func envelope(id string) messaging.Envelope {
 	return messaging.Envelope{
 		ID:          id,
 		Type:        eventType,
-		AggregateID: "compte-1",
-		Payload:     []byte(`{"user_id":"compte-1","email":"alice@example.com"}`),
+		AggregateID: "account-1",
+		Payload:     []byte(`{"user_id":"account-1","email":"alice@example.com"}`),
 		OccurredAt:  time.Date(2026, time.July, 28, 9, 0, 0, 0, time.UTC),
 	}
 }
 
-// compteur retient combien de fois le gestionnaire a été appelé.
+// counter retains how many times the handler has been called.
 //
-// C'est la seule chose que ces tests mesurent vraiment : « l'effet a-t-il eu
-// lieu, et combien de fois ». Un compteur sûr en concurrence, parce qu'un des
-// tests rejoue depuis plusieurs goroutines.
-type compteur struct {
-	mu      sync.Mutex
-	appels  int
-	erreur  error
-	contexs []context.Context
+// It is the only thing these tests really measure: "did the effect take place,
+// and how many times". A concurrency-safe counter, because one of the tests
+// replays from several goroutines.
+type counter struct {
+	mu       sync.Mutex
+	calls    int
+	failure  error
+	contexts []context.Context
 }
 
-// handler rend un gestionnaire qui compte ses appels.
-func (c *compteur) handler() messaging.Handler {
+// handler returns a handler that counts its calls.
+func (c *counter) handler() messaging.Handler {
 	return func(ctx context.Context, _ messaging.Envelope) error {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		c.appels++
-		c.contexs = append(c.contexs, ctx)
-		return c.erreur
+		c.calls++
+		c.contexts = append(c.contexts, ctx)
+		return c.failure
 	}
 }
 
-// total rend le nombre d'appels observés.
-func (c *compteur) total() int {
+// total returns the number of observed calls.
+func (c *counter) total() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.appels
+	return c.calls
 }
 
-// dernierContexte rend le contexte reçu au dernier appel.
-func (c *compteur) dernierContexte(t *testing.T) context.Context {
+// lastContext returns the context received on the last call.
+func (c *counter) lastContext(t *testing.T) context.Context {
 	t.Helper()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.contexs) == 0 {
-		t.Fatal("le gestionnaire n'a jamais été appelé : le test n'observe rien")
+	if len(c.contexts) == 0 {
+		t.Fatal("the handler has never been called: the test observes nothing")
 	}
-	return c.contexs[len(c.contexs)-1]
+	return c.contexts[len(c.contexts)-1]
 }
 
-// echouant rend un compteur dont le gestionnaire échoue toujours.
-func echouant(err error) *compteur { return &compteur{erreur: err} }
+// failing returns a counter whose handler always fails.
+func failing(err error) *counter { return &counter{failure: err} }

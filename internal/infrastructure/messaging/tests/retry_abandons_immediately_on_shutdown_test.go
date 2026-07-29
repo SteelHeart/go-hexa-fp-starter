@@ -10,21 +10,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestRetryAbandonsImmediatelyOnShutdown : l'arrêt ne se négocie pas.
+// TestRetryAbandonsImmediatelyOnShutdown: shutdown is not negotiable.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un `time.Sleep` à la place du `select` sur `ctx.Done()` rendrait l'attente
-// insensible à l'annulation. À l'arrêt du worker, chaque publication en cours
-// tiendrait son recul jusqu'au bout ; l'orchestrateur, lui, n'attend pas — il
-// envoie SIGKILL après son délai de grâce.
+// A `time.Sleep` in place of the `select` on `ctx.Done()` would make the wait
+// insensitive to cancellation. At the shutdown of the worker, every publication
+// in flight would hold its backoff to the end; the orchestrator, for its part,
+// does not wait — it sends SIGKILL after its grace period.
 //
-// Conséquence exacte : un message publié chez le broker mais JAMAIS marqué dans
-// l'outbox. C'est le seul cas de ce socle qui produit un doublon chez le
-// consommateur, et il naîtrait à chaque déploiement.
+// The exact consequence: a message published to the broker but NEVER marked in
+// the outbox. It is the only case of this starter that produces a duplicate at
+// the consumer, and it would be born at every deployment.
 //
-// Le test mesure la DURÉE : un recul de dix secondes doit rendre la main
-// immédiatement. Il n'y a pas d'autre façon de distinguer les deux écritures.
+// The test measures the DURATION: a ten-second backoff must hand back control
+// immediately. There is no other way to tell the two writings apart.
 func TestRetryAbandonsImmediatelyOnShutdown(t *testing.T) {
 	t.Parallel()
 
@@ -33,16 +33,16 @@ func TestRetryAbandonsImmediatelyOnShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// L'annulation part APRÈS le premier essai : c'est l'ATTENTE entre deux
-	// essais qu'on vérifie, pas le refus d'entrer dans la boucle.
+	// The cancellation leaves AFTER the first attempt: it is the WAIT between
+	// two attempts that is checked, not the refusal to enter the loop.
 	//
-	// sync.Once plutôt qu'une attente active sur un compteur : le publieur et
-	// l'annuleur tourneraient sur des goroutines différentes, et le compteur
-	// partagé serait lui-même la course que ce fichier prétend chasser.
+	// sync.Once rather than a busy wait on a counter: the publisher and the
+	// canceller would run on different goroutines, and the shared counter would
+	// itself be the race this file claims to hunt.
 	var once sync.Once
 	always := func(context.Context, messaging.Envelope) error {
 		once.Do(cancel)
-		return errors.New("broker injoignable")
+		return errors.New("broker unreachable")
 	}
 
 	publish := messaging.WithRetry(always, 5, backoff)
@@ -52,10 +52,10 @@ func TestRetryAbandonsImmediatelyOnShutdown(t *testing.T) {
 	elapsed := time.Since(started)
 
 	if !errors.Is(err, context.Canceled) {
-		t.Errorf("erreur rendue = %v, attendu context.Canceled", err)
+		t.Errorf("returned error = %v, want context.Canceled", err)
 	}
 	if elapsed >= backoff {
-		t.Errorf("la publication a tenu son recul (%s) malgré l'annulation — "+
-			"le worker serait tué au milieu, et un message publié resterait non marqué", elapsed)
+		t.Errorf("the publication held its backoff (%s) despite the cancellation — "+
+			"the worker would be killed midway, and a published message would stay unmarked", elapsed)
 	}
 }

@@ -1,8 +1,8 @@
-// Package cache fournit un cache typé au-dessus de Redis.
+// Package cache provides a typed cache on top of Redis.
 //
-// L'API est faite de types fonction (Getter, Setter) pour qu'un décorateur
-// puisse les recevoir sans dépendre de Redis, et qu'un test les remplace par
-// une closure sur une map.
+// The API is made of function types (Getter, Setter) so that a decorator can
+// receive them without depending on Redis, and so that a test can replace them
+// with a closure over a map.
 package cache
 
 import (
@@ -18,18 +18,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// Getter lit une valeur du cache. Une absence n'est pas une erreur : c'est le
-// cas nominal d'un cache.
+// Getter reads a value from the cache. An absence is not an error: it is the
+// nominal case of a cache.
 type Getter[V any] = func(ctx context.Context, key string) fp.Option[V]
 
-// Setter écrit une valeur dans le cache. Elle ne retourne rien : un cache qui
-// tombe ne doit jamais faire échouer une requête métier.
+// Setter writes a value into the cache. It returns nothing: a cache that goes
+// down must never make a business request fail.
 type Setter[V any] = func(ctx context.Context, key string, value V)
 
-// Deleter invalide une entrée.
+// Deleter invalidates an entry.
 type Deleter = func(ctx context.Context, key string)
 
-// New ouvre le client Redis et vérifie qu'il répond.
+// New opens the Redis client and checks that it answers.
 func New(ctx context.Context, cfg config.Cache) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
@@ -40,16 +40,16 @@ func New(ctx context.Context, cfg config.Cache) (*redis.Client, error) {
 	defer cancel()
 	if err := client.Ping(pingCtx).Err(); err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("cache injoignable: %w", err)
+		return nil, fmt.Errorf("cache unreachable: %w", err)
 	}
 	return client, nil
 }
 
-// JSON construit un trio lecture/écriture/invalidation sérialisé en JSON.
+// JSON builds a read/write/invalidate trio serialised as JSON.
 //
-// `namespace` préfixe toutes les clés : c'est ce qui permet de purger un
-// domaine entier sans toucher aux autres, et d'éviter les collisions entre
-// features qui utiliseraient la même clé métier.
+// `namespace` prefixes every key: that is what allows a whole domain to be
+// purged without touching the others, and what avoids collisions between
+// features that would use the same business key.
 func JSON[V any](
 	client *redis.Client,
 	namespace string,
@@ -60,8 +60,8 @@ func JSON[V any](
 	get = func(ctx context.Context, key string) fp.Option[V] {
 		raw, err := client.Get(ctx, full(key)).Bytes()
 		if err != nil {
-			// Absence comme panne : dans les deux cas on n'a pas la valeur, et
-			// l'appelant doit se rabattre sur la source de vérité.
+			// Absence like breakdown: in both cases we do not have the value,
+			// and the caller must fall back on the source of truth.
 			return fp.None[V]()
 		}
 		var value V
@@ -86,5 +86,5 @@ func JSON[V any](
 	return get, set, del
 }
 
-// IsMiss indique une absence d'entrée, par opposition à une panne du cache.
+// IsMiss reports a missing entry, as opposed to a cache breakdown.
 func IsMiss(err error) bool { return errors.Is(err, redis.Nil) }

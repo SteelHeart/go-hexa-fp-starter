@@ -7,48 +7,47 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
-// TestTheMiddlewareStackIsActuallyMounted : la pile est BRANCHÉE, pas seulement écrite.
+// TestTheMiddlewareStackIsActuallyMounted: the stack is WIRED, not merely written.
 //
-// # Pourquoi ce test existe séparément de ceux du paquet middleware
+// # Why this test exists separately from those of the middleware package
 //
-// `internal/pkg/middleware/tests` prouve que chaque garde FONCTIONNE. Il ne prouve
-// pas qu'elle est MONTÉE. Ce sont deux défauts distincts, et le second ne laisse
-// aucune trace : un `mux.Use(...)` dont une ligne a disparu à la fusion produit un
-// service parfaitement fonctionnel, simplement sans protection.
+// `internal/pkg/middleware/tests` proves that each guard WORKS. It does not
+// prove that it is MOUNTED. These are two distinct defects, and the second
+// leaves no trace: a `mux.Use(...)` from which one line disappeared at merge
+// time produces a perfectly functional service, simply without protection.
 //
-// Aucun test du paquet middleware ne peut l'attraper — ils construisent la pile
-// eux-mêmes. C'est donc ici, et nulle part ailleurs.
+// No test of the middleware package can catch it — they build the stack
+// themselves. So it is here, and nowhere else.
 //
-// Ce test vérifie ce qui est OBSERVABLE dans une réponse : l'identifiant de
-// corrélation et l'origine refusée. La limitation de débit et la borne de corps
-// ont leurs propres tests ; les rejouer ici les rendrait dépendants de la
-// configuration de test.
+// This test checks what is OBSERVABLE in a response: the correlation identifier
+// and the refused origin. Rate limiting and the body bound have their own
+// tests; replaying them here would make them depend on the test configuration.
 func TestTheMiddlewareStackIsActuallyMounted(t *testing.T) {
 	t.Parallel()
 
 	headers := get(t, config.EnvProduction, nil, "/healthz").Header()
 
-	// RequestID : présent en sortie, toujours. Sans lui, aucune ligne de journal
-	// ne peut être reliée à une requête.
+	// RequestID: present in the output, always. Without it, no log line can be
+	// linked back to a request.
 	if headers.Get(middleware.RequestIDHeader) == "" {
-		t.Errorf("%s absent de la réponse — middleware.RequestID() n'est pas monté",
+		t.Errorf("%s missing from the response — middleware.RequestID() is not mounted",
 			middleware.RequestIDHeader)
 	}
 }
 
-// TestCORSIsMountedAndDeniesAnUnlistedOrigin : la garde d'origine est en place.
+// TestCORSIsMountedAndDeniesAnUnlistedOrigin: the origin guard is in place.
 //
-// La configuration de test n'autorise que `https://app.example.com`. Une réponse
-// qui accorderait l'accès à une autre origine signalerait soit un CORS absent de
-// la pile, soit un CORS monté avec la mauvaise liste.
+// The test configuration allows only `https://app.example.com`. A response that
+// granted access to another origin would signal either a CORS missing from the
+// stack, or a CORS mounted with the wrong list.
 func TestCORSIsMountedAndDeniesAnUnlistedOrigin(t *testing.T) {
 	t.Parallel()
 
 	rec := get(t, config.EnvProduction, nil, "/healthz")
 
-	// Aucune origine n'a été envoyée : aucun en-tête d'autorisation ne doit
-	// apparaître. Un `*` ici serait une ouverture totale.
+	// No origin was sent: no authorisation header must appear. A `*` here would
+	// be a total opening.
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Errorf("Access-Control-Allow-Origin = %q sans en-tête Origin dans la requête", got)
+		t.Errorf("Access-Control-Allow-Origin = %q without an Origin header in the request", got)
 	}
 }

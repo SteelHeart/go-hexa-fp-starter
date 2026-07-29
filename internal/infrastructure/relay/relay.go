@@ -1,22 +1,22 @@
-// Package relay branche le dépileur de l'outbox sur le transport d'événements.
+// Package relay plugs the outbox dispatcher onto the event transport.
 //
-// # Pourquoi ce paquet existe, et pourquoi ICI
+// # Why this package exists, and why HERE
 //
-// L'outbox est un module NOYAU : elle ne doit importer aucune infrastructure,
-// sous peine de ne plus pouvoir être extraite en module Go indépendant
-// (ADR 012). Le transport, lui, ignore tout de l'outbox — et c'est bien ainsi :
-// il publie des enveloppes, sans savoir d'où elles viennent.
+// The outbox is a CORE module: it must import no infrastructure, on pain of no
+// longer being extractable into an independent Go module (ADR 012). The
+// transport, for its part, knows nothing of the outbox — and rightly so: it
+// publishes envelopes, without knowing where they come from.
 //
-// Quelqu'un doit pourtant les relier. Ce paquet est ce quelqu'un : il consomme
-// les deux et n'est consommé que par un composition root. La dépendance va donc
-// de l'infrastructure vers le noyau, jamais l'inverse.
+// Someone must nonetheless connect them. This package is that someone: it
+// consumes both and is consumed only by a composition root. The dependency
+// therefore goes from the infrastructure towards the core, never the reverse.
 //
-// Il vit hors de `cmd/` pour une raison précise : un mappage champ à champ
-// paraît trivial et ne l'est pas. Oublier `Payload` publierait des enveloppes
-// vides ; oublier `TraceParent` couperait la trace entre producteur et
-// consommateur. Dans les deux cas le dépileur rapporterait `published`, le
-// message serait marqué traité, et rien ne signalerait la perte. Ce code doit
-// donc être testable — et du code dans `main` ne l'est qu'à moitié.
+// It lives outside `cmd/` for a precise reason: a field-to-field mapping looks
+// trivial and is not. Forgetting `Payload` would publish empty envelopes;
+// forgetting `TraceParent` would cut the trace between producer and consumer.
+// In both cases the dispatcher would report `published`, the message would be
+// marked as handled, and nothing would signal the loss. This code must
+// therefore be testable — and code inside `main` is only half testable.
 package relay
 
 import (
@@ -28,30 +28,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// FromOutbox construit le gestionnaire que le dépileur appelle pour chaque
-// message réservé.
+// FromOutbox builds the handler that the dispatcher calls for each claimed
+// message.
 //
-// L'erreur de publication remonte TELLE QUELLE. C'est essentiel : le recul
-// exponentiel et l'abandon après N essais sont décidés par une politique pure et
-// testée, dans `outbox/application`. Avaler l'erreur ici ferait marquer le
-// message comme traité alors que rien n'est parti — donc perdu définitivement,
-// sans trace. Et la rattraper pour décider soi-même dupliquerait la politique,
-// avec la certitude que les deux divergeront.
+// The publication error goes back up AS IS. That is essential: the exponential
+// backoff and the abandonment after N attempts are decided by a pure and tested
+// policy, in `outbox/application`. Swallowing the error here would mark the
+// message as handled although nothing has left — hence definitively lost,
+// without a trace. And catching it to decide by itself would duplicate the
+// policy, with the certainty that the two will diverge.
 func FromOutbox(publish messaging.Publisher) outboxports.Handler {
 	return func(ctx context.Context, msg outboxdomain.Message) error {
 		if err := publish(ctx, envelopeOf(msg)); err != nil {
-			return fmt.Errorf("publication de %s: %w", msg.Type, err)
+			return fmt.Errorf("publication of %s: %w", msg.Type, err)
 		}
 		return nil
 	}
 }
 
-// envelopeOf traduit un message persisté en enveloppe de transport.
+// envelopeOf translates a persisted message into a transport envelope.
 //
-// `OccurredAt` porte la date de CRÉATION du message, pas celle de sa
-// publication : un consommateur doit pouvoir ordonner les faits selon le moment
-// où ils se sont produits, et non selon le moment où le dépileur les a sortis.
-// Après une panne du dépileur, les deux diffèrent de plusieurs heures.
+// `OccurredAt` carries the CREATION date of the message, not that of its
+// publication: a consumer must be able to order facts according to the moment
+// they occurred, and not according to the moment the dispatcher took them out.
+// After a dispatcher breakdown, the two differ by several hours.
 func envelopeOf(msg outboxdomain.Message) messaging.Envelope {
 	return messaging.Envelope{
 		ID:          msg.ID.String(),

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Paramètres du format d'encodage Argon2id.
+// Parameters of the Argon2id encoding format.
 const (
 	argon2SaltLen = 16
 	argon2KeyLen  = 32
@@ -19,51 +19,51 @@ const (
 	argon2Parts   = 6
 )
 
-// Bornes du condensé décodé.
+// Bounds of the decoded digest.
 //
-// Un condensé est censé venir de notre propre base, mais rien ne le garantit : une
-// reprise de données, une colonne mal migrée, un magasin externe suffisent à y
-// glisser autre chose. Sans borne, la longueur de clé annoncée pilote directement
-// une allocation dans argon2.IDKey — un « condensé » forgé annonçant quatre
-// gigaoctets ferait tomber le processus à la première vérification.
+// A digest is supposed to come from our own database, but nothing guarantees it:
+// a data import, a badly migrated column, an external store are enough to slip
+// something else in. Without a bound, the announced key length directly drives
+// an allocation in argon2.IDKey — a forged "digest" announcing four gigabytes
+// would bring the process down on the first verification.
 //
-// Les bornes couvrent large pour ne pas invalider un condensé légitime produit
-// avec une autre longueur de clé, tout en fermant le cas absurde.
+// The bounds are generous so as not to invalidate a legitimate digest produced
+// with another key length, while still closing the absurd case.
 const (
 	argon2MinKeyLen = 16
 	argon2MaxKeyLen = 64
 )
 
-// ErrInvalidHash signale un condensé illisible : format inconnu, version
-// inattendue, ou encodage corrompu.
-var ErrInvalidHash = errors.New("condensé de mot de passe invalide")
+// ErrInvalidHash reports an unreadable digest: unknown format, unexpected
+// version, or corrupted encoding.
+var ErrInvalidHash = errors.New("invalid password digest")
 
-// Argon2Params porte le coût du hachage.
+// Argon2Params carries the hashing cost.
 //
-// Augmenter Memory est ce qui protège réellement contre le calcul massivement
-// parallèle : augmenter uniquement Iterations coûte autant à l'attaquant sur GPU
-// qu'au serveur.
+// Raising Memory is what really protects against massively parallel computation:
+// raising Iterations alone costs an attacker on GPU as much as it costs the
+// server.
 type Argon2Params struct {
 	MemoryKiB  uint32
 	Iterations uint32
 	Threads    uint8
 }
 
-// Hasher hache et vérifie des mots de passe avec Argon2id.
+// Hasher hashes and verifies passwords with Argon2id.
 type Hasher struct{ params Argon2Params }
 
-// NewHasher construit un hacheur.
+// NewHasher builds a hasher.
 func NewHasher(params Argon2Params) Hasher { return Hasher{params: params} }
 
-// Hash produit un condensé auto-décrit : le format embarque la version et les
-// paramètres, ce qui permet d'augmenter le coût sans invalider les condensés
-// existants.
+// Hash produces a self-describing digest: the format embeds the version and the
+// parameters, which allows the cost to be raised without invalidating existing
+// digests.
 //
-//	$argon2id$v=19$m=65536,t=3,p=4$<sel b64>$<clé b64>
+//	$argon2id$v=19$m=65536,t=3,p=4$<salt b64>$<key b64>
 func (h Hasher) Hash(plain string) (string, error) {
 	salt := make([]byte, argon2SaltLen)
 	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("génération du sel: %w", err)
+		return "", fmt.Errorf("salt generation: %w", err)
 	}
 	key := argon2.IDKey(
 		[]byte(plain), salt,
@@ -77,17 +77,17 @@ func (h Hasher) Hash(plain string) (string, error) {
 	), nil
 }
 
-// Verify compare un mot de passe en clair à un condensé, en temps constant.
+// Verify compares a plaintext password against a digest, in constant time.
 //
-// Une erreur de format et un mot de passe incorrect sont deux choses
-// différentes : la première est un défaut de données, la seconde un cas nominal.
+// A format error and an incorrect password are two different things: the first
+// is a data defect, the second a nominal case.
 func (h Hasher) Verify(plain, encoded string) (bool, error) {
 	decoded, err := decodeHash(encoded)
 	if err != nil {
 		return false, err
 	}
-	// La conversion est sûre : decodeHash a déjà refusé toute longueur hors bornes.
-	keyLen := uint32(len(decoded.key)) //nolint:gosec // borné par decodeHash
+	// The conversion is safe: decodeHash has already refused any out-of-bounds length.
+	keyLen := uint32(len(decoded.key)) //nolint:gosec // bounded by decodeHash
 	candidate := argon2.IDKey(
 		[]byte(plain), decoded.salt,
 		decoded.params.Iterations, decoded.params.MemoryKiB, decoded.params.Threads, keyLen,
@@ -95,25 +95,25 @@ func (h Hasher) Verify(plain, encoded string) (bool, error) {
 	return subtle.ConstantTimeCompare(decoded.key, candidate) == 1, nil
 }
 
-// NeedsRehash indique si un condensé a été produit avec un coût inférieur au
-// coût courant. À appeler après une vérification réussie pour remonter le coût
-// de façon transparente.
+// NeedsRehash reports whether a digest was produced with a cost lower than the
+// current one. To be called after a successful verification, so as to raise the
+// cost transparently.
 func (h Hasher) NeedsRehash(encoded string) bool {
 	decoded, err := decodeHash(encoded)
 	if err != nil {
-		// Un condensé illisible mérite d'être refait, pas d'être conservé.
+		// An unreadable digest deserves to be redone, not kept.
 		return true
 	}
 	return decoded.params.MemoryKiB < h.params.MemoryKiB ||
 		decoded.params.Iterations < h.params.Iterations
 }
 
-// decodedHash porte les trois morceaux d'un condensé.
+// decodedHash carries the three pieces of a digest.
 //
-// Regroupés en type plutôt qu'en trois valeurs de retour : ils n'ont de sens
-// qu'ensemble — vérifier une clé avec le sel d'un autre condensé ne veut rien dire —
-// et trois retours de même forme (`[]byte`, `[]byte`) s'inversent sans que le
-// compilateur bronche.
+// Grouped into a type rather than three return values: they only mean something
+// together — verifying a key with the salt of another digest means nothing —
+// and three returns of the same shape (`[]byte`, `[]byte`) get swapped without
+// the compiler flinching.
 type decodedHash struct {
 	params Argon2Params
 	salt   []byte
@@ -123,7 +123,7 @@ type decodedHash struct {
 func decodeHash(encoded string) (decodedHash, error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != argon2Parts || parts[1] != "argon2id" {
-		return decodedHash{}, fmt.Errorf("%w: préfixe", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: prefix", ErrInvalidHash)
 	}
 	var version int
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2Version {
@@ -134,18 +134,18 @@ func decodeHash(encoded string) (decodedHash, error) {
 		parts[3], "m=%d,t=%d,p=%d",
 		&params.MemoryKiB, &params.Iterations, &params.Threads,
 	); err != nil {
-		return decodedHash{}, fmt.Errorf("%w: paramètres", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: parameters", ErrInvalidHash)
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return decodedHash{}, fmt.Errorf("%w: sel", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: salt", ErrInvalidHash)
 	}
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return decodedHash{}, fmt.Errorf("%w: clé", ErrInvalidHash)
+		return decodedHash{}, fmt.Errorf("%w: key", ErrInvalidHash)
 	}
 	if len(key) < argon2MinKeyLen || len(key) > argon2MaxKeyLen {
-		return decodedHash{}, fmt.Errorf("%w: longueur de clé (%d octets)", ErrInvalidHash, len(key))
+		return decodedHash{}, fmt.Errorf("%w: key length (%d bytes)", ErrInvalidHash, len(key))
 	}
 	return decodedHash{params: params, salt: salt, key: key}, nil
 }

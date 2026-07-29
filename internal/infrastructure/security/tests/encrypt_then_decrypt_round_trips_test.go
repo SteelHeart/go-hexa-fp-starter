@@ -6,31 +6,31 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 )
 
-// TestEncryptThenDecryptRoundTrips : le chemin nominal du chiffrement au repos.
+// TestEncryptThenDecryptRoundTrips: the nominal path of encryption at rest.
 //
-// Une donnée chiffrée qu'on ne sait plus déchiffrer est une donnée PERDUE, sans
-// message d'erreur au moment où on la perd. C'est le seul test qui l'empêche.
+// Encrypted data that can no longer be decrypted is LOST data, with no error
+// message at the moment it is lost. This is the only test that prevents it.
 func TestEncryptThenDecryptRoundTrips(t *testing.T) {
 	t.Parallel()
 
-	cipher, err := security.NewCipher(cleAES())
+	cipher, err := security.NewCipher(aesKey())
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
 
-	for _, clair := range []string{
-		"", "a", "une donnée personnelle", "accents éàü et symboles ✓",
+	for _, plaintext := range []string{
+		"", "a", "some personal data", "accents éàü and symbols ✓",
 	} {
-		chiffre, err := cipher.Encrypt([]byte(clair))
+		ciphertext, err := cipher.Encrypt([]byte(plaintext))
 		if err != nil {
-			t.Fatalf("Encrypt(%q): %v", clair, err)
+			t.Fatalf("Encrypt(%q): %v", plaintext, err)
 		}
-		dechiffre, err := cipher.Decrypt(chiffre)
+		decrypted, err := cipher.Decrypt(ciphertext)
 		if err != nil {
-			t.Fatalf("Decrypt(%q): %v", clair, err)
+			t.Fatalf("Decrypt(%q): %v", plaintext, err)
 		}
-		if string(dechiffre) != clair {
-			t.Errorf("aller-retour = %q, attendu %q", dechiffre, clair)
+		if string(decrypted) != plaintext {
+			t.Errorf("round trip = %q, want %q", decrypted, plaintext)
 		}
 	}
 }

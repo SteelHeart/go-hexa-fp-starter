@@ -6,33 +6,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 )
 
-// TestNeedsRehashDetectsAnOutdatedCost : un condensé produit avec un coût inférieur
-// au coût courant doit être refait.
+// TestNeedsRehashDetectsAnOutdatedCost: a digest produced with a cost lower than
+// the current one must be redone.
 //
-// C'est ce qui permet de remonter le coût sans invalider les comptes existants :
-// après une vérification réussie, on rehache avec les paramètres du jour. Sans
-// cela, augmenter le coût ne protégerait QUE les nouveaux comptes — c'est-à-dire
-// pas ceux qui existent depuis assez longtemps pour avoir fuité.
+// This is what makes it possible to raise the cost without invalidating existing
+// accounts: after a successful verification, the password is rehashed with
+// today's parameters. Without it, raising the cost would protect ONLY the new
+// accounts — that is, not the ones that have existed long enough to have leaked.
 //
-// Un condensé illisible rend `true` : mieux vaut le refaire que le conserver.
+// An unreadable digest returns `true`: better to redo it than to keep it.
 func TestNeedsRehashDetectsAnOutdatedCost(t *testing.T) {
 	t.Parallel()
 
-	ancien := hash(t, "correct cheval batterie agrafe")
+	old := hash(t, "correct horse battery staple")
 
-	memeCout := newHasher()
-	if memeCout.NeedsRehash(ancien) {
-		t.Error("un condensé produit au coût courant ne doit pas être refait")
+	sameCost := newHasher()
+	if sameCost.NeedsRehash(old) {
+		t.Error("a digest produced at the current cost must not be redone")
 	}
 
-	plusCher := security.NewHasher(security.Argon2Params{
+	costlier := security.NewHasher(security.Argon2Params{
 		MemoryKiB: testParams().MemoryKiB * 4, Iterations: 2, Threads: 1,
 	})
-	if !plusCher.NeedsRehash(ancien) {
-		t.Error("un condensé produit à un coût inférieur doit être refait")
+	if !costlier.NeedsRehash(old) {
+		t.Error("a digest produced at a lower cost must be redone")
 	}
 
-	if !memeCout.NeedsRehash("condensé illisible") {
-		t.Error("un condensé illisible doit être refait, pas conservé")
+	if !sameCost.NeedsRehash("unreadable digest") {
+		t.Error("an unreadable digest must be redone, not kept")
 	}
 }

@@ -1,9 +1,9 @@
 package config
 
-// Environment nomme l'environnement d'exécution.
+// Environment names the runtime environment.
 type Environment string
 
-// Les environnements reconnus. Toute autre valeur refuse le démarrage.
+// The recognised environments. Any other value refuses to start.
 const (
 	EnvDevelopment Environment = "development"
 	EnvTest        Environment = "test"
@@ -11,12 +11,12 @@ const (
 	EnvProduction  Environment = "production"
 )
 
-// IsProduction indique si l'environnement exige les protections maximales.
+// IsProduction tells whether the environment requires the maximum protections.
 func (e Environment) IsProduction() bool { return e == EnvProduction }
 
-// IsDevelopment indique si l'on est en développement local.
+// IsDevelopment tells whether we are in local development.
 func (e Environment) IsDevelopment() bool { return e == EnvDevelopment }
 
-// IsLocal regroupe développement et test : les durcissements réseau ne s'y
-// appliquent pas, mais AUCUN affaiblissement de sécurité n'y est permis.
+// IsLocal groups development and test: the network hardenings do not apply
+// there, but NO weakening of security is permitted there either.
 func (e Environment) IsLocal() bool { return e == EnvDevelopment || e == EnvTest }

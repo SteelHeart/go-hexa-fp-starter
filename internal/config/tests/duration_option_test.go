@@ -7,9 +7,9 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestDurationOption : les options de pilote ne sont pas typées à la lecture du
-// fichier. Cet accesseur est le seul endroit où une durée d'option est
-// interprétée, donc le seul endroit à tester — tous les pilotes en héritent.
+// TestDurationOption: driver options are not typed when the file is read. This
+// accessor is the only place where an option duration is interpreted, hence the
+// only place to test — every driver inherits from it.
 func TestDurationOption(t *testing.T) {
 	t.Parallel()
 
@@ -20,17 +20,17 @@ func TestDurationOption(t *testing.T) {
 		want    time.Duration
 		refused bool
 	}{
-		"absente : valeur par défaut":   {options: nil, want: fallback},
-		"nulle : valeur par défaut":     {options: map[string]any{"ttl": nil}, want: fallback},
-		"chaîne avec unité":             {options: map[string]any{"ttl": "90m"}, want: 90 * time.Minute},
-		"entier : des secondes":         {options: map[string]any{"ttl": 30}, want: 30 * time.Second},
-		"entier 64 bits : des secondes": {options: map[string]any{"ttl": int64(45)}, want: 45 * time.Second},
-		"unité manquante : refus":       {options: map[string]any{"ttl": "24"}, refused: true},
-		"négative : refus":              {options: map[string]any{"ttl": "-1h"}, refused: true},
-		"nulle en durée : refus":        {options: map[string]any{"ttl": "0s"}, refused: true},
-		"type inattendu : refus":        {options: map[string]any{"ttl": true}, refused: true},
-		"décimal non supporté : refus":  {options: map[string]any{"ttl": 1.5}, refused: true},
-		"autre clé : sans effet":        {options: map[string]any{"namespace": "x"}, want: fallback},
+		"absent: default value":          {options: nil, want: fallback},
+		"null: default value":            {options: map[string]any{"ttl": nil}, want: fallback},
+		"string with a unit":             {options: map[string]any{"ttl": "90m"}, want: 90 * time.Minute},
+		"integer: seconds":               {options: map[string]any{"ttl": 30}, want: 30 * time.Second},
+		"64-bit integer: seconds":        {options: map[string]any{"ttl": int64(45)}, want: 45 * time.Second},
+		"missing unit: refusal":          {options: map[string]any{"ttl": "24"}, refused: true},
+		"negative: refusal":              {options: map[string]any{"ttl": "-1h"}, refused: true},
+		"zero as a duration: refusal":    {options: map[string]any{"ttl": "0s"}, refused: true},
+		"unexpected type: refusal":       {options: map[string]any{"ttl": true}, refused: true},
+		"decimal not supported: refusal": {options: map[string]any{"ttl": 1.5}, refused: true},
+		"another key: no effect":         {options: map[string]any{"namespace": "x"}, want: fallback},
 	}
 
 	for name, tc := range cases {
@@ -40,15 +40,15 @@ func TestDurationOption(t *testing.T) {
 			got, err := mod.DurationOption("ttl", fallback)
 			if tc.refused {
 				if err == nil {
-					t.Fatalf("attendu un refus, reçu %v", got)
+					t.Fatalf("want a refusal, got %v", got)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("refus inattendu: %v", err)
+				t.Fatalf("unexpected refusal: %v", err)
 			}
 			if got != tc.want {
-				t.Errorf("DurationOption = %v, attendu %v", got, tc.want)
+				t.Errorf("DurationOption = %v, want %v", got, tc.want)
 			}
 		})
 	}

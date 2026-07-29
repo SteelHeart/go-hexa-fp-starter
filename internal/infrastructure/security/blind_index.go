@@ -5,12 +5,12 @@ import (
 	"encoding/base64"
 )
 
-// BlindIndex produit un index déterministe permettant de rechercher une valeur
-// chiffrée sans la déchiffrer.
+// BlindIndex produces a deterministic index that allows an encrypted value to
+// be searched for without decrypting it.
 //
-// ⚠️ Déterministe, donc il fuit l'égalité : deux valeurs identiques ont le même
-// index. Acceptable pour une recherche exacte sur un champ à forte entropie,
-// jamais pour un champ à faible cardinalité.
+// ⚠️ Deterministic, therefore it leaks equality: two identical values have the
+// same index. Acceptable for an exact search on a high-entropy field, never for
+// a low-cardinality field.
 func BlindIndex(key, value []byte) string {
 	mac := sha256.Sum256(append(append([]byte(nil), key...), value...))
 	return base64.RawURLEncoding.EncodeToString(mac[:])
