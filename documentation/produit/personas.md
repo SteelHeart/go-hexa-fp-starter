@@ -41,6 +41,24 @@ gardes :
 
 ---
 
+## Les preuves — mesurées, pas affirmées
+
+Depuis le **2026-07-29**, chaque persona a une **preuve tangible** : un mini-projet de liste de
+tâches construit avec `hexa new`, puis mesuré contre le tableau de critères de sa propre persona
+(issue #138). Voir [`preuves/`](preuves/README.md).
+
+| Persona | Verdict mesuré |
+|---|---|
+| [P1](preuves/p1-equipe-produit.md) · **PRIMAIRE** | ✅ trois critères sur quatre |
+| [P2](preuves/p2-fort-trafic.md) | 🔴 quatre sur cinq rouges |
+| [P3](preuves/p3-adoption-externe.md) | 🔴 impossible en l'état |
+| [P4](preuves/p4-exploitant.md) | ✅ cinq sur cinq |
+| [P5](preuves/p5-decideur.md) | ⚠️ trois sur quatre |
+
+⚠️ **Ce document affirme, les preuves mesurent.** Quand les deux divergent, c'est la preuve qui a
+raison — et deux critères de cette grille ont déjà été corrigés par elles : celui de P1 sur les
+fichiers du framework, et celui de P2 sur la taille d'ingestion.
+
 ## Les personas
 
 ### P1 — L'équipe produit d'ImpactOne · **PRIMAIRE**
@@ -55,7 +73,7 @@ la forme du socle se dégrade au bout de trois mois.
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Fichiers du **framework** à modifier pour ajouter un module métier | **0** | **0** ✅ — ADR 014. Mesuré : aucun fichier de `internal/config/`, `internal/pkg/` ni `internal/infrastructure/` ne nomme un module métier. Ajouter `billing` demande son dossier, **une ligne** dans `internal/modules/catalog.go` et son montage dans le composition root — trois emplacements qui appartiennent tous à l'**application** |
+| Fichiers du **framework** à modifier **À LA MAIN** pour ajouter un module métier | **0** | **0** ✅ — ADR 014. Mesuré : aucun fichier de `internal/config/`, `internal/pkg/` ni `internal/infrastructure/` ne nomme un module métier. Ajouter `billing` demande son dossier, **une ligne** dans `internal/modules/catalog.go` et son montage dans le composition root — trois emplacements qui appartiennent tous à l'**application** |
 | Commandes qui **créent** un module | ≥ 1 | **1** ✅ — `hexa make:feature <nom>` écrit l'anatomie complète, la teste, et déclare la règle d'étanchéité `arch-go` du module neuf |
 | Délai avant premier succès depuis un clone nu | < 10 min | ~5 min ✅ — et vrai **avec une base** depuis #84 : `task init && task up` échouait jusque-là sur un volume neuf |
 | Modules métier livrables sans authentification | 0 | tous 🔴 — `auth` n'existe pas (#11) |
@@ -90,7 +108,7 @@ tenue, plusieurs frontends simultanés, configuration modifiable à volonté.
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
 | Réponse en flux possible | oui | **non** — `write_timeout: 10s` la tue |
-| Taille d'ingestion | configurable | **1 MiB en dur** (`max_body_bytes`) |
+| Taille d'ingestion | configurable | **non** — `max_body_bytes` existe, est validée, et **ne produit aucun effet** : `huma.DefaultConfig` porte sa propre borne, non reliée (#141, mesuré sur la preuve P2) |
 | File de travaux longs | oui | **aucune** — `cmd/worker` ne dépile que l'outbox |
 | Benchmarks de non-régression | ≥ 1 | **0** — `grep -rl "func Benchmark"` ne rend aucun fichier |
 | Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`** |
