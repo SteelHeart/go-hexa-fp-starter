@@ -8,8 +8,22 @@ import (
 	"fmt"
 
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
+	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
+
+// BootstrapRole est le rôle accordé au compte d'amorçage.
+//
+// # Pourquoi l'amorçage accorde des droits, et pas seulement un compte
+//
+// Un compte sans rôle n'accorde RIEN — deny par défaut. L'amorçage produirait
+// donc un administrateur qui reçoit 403 sur chaque route d'administration : le
+// délai avant premier succès resterait infini, déplacé d'un cran.
+//
+// Les permissions accordées sont celles de la surface d'administration, et rien
+// de plus. En particulier, ce rôle ne présume d'aucun droit MÉTIER : une
+// application qui monte ce socle compose les siens.
+const BootstrapRole = "admin"
 
 // BootstrapSubject désigne le compte d'amorçage.
 //
@@ -87,7 +101,8 @@ func Bootstrap(ctx context.Context, mod Module, env config.Environment) (Bootstr
 		return BootstrapReport{}, err
 	}
 
-	if _, err := mod.Register(ctx, BootstrapSubject, secret); err != nil {
+	identity, err := mod.Register(ctx, BootstrapSubject, secret)
+	if err != nil {
 		if errors.Is(err, domain.ErrSubjectTaken) || errors.Is(err, ErrDisabled) {
 			// Deux « rien à faire » distincts, et le même compte rendu vide :
 			//
@@ -110,7 +125,37 @@ func Bootstrap(ctx context.Context, mod Module, env config.Environment) (Bootstr
 		return BootstrapReport{}, fmt.Errorf("amorçage du compte %q: %w", BootstrapSubject, err)
 	}
 
+	if err := grantAdmin(ctx, mod, identity.ID); err != nil {
+		return BootstrapReport{}, err
+	}
 	return BootstrapReport{Created: true, Subject: BootstrapSubject, Secret: secret}, nil
+}
+
+// grantAdmin définit le rôle d'amorçage et l'accorde.
+//
+// # L'ordre compte, et l'échec doit être bruyant
+//
+// Définir avant d'affecter : l'inverse fonctionnerait — un rôle affecté avant
+// d'exister n'accorde rien puis accorde — mais laisserait une fenêtre pendant
+// laquelle le compte annoncé comme administrateur ne peut rien faire.
+//
+// Un échec ici REMONTE plutôt que d'être avalé. Rendre un compte rendu « créé »
+// sur un compte sans droits produirait le pire message possible : l'exploitant
+// lit un secret, se connecte, et reçoit 403 partout sans savoir pourquoi.
+func grantAdmin(ctx context.Context, mod Module, id domain.IdentityID) error {
+	permissions := []string{
+		contract.PermissionIdentityCreate,
+		contract.PermissionIdentityRoles,
+		contract.PermissionIdentityClose,
+		contract.PermissionRoleWrite,
+	}
+	if err := mod.DefineRole(ctx, BootstrapRole, permissions); err != nil {
+		return fmt.Errorf("définition du rôle %q: %w", BootstrapRole, err)
+	}
+	if err := mod.AssignRoles(ctx, id, []string{BootstrapRole}); err != nil {
+		return fmt.Errorf("affectation du rôle %q: %w", BootstrapRole, err)
+	}
+	return nil
 }
 
 // randomSecret tire un secret d'une source cryptographiquement sûre.

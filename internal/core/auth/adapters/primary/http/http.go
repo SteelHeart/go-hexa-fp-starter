@@ -9,24 +9,24 @@
 //
 // # Carte des fichiers
 //
-//	http.go            Mount, et la carte des routes
-//	open_session.go    POST   /v1/auth/sessions          — échanger un secret
-//	close_session.go   DELETE /v1/auth/sessions/current  — révoquer
-//	identity.go        GET    /v1/auth/identity          — résoudre le jeton
-//	status.go          la traduction des refus en statuts, et le porteur
+//	http.go             Mount, et la carte des routes
+//	open_session.go     POST   /v1/auth/sessions          — échanger un secret
+//	close_session.go    DELETE /v1/auth/sessions/current  — révoquer
+//	identity.go         GET    /v1/auth/identity          — résoudre le jeton
+//	guard.go            exiger une permission — le seul appelant d'Authorize
+//	administration.go   les quatre routes PROTÉGÉES
+//	status.go           la traduction des refus en statuts, et le porteur
 //
-// # Ce que cette surface n'expose PAS, et pourquoi
+// # Deux familles de routes, et la frontière entre elles est une permission
 //
-// Ni inscription, ni définition de rôle, ni affectation, ni fermeture de compte.
-// Ce sont des opérations d'ADMINISTRATION : les exposer sans les protéger
-// ouvrirait à quiconque la création de comptes et l'attribution de droits, et les
-// protéger exige un premier administrateur — donc une décision d'amorçage qui
-// n'est pas prise (ADR 017 § ce qui n'est pas tranché).
+// Les trois routes de SESSION sont publiques par nécessité : on ne peut pas
+// exiger un jeton de quelqu'un qui vient en demander un. Les quatre routes
+// d'ADMINISTRATION exigent chacune une permission distincte.
 //
-// Elles restent joignables par le composition root, qui les tient déjà. Rien
-// n'est perdu ; ce qui est refusé, c'est de les rendre publiques avant d'avoir
-// tranché QUI a le droit de les appeler. Deny par défaut, y compris sur ce qu'on
-// n'a pas encore décidé.
+// ⚠️ Ce paragraphe disait « cette surface n'expose PAS l'administration », faute
+// d'un premier administrateur : les publier sans les protéger aurait ouvert la
+// création de comptes à quiconque. L'amorçage tranché (ADR 017 §6), elles
+// arrivent — avec le garde qui rend `Authorize` enfin joignable.
 package http
 
 import (
@@ -54,4 +54,5 @@ func Mount(api huma.API, mod auth.Module) {
 	mountOpenSession(api, mod)
 	mountCloseSession(api, mod)
 	mountIdentity(api, mod)
+	mountAdministration(api, mod)
 }
