@@ -6,18 +6,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// TestFingerprintIsDeterministic : sans déterminisme, la même requête rejouée
-// produirait une empreinte différente et serait vue comme un conflit. Le module
-// refuserait alors des rejeux légitimes — exactement l'inverse de son rôle.
+// TestFingerprintIsDeterministic: without determinism, the same request
+// replayed would produce a different fingerprint and would be seen as a
+// conflict. The module would then refuse legitimate replays — exactly the
+// opposite of its role.
 func TestFingerprintIsDeterministic(t *testing.T) {
 	t.Parallel()
 
-	payload := map[string]any{"email": "a@example.com", "montant": 4200, "actif": true}
+	payload := map[string]any{"email": "a@example.com", "amount": 4200, "active": true}
 	first := domain.Fingerprint(payload)
 
 	for range 20 {
 		if got := domain.Fingerprint(payload); got != first {
-			t.Fatalf("empreinte instable: %q puis %q", first, got)
+			t.Fatalf("unstable fingerprint: %q then %q", first, got)
 		}
 	}
 }

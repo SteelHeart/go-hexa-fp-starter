@@ -8,15 +8,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestInvalidInputTouchesNoPort : une commande invalide n'atteint AUCUN effet.
+// TestInvalidInputTouchesNoPort: an invalid command reaches NO effect at all.
 //
-// La validation est la première étape du pipeline, et `result.Chain` court-circuite
-// au premier échec. Conséquence concrète : une saisie fautive ne consomme ni
-// connexion à la base, ni cycle de hachage. Un formulaire mal rempli en boucle ne
-// coûte donc presque rien au serveur.
+// Validation is the first step of the pipeline, and `result.Chain` short
+// circuits on the first failure. Concrete consequence: a faulty input consumes
+// neither a database connection nor a hashing cycle. A form filled in badly over
+// and over therefore costs the server almost nothing.
 //
-// C'est aussi ce qui garantit qu'aucune donnée invalide ne franchit la frontière :
-// les étapes suivantes ne reçoivent que des types du domaine.
+// It is also what guarantees that no invalid data crosses the boundary: the
+// following steps only receive domain types.
 func TestInvalidInputTouchesNoPort(t *testing.T) {
 	t.Parallel()
 
@@ -24,15 +24,15 @@ func TestInvalidInputTouchesNoPort(t *testing.T) {
 		cmd  domain.RegistrationCommand
 		code domain.ErrorCode
 	}{
-		"adresse invalide": {
-			cmd:  domain.RegistrationCommand{Email: "pas une adresse", Password: motDePasseFort},
+		"invalid address": {
+			cmd:  domain.RegistrationCommand{Email: "not an address", Password: strongPassword},
 			code: domain.CodeInvalidEmail,
 		},
-		"mot de passe faible": {
-			cmd:  domain.RegistrationCommand{Email: adresseValide, Password: "court"},
+		"weak password": {
+			cmd:  domain.RegistrationCommand{Email: validAddress, Password: "short"},
 			code: domain.CodeWeakPassword,
 		},
-		"commande vide": {
+		"empty command": {
 			cmd:  domain.RegistrationCommand{},
 			code: domain.CodeInvalidEmail,
 		},
@@ -42,18 +42,18 @@ func TestInvalidInputTouchesNoPort(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			observe := &journal{}
-			registre := application.NewRegisterUser(depsNominales(observe))
+			observed := &callLog{}
+			registerUser := application.NewRegisterUser(nominalDeps(observed))
 
-			_, err, ok := registre(context.Background(), tc.cmd).Get()
+			_, err, ok := registerUser(context.Background(), tc.cmd).Get()
 			if ok {
-				t.Fatal("une commande invalide doit être refusée")
+				t.Fatal("an invalid command must be refused")
 			}
 			if err.Code != tc.code {
-				t.Errorf("code = %q, attendu %q", err.Code, tc.code)
+				t.Errorf("code = %q, want %q", err.Code, tc.code)
 			}
-			if len(observe.appels) != 0 {
-				t.Errorf("ports appelés = %v, attendu aucun", observe.appels)
+			if len(observed.calls) != 0 {
+				t.Errorf("ports called = %v, want none", observed.calls)
 			}
 		})
 	}

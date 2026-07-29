@@ -5,142 +5,147 @@ import (
 	"testing"
 )
 
-// TestAProtectedRouteRefusesARevokedRight porte l'ADR 017 JUSQU'À LA SURFACE.
+// TestAProtectedRouteRefusesARevokedRight carries ADR 017 ALL THE WAY TO THE
+// SURFACE.
 //
-// # Pourquoi le rejouer ici alors que le module le garantit déjà
+// # Why replay it here when the module already guarantees it
 //
-// Parce que la surface a sa propre occasion de le rompre. Le témoin du module
-// prouve qu'`Authorize` interroge l'état persisté ; celui-ci prouve que la route
-// l'APPELLE — à chaque requête, et pas une seule fois au montage.
+// Because the surface has its own opportunity to break it. The module's witness
+// proves that `Authorize` queries the persisted state; this one proves that the
+// route CALLS it — on every request, and not once at mount time.
 //
-// La faute qu'il attrape est banale et invisible : résoudre la permission au
-// démarrage puis mémoriser la décision, ou poser un intergiciel qui met en cache
-// l'identité résolue. Les deux passent tous les tests du module, et les deux
-// rendent un droit révoqué encore actif.
+// The mistake it catches is mundane and invisible: resolving the permission at
+// startup then memoising the decision, or adding a middleware that caches the
+// resolved identity. Both pass every test of the module, and both keep a
+// revoked right active.
 //
-// Le jeton reste valide tout du long — le test le vérifie explicitement entre
-// les deux appels — sans quoi le refus pourrait venir d'une session invalidée et
-// la démonstration serait vide.
+// The token stays valid throughout — the test checks that explicitly between
+// the two calls — otherwise the refusal could come from an invalidated session
+// and the demonstration would be empty.
 func TestAProtectedRouteRefusesARevokedRight(t *testing.T) {
 	t.Parallel()
 
-	server, token := serveurAmorce(t)
+	server, token := bootstrappedServer(t)
 
-	// Le compte d'amorçage détient le rôle admin : la route répond.
-	corps := `{"subject":"bob@example.com","secret":"correct cheval batterie agrafe"}`
-	if resp := envoyer(t, server, requete{http.MethodPost, identitiesPath, porteur(token), corps}); resp.status != http.StatusCreated {
-		t.Fatalf("le compte d'amorçage doit pouvoir créer : attendu 201, obtenu %d — %s",
+	// The bootstrap account holds the admin role: the route answers.
+	body := `{"subject":"bob@example.com","secret":"correct horse battery staple"}`
+	if resp := send(t, server, request{http.MethodPost, identitiesPath, bearerOf(token), body}); resp.status != http.StatusCreated {
+		t.Fatalf("the bootstrap account must be able to create: want 201, got %d — %s",
 			resp.status, resp.raw)
 	}
 
-	// Révocation du DROIT, pas de la session : le rôle est redéfini sans la
-	// permission de création. Aucun jeton n'est touché.
-	vide := `{"permissions":[]}`
-	if resp := envoyer(t, server, requete{http.MethodPut, rolePath, porteur(token), vide}); resp.status != http.StatusNoContent {
-		t.Fatalf("redéfinition du rôle : attendu 204, obtenu %d — %s", resp.status, resp.raw)
+	// Revocation of the RIGHT, not of the session: the role is redefined without
+	// the creation permission. No token is touched.
+	empty := `{"permissions":[]}`
+	if resp := send(t, server, request{http.MethodPut, rolePath, bearerOf(token), empty}); resp.status != http.StatusNoContent {
+		t.Fatalf("redefining the role: want 204, got %d — %s", resp.status, resp.raw)
 	}
 
-	// Le jeton vaut TOUJOURS : c'est ce qui rend le refus qui suit concluant.
+	// The token is STILL worth something: that is what makes the refusal that
+	// follows conclusive.
 	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token); resp.status != http.StatusOK {
-		t.Fatalf("le jeton ne devait pas être affecté par la révocation : %d — %s",
+		t.Fatalf("the token should not have been affected by the revocation: %d — %s",
 			resp.status, resp.raw)
 	}
 
-	autre := `{"subject":"carol@example.com","secret":"correct cheval batterie agrafe"}`
-	resp := envoyer(t, server, requete{http.MethodPost, identitiesPath, porteur(token), autre})
+	other := `{"subject":"carol@example.com","secret":"correct horse battery staple"}`
+	resp := send(t, server, request{http.MethodPost, identitiesPath, bearerOf(token), other})
 	if resp.status != http.StatusForbidden {
-		t.Fatalf("droit révoqué : attendu 403, obtenu %d — %s", resp.status, resp.raw)
+		t.Fatalf("revoked right: want 403, got %d — %s", resp.status, resp.raw)
 	}
 }
 
-// TestAnUnauthenticatedCallerNeverLearnsThatARouteIsGuarded garde l'ordre des refus.
+// TestAnUnauthenticatedCallerNeverLearnsThatARouteIsGuarded guards the order of
+// the refusals.
 //
-// # L'ordre des refus est la décision
+// # The order of the refusals is the decision
 //
-// Un jeton absent ou invalide rend **401**, jamais 403. Dire « permission
-// refusée » à quelqu'un qui n'est pas authentifié lui apprendrait deux choses :
-// que la route existe, et qu'un droit la garde. C'est exactement la cartographie
-// qu'un attaquant construit avant d'agir.
+// A missing or invalid token returns **401**, never 403. Saying "permission
+// denied" to someone who is not authenticated would teach them two things: that
+// the route exists, and that a right guards it. That is exactly the map an
+// attacker builds before acting.
 //
-// Le 403 est réservé à un porteur AUTHENTIFIÉ — et là il est utile : il lui
-// évite de se reconnecter en boucle pour un droit qu'il n'aura pas davantage.
+// The 403 is reserved for an AUTHENTICATED bearer — and there it is useful: it
+// spares them signing in over and over for a right they will not have any more
+// than before.
 func TestAnUnauthenticatedCallerNeverLearnsThatARouteIsGuarded(t *testing.T) {
 	t.Parallel()
 
-	server, _ := serveurAmorce(t)
-	corps := `{"subject":"bob@example.com","secret":"correct cheval batterie agrafe"}`
+	server, _ := bootstrappedServer(t)
+	body := `{"subject":"bob@example.com","secret":"correct horse battery staple"}`
 
-	entetes := map[string]string{
-		"absent":           "",
-		"schéma inconnu":   "Basic " + jetonFactice,
-		"jeton inventé":    "Bearer " + jetonFactice,
-		"jeton trop court": "Bearer court",
+	headers := map[string]string{
+		"missing":         "",
+		"unknown scheme":  "Basic " + unknownToken,
+		"invented token":  "Bearer " + unknownToken,
+		"token too short": "Bearer short",
 	}
-	for nom, entete := range entetes {
-		resp := envoyer(t, server, requete{http.MethodPost, identitiesPath, entete, corps})
+	for name, header := range headers {
+		resp := send(t, server, request{http.MethodPost, identitiesPath, header, body})
 		if resp.status != http.StatusUnauthorized {
-			t.Errorf("%s : attendu 401, obtenu %d — %s", nom, resp.status, resp.raw)
+			t.Errorf("%s: want 401, got %d — %s", name, resp.status, resp.raw)
 		}
 	}
 }
 
-// TestAnAuthenticatedCallerWithoutTheRightGets403 garde l'autre moitié.
+// TestAnAuthenticatedCallerWithoutTheRightGets403 guards the other half.
 //
-// Le compte créé par l'administrateur n'a AUCUN rôle : il s'authentifie
-// parfaitement et n'obtient rien. C'est le deny par défaut vu depuis la surface,
-// et c'est la moitié que le test précédent ne couvre pas — un garde qui rendrait
-// 401 à tout le monde y serait vert et parfaitement inutile.
+// The account created by the administrator has NO role: it authenticates
+// perfectly and obtains nothing. That is deny by default seen from the surface,
+// and it is the half the previous test does not cover — a guard that returned
+// 401 to everybody would be green there and perfectly useless.
 func TestAnAuthenticatedCallerWithoutTheRightGets403(t *testing.T) {
 	t.Parallel()
 
-	server, admin := serveurAmorce(t)
+	server, admin := bootstrappedServer(t)
 
-	const sujet = "bob@example.com"
-	corps := `{"subject":"` + sujet + `","secret":"` + secret + `"}`
-	if resp := envoyer(t, server, requete{http.MethodPost, identitiesPath, porteur(admin), corps}); resp.status != http.StatusCreated {
-		t.Fatalf("création du compte: %d — %s", resp.status, resp.raw)
+	const subj = "bob@example.com"
+	body := `{"subject":"` + subj + `","secret":"` + secret + `"}`
+	if resp := send(t, server, request{http.MethodPost, identitiesPath, bearerOf(admin), body}); resp.status != http.StatusCreated {
+		t.Fatalf("creating the account: %d — %s", resp.status, resp.raw)
 	}
 
-	sansDroit := tokenOf(t, openSession(t, server, sujet, secret))
-	resp := envoyer(t, server, requete{
-		http.MethodPost, identitiesPath, porteur(sansDroit),
+	withoutRight := tokenOf(t, openSession(t, server, subj, secret))
+	resp := send(t, server, request{
+		http.MethodPost, identitiesPath, bearerOf(withoutRight),
 		`{"subject":"carol@example.com","secret":"` + secret + `"}`,
 	})
 	if resp.status != http.StatusForbidden {
-		t.Fatalf("authentifié sans droit : attendu 403, obtenu %d — %s", resp.status, resp.raw)
+		t.Fatalf("authenticated without the right: want 403, got %d — %s", resp.status, resp.raw)
 	}
 }
 
-// TestClosingAnAccountTakesEffectAtOnce : la fermeture vaut au prochain appel.
+// TestClosingAnAccountTakesEffectAtOnce: the closure holds on the next call.
 //
-// C'est le geste qu'on fait quand un compte est compromis, donc le seul moment
-// où la latence compte vraiment. Le jeton du compte fermé a été émis AVANT la
-// fermeture — c'est celui qu'un attaquant détient au moment où l'on réagit.
+// This is the gesture you make when an account is compromised, hence the only
+// moment where latency really matters. The closed account's token was issued
+// BEFORE the closure — it is the one an attacker holds at the moment you
+// react.
 func TestClosingAnAccountTakesEffectAtOnce(t *testing.T) {
 	t.Parallel()
 
-	server, admin := serveurAmorce(t)
+	server, admin := bootstrappedServer(t)
 
-	const sujet = "bob@example.com"
-	creation := envoyer(t, server, requete{
-		http.MethodPost, identitiesPath, porteur(admin),
-		`{"subject":"` + sujet + `","secret":"` + secret + `"}`,
+	const subj = "bob@example.com"
+	creation := send(t, server, request{
+		http.MethodPost, identitiesPath, bearerOf(admin),
+		`{"subject":"` + subj + `","secret":"` + secret + `"}`,
 	})
 	if creation.status != http.StatusCreated {
-		t.Fatalf("création: %d — %s", creation.status, creation.raw)
+		t.Fatalf("creation: %d — %s", creation.status, creation.raw)
 	}
 	id, _ := creation.body["identity_id"].(string)
 
-	jeton := tokenOf(t, openSession(t, server, sujet, secret))
-	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+jeton); resp.status != http.StatusOK {
-		t.Fatalf("le jeton vient d'être émis : %d", resp.status)
+	token := tokenOf(t, openSession(t, server, subj, secret))
+	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token); resp.status != http.StatusOK {
+		t.Fatalf("the token has just been issued: %d", resp.status)
 	}
 
-	if resp := envoyer(t, server, requete{http.MethodDelete, identitiesPath + "/" + id, porteur(admin), ""}); resp.status != http.StatusNoContent {
-		t.Fatalf("fermeture : attendu 204, obtenu %d — %s", resp.status, resp.raw)
+	if resp := send(t, server, request{http.MethodDelete, identitiesPath + "/" + id, bearerOf(admin), ""}); resp.status != http.StatusNoContent {
+		t.Fatalf("closure: want 204, got %d — %s", resp.status, resp.raw)
 	}
 
-	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+jeton); resp.status != http.StatusUnauthorized {
-		t.Fatalf("compte fermé, jeton déjà émis : attendu 401, obtenu %d — %s", resp.status, resp.raw)
+	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token); resp.status != http.StatusUnauthorized {
+		t.Fatalf("closed account, token already issued: want 401, got %d — %s", resp.status, resp.raw)
 	}
 }

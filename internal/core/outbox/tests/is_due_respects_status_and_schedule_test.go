@@ -15,17 +15,17 @@ func TestIsDueRespectsStatusAndSchedule(t *testing.T) {
 		msg  domain.Message
 		want bool
 	}{
-		"pending et echu":             {msg: domain.Message{Status: domain.StatusPending, AvailableAt: now}, want: true},
-		"pending mais futur":          {msg: domain.Message{Status: domain.StatusPending, AvailableAt: now.Add(time.Minute)}, want: false},
-		"deja traite":                 {msg: domain.Message{Status: domain.StatusDone, AvailableAt: now}, want: false},
-		"abandonne, jamais rejouable": {msg: domain.Message{Status: domain.StatusFailed, AvailableAt: now}, want: false},
+		"pending and due":             {msg: domain.Message{Status: domain.StatusPending, AvailableAt: now}, want: true},
+		"pending but in the future":   {msg: domain.Message{Status: domain.StatusPending, AvailableAt: now.Add(time.Minute)}, want: false},
+		"already processed":           {msg: domain.Message{Status: domain.StatusDone, AvailableAt: now}, want: false},
+		"abandoned, never replayable": {msg: domain.Message{Status: domain.StatusFailed, AvailableAt: now}, want: false},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.msg.IsDue(now); got != tc.want {
-				t.Errorf("IsDue = %v, attendu %v", got, tc.want)
+				t.Errorf("IsDue = %v, want %v", got, tc.want)
 			}
 		})
 	}

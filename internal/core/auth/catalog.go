@@ -2,31 +2,31 @@ package auth
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares this module's drivers — ADR 014.
 //
-// Aucun fichier du framework ne nomme `auth` : le catalogue est construit ici, à
-// côté de la fabrique `New`, et il PARTAGE ses constantes avec le `switch` de
-// celle-ci. La divergence entre ce qui est déclarable et ce qui est
-// constructible devient donc impossible.
+// No file of the framework names `auth`: the catalogue is built here, next to
+// the `New` factory, and it SHARES its constants with that factory's `switch`.
+// Divergence between what is declarable and what is constructible therefore
+// becomes impossible.
 //
-// # Pourquoi un seul pilote pour l'instant
+// # Why a single driver for now
 //
-// L'ADR 017 déclare la cible — `postgres`, puis `oidc` — et n'en livre qu'un.
-// Ce dépôt a déjà payé la faute inverse : huit paquets de pilotes ont vécu des
-// mois avec ZÉRO test, à aucun niveau (#37), et deux défauts de production y
-// dormaient. Un pilote écrit sans rien pour l'éprouver est du code qui a l'air
-// de marcher.
+// ADR 017 declares the target — `postgres`, then `oidc` — and delivers only
+// one. This repository has already paid for the opposite mistake: eight driver
+// packages lived for months with ZERO tests, at any level (#37), and two
+// production defects were asleep in them. A driver written with nothing to
+// exercise it is code that looks like it works.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vraie la promesse
-			// « `hexa new` puis `go run`, ça démarre » — y compris avec
-			// l'authentification active.
+			// The default demands NOTHING: that is what makes the promise
+			// "`hexa new` then `go run`, and it starts" true — including with
+			// authentication enabled.
 			Default: driverMemory,
 			Drivers: map[string]config.Resources{
-				// Perdu au redémarrage, et local au processus : voir les
-				// NON-garanties du paquet drivers/memory avant de l'envisager
-				// ailleurs qu'en développement.
+				// Lost on restart, and local to the process: see the
+				// NON-guarantees of the drivers/memory package before
+				// considering it anywhere but in development.
 				driverMemory: {Options: []string{OptionSessionTTL}},
 			},
 		},

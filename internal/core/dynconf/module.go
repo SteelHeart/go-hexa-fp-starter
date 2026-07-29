@@ -1,6 +1,6 @@
-// Package dynconf est le module noyau de la configuration modifiable à chaud.
+// Package dynconf is the core module of configuration changeable at run time.
 //
-// Composition root du module : le seul endroit qui connaît les pilotes.
+// Composition root of the module: the only place that knows the drivers.
 package dynconf
 
 import (
@@ -19,29 +19,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the name of the module in config/modules.yaml.
 const Name = "dynconf"
 
-// Noms des pilotes de ce module.
+// Names of the drivers of this module.
 //
-// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
-// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
-// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
-// une constante qui n'existe pas, un littéral mal orthographié passe.
+// They exist so that `Catalog` and the `switch` of `New` share the SAME
+// identifier. This is what makes divergence between the two IMPOSSIBLE, where
+// ADR 014 only promised to make it improbable — the compiler refuses a
+// constant that does not exist, a misspelt literal goes through.
 //
-// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
-// Il avait raison, et pour une raison plus forte que la sienne.
+// The `goconst` linter reported the repetition as soon as the catalogue
+// arrived. It was right, and for a stronger reason than its own.
 const (
 	driverFile     = "file"
 	driverPostgres = "postgres"
 )
 
-// defaultTTL borne la fraîcheur du cache du pilote postgres.
+// defaultTTL bounds the freshness of the cache of the postgres driver.
 //
-// Trente secondes est le compromis : assez court pour qu'un drapeau éteint en
-// urgence le soit partout vite, assez long pour qu'une évaluation en boucle ne
-// martèle pas la base.
-// Clés d'options du module, partagées avec le catalogue (ADR 014, #93).
+// Thirty seconds is the compromise: short enough that a flag switched off in an
+// emergency is off everywhere quickly, long enough that an evaluation in a loop
+// does not hammer the database.
+// Option keys of the module, shared with the catalogue (ADR 014, #93).
 const (
 	OptionFlags    = "flags"
 	OptionSettings = "settings"
@@ -50,7 +50,7 @@ const (
 
 const defaultTTL = 30 * time.Second
 
-// Module expose les ports de la configuration dynamique.
+// Module exposes the ports of dynamic configuration.
 type Module struct {
 	IsEnabled  ports.IsEnabled
 	GetSetting ports.GetSetting
@@ -58,31 +58,32 @@ type Module struct {
 	Invalidate ports.Invalidate
 }
 
-// Deps porte les dépendances que les pilotes peuvent réclamer.
+// Deps carries the dependencies the drivers may claim.
 //
-// Toutes peuvent être nil : le pilote `file` n'en réclame aucune.
+// All of them may be nil: the `file` driver claims none.
 type Deps struct {
 	Pool   *pgxpool.Pool
 	Logger *slog.Logger
 	Now    func() time.Time
 }
 
-// ErrDisabled signale une écriture sur un module désactivé.
-var ErrDisabled = errors.New("module dynconf désactivé dans config/modules.yaml")
+// ErrDisabled signals a write on a disabled module.
+var ErrDisabled = errors.New("dynconf module disabled in config/modules.yaml")
 
-// ErrPoolRequired signale un pilote qui exige une base absente.
-var ErrPoolRequired = errors.New("le pilote postgres exige une connexion à la base")
+// ErrPoolRequired signals a driver that requires an absent database.
+var ErrPoolRequired = errors.New("the postgres driver requires a database connection")
 
-// ErrLoggerRequired signale un pilote qui exige un journal absent.
+// ErrLoggerRequired signals a driver that requires an absent logger.
 //
-// Le pilote postgres ne peut PAS retourner ses pannes : le contrat de
-// ports.IsEnabled l'interdit. Il doit donc pouvoir les journaliser, sinon une base
-// injoignable éteindrait les fonctionnalités masquées sans laisser de trace.
-var ErrLoggerRequired = errors.New("le pilote postgres exige un journal")
+// The postgres driver can NOT return its outages: the contract of
+// ports.IsEnabled forbids it. It must therefore be able to log them, otherwise
+// an unreachable database would switch off the hidden features without leaving
+// a trace.
+var ErrLoggerRequired = errors.New("the postgres driver requires a logger")
 
-var errUnknownDriver = errors.New("pilote dynconf inconnu")
+var errUnknownDriver = errors.New("unknown dynconf driver")
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return disabled(), nil
@@ -98,7 +99,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 }
 
-// fromFile construit le pilote des valeurs versionnées.
+// fromFile builds the driver of the versioned values.
 func fromFile(cfg config.Module) (Module, error) {
 	flags, err := cfg.MapOption(OptionFlags)
 	if err != nil {
@@ -120,7 +121,7 @@ func fromFile(cfg config.Module) (Module, error) {
 	}, nil
 }
 
-// fromPostgres construit le pilote modifiable à chaud.
+// fromPostgres builds the driver changeable at run time.
 func fromPostgres(cfg config.Module, deps Deps) (Module, error) {
 	if deps.Pool == nil {
 		return Module{}, ErrPoolRequired
@@ -141,17 +142,18 @@ func fromPostgres(cfg config.Module, deps Deps) (Module, error) {
 	}, nil
 }
 
-// disabled retourne des ports inertes en LECTURE et refusants en ÉCRITURE.
+// disabled returns ports that are inert on READ and refusing on WRITE.
 //
-// # Pourquoi la lecture ne refuse pas ici, contrairement aux autres modules
+// # Why reading does not refuse here, unlike in the other modules
 //
-// `ports.IsEnabled` ne peut pas retourner d'erreur, par contrat. La seule réponse
-// possible est donc `false` — et c'est justement la réponse « deny par défaut »,
-// celle qui éteint les fonctionnalités masquées plutôt que de les allumer.
-// L'inertie coïncide ici avec le refus, ce qui n'est pas le cas ailleurs.
+// `ports.IsEnabled` cannot return an error, by contract. The only possible
+// answer is therefore `false` — and that is precisely the "deny by default"
+// answer, the one that switches the hidden features off rather than on.
+// Inertia coincides with refusal here, which is not the case elsewhere.
 //
-// `Set`, lui, PEUT parler : il refuse bruyamment. Un appelant qui croirait avoir
-// changé un drapeau sur un module éteint est le seul vrai piège de ce module.
+// `Set`, for its part, CAN speak: it refuses loudly. A caller that believed it
+// had changed a flag on a switched-off module is the only real trap of this
+// module.
 func disabled() Module {
 	return Module{
 		IsEnabled:  func(context.Context, domain.FlagKey) bool { return false },

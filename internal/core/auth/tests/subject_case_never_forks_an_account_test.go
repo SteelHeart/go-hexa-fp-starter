@@ -8,18 +8,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestSubjectCaseNeverForksAnAccount : `Alice@Example.COM ` et `alice@example.com`
-// sont UNE identité, pas deux.
+// TestSubjectCaseNeverForksAnAccount: `Alice@Example.COM ` and
+// `alice@example.com` are ONE identity, not two.
 //
-// # La faute, quand la normalisation manque
+// # The fault, when the normalisation is missing
 //
-// Deux comptes coexistent. L'inscription réussit deux fois, donc rien ne signale
-// quoi que ce soit. Puis quelqu'un se connecte avec la casse « de l'autre »
-// compte, tombe sur un compte vide, et personne ne comprend — surtout pas au
-// support, qui voit bien l'adresse dans la base.
+// Two accounts coexist. The registration succeeds twice, so nothing reports
+// anything. Then someone signs in with the case of "the other" account, lands
+// on an empty account, and nobody understands — least of all support, who can
+// see the address in the database perfectly well.
 //
-// La normalisation est portée par le TYPE : le champ de `Subject` est privé, donc
-// un sujet non normalisé ne peut pas exister hors du domaine.
+// The normalisation is carried by the TYPE: `Subject`'s field is private, so a
+// non-normalised subject cannot exist outside the domain.
 func TestSubjectCaseNeverForksAnAccount(t *testing.T) {
 	t.Parallel()
 
@@ -28,22 +28,22 @@ func TestSubjectCaseNeverForksAnAccount(t *testing.T) {
 	register(t, mod, "  Alice@Example.COM ")
 
 	if _, err := mod.Register(ctx, "alice@example.com", secret); !errors.Is(err, domain.ErrSubjectTaken) {
-		t.Fatalf("la même adresse à la casse près : attendu ErrSubjectTaken, obtenu %v", err)
+		t.Fatalf("the same address up to case: want ErrSubjectTaken, got %v", err)
 	}
 
 	for _, variant := range []string{"alice@example.com", "ALICE@EXAMPLE.COM", " Alice@Example.Com "} {
 		if _, err := mod.Authenticate(ctx, variant, secret); err != nil {
-			t.Errorf("authentification avec %q : %v", variant, err)
+			t.Errorf("authenticating with %q: %v", variant, err)
 		}
 	}
 }
 
-// TestMalformedSubjectIsRefusedBeforeTheStore garde le refus EN AMONT du pilote.
+// TestMalformedSubjectIsRefusedBeforeTheStore guards the refusal UPSTREAM of
+// the driver.
 //
-// Le refus est en amont pour deux raisons : il ne coûte aucune requête, et il ne
-// laisse pas une chaîne vide atteindre un pilote, où elle deviendrait une clé
-// légitime — donc un compte que n'importe qui pourrait revendiquer en n'envoyant
-// rien.
+// The refusal happens upstream for two reasons: it costs no query, and it does
+// not let an empty string reach a driver, where it would become a legitimate
+// key — hence an account anyone could claim by sending nothing.
 func TestMalformedSubjectIsRefusedBeforeTheStore(t *testing.T) {
 	t.Parallel()
 
@@ -52,60 +52,58 @@ func TestMalformedSubjectIsRefusedBeforeTheStore(t *testing.T) {
 
 	for _, raw := range []string{"", "   ", "\t", "alice bob@example.com"} {
 		if _, err := mod.Register(ctx, raw, secret); !errors.Is(err, domain.ErrIncomplete) {
-			t.Errorf("sujet %q : attendu ErrIncomplete, obtenu %v", raw, err)
+			t.Errorf("subject %q: want ErrIncomplete, got %v", raw, err)
 		}
 	}
 }
 
-// TestShortSecretIsRefused : douze caractères, et aucune règle de composition.
+// TestShortSecretIsRefused: twelve characters, and no composition rule.
 //
-// La longueur est la seule contrainte qui augmente réellement l'entropie. Les
-// règles de composition — une majuscule, un chiffre, un caractère spécial —
-// poussent surtout à écrire `Password1!`, qui satisfait les quatre et ne résiste
-// à rien.
+// Length is the only constraint that really increases entropy. Composition
+// rules — an uppercase letter, a digit, a special character — mostly push
+// people to write `Password1!`, which satisfies all four and resists nothing.
 func TestShortSecretIsRefused(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 
-	if _, err := mod.Register(ctx, subject, "onze-carac"); !errors.Is(err, domain.ErrIncomplete) {
-		t.Fatalf("secret trop court : attendu ErrIncomplete, obtenu %v", err)
+	if _, err := mod.Register(ctx, subject, "eleven-char"); !errors.Is(err, domain.ErrIncomplete) {
+		t.Fatalf("secret too short: want ErrIncomplete, got %v", err)
 	}
 
-	// Douze caractères sans majuscule, sans chiffre, sans caractère spécial :
-	// accepté. La règle est la longueur, et elle seule.
+	// Twelve characters with no uppercase, no digit, no special character:
+	// accepted. The rule is the length, and it alone.
 	if _, err := mod.Register(ctx, subject, "abcdefghijkl"); err != nil {
-		t.Fatalf("aucune règle de composition ne doit s'appliquer : %v", err)
+		t.Fatalf("no composition rule must apply: %v", err)
 	}
 }
 
-// TestSubjectIsMaskedForLogs : un sujet est une donnée personnelle.
+// TestSubjectIsMaskedForLogs: a subject is personal data.
 //
-// Il ne se journalise jamais en clair (rules/securite.md §5) — et c'est le
-// journal d'authentification qu'on exporte le plus volontiers vers un collecteur
-// tiers.
+// It is never logged in clear (rules/securite.md §5) — and the authentication
+// log is the one most readily exported to a third-party collector.
 func TestSubjectIsMaskedForLogs(t *testing.T) {
 	t.Parallel()
 
 	subj, err := domain.NewSubject("alice@example.com")
 	if err != nil {
-		t.Fatalf("sujet: %v", err)
+		t.Fatalf("subject: %v", err)
 	}
 
 	masked := subj.Masked()
 	if masked == subj.String() {
-		t.Fatal("la forme masquée ne doit pas être le sujet en clair")
+		t.Fatal("the masked form must not be the subject in clear")
 	}
 	if masked != "a***@example.com" {
-		t.Fatalf("forme masquée inattendue : %q", masked)
+		t.Fatalf("unexpected masked form: %q", masked)
 	}
 
 	short, err := domain.NewSubject("ab")
 	if err != nil {
-		t.Fatalf("sujet court: %v", err)
+		t.Fatalf("short subject: %v", err)
 	}
 	if short.Masked() != "***" {
-		t.Fatalf("un sujet trop court doit disparaître entièrement, obtenu %q", short.Masked())
+		t.Fatalf("a subject that is too short must disappear entirely, got %q", short.Masked())
 	}
 }

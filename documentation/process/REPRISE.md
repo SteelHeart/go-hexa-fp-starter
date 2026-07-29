@@ -139,7 +139,7 @@ go run ./cmd/server
 ```bash
 task run
 curl -s -X POST localhost:8080/v1/users -H 'content-type: application/json' \
-  -d '{"email":"Alice@Example.COM ","password":"correct cheval batterie agrafe"}'
+  -d '{"email":"Alice@Example.COM ","password":"correct horse battery staple"}'
 ```
 
 Attendu, et constaté depuis un clone neuf : **201**, identifiant **UUID v7**, adresse **normalisée**

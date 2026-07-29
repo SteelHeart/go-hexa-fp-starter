@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-// TestWithTimeDoesNotMutateTheEntry : domain.Entry est une valeur. Une méthode qui
-// muterait son receveur rendrait deux enregistrements du même fait divergents.
+// TestWithTimeDoesNotMutateTheEntry: domain.Entry is a value. A method that
+// mutated its receiver would make two records of the same fact diverge.
 func TestWithTimeDoesNotMutateTheEntry(t *testing.T) {
 	t.Parallel()
 
@@ -13,6 +13,6 @@ func TestWithTimeDoesNotMutateTheEntry(t *testing.T) {
 	_ = original.WithTime(recordedAt())
 
 	if !original.At.IsZero() {
-		t.Errorf("WithTime a muté l'entrée d'origine: At = %v", original.At)
+		t.Errorf("WithTime mutated the original entry: At = %v", original.At)
 	}
 }

@@ -12,14 +12,14 @@ func TestNextAttemptMarksFailedWhenAttemptsExhausted(t *testing.T) {
 
 	got := domain.NextAttempt(domain.Message{Attempts: 4},
 		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
-		fixedNow(), "raison")
+		fixedNow(), "reason")
 	if got.Status != domain.StatusFailed {
-		t.Errorf("statut = %q, attendu failed après épuisement des tentatives", got.Status)
+		t.Errorf("status = %q, want failed after the attempts are exhausted", got.Status)
 	}
 
-	// Un message abandonné n'est JAMAIS supprimé : c'est la seule trace de ce
-	// qui n'a pas été publié.
+	// An abandoned message is NEVER deleted: it is the only trace of what has
+	// not been published.
 	if got.Reason == "" {
-		t.Error("la raison de l'abandon doit être conservée")
+		t.Error("the reason for the abandonment must be kept")
 	}
 }

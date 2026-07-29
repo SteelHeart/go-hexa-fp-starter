@@ -9,13 +9,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestDuplicateTaskNameIsRefused : deux tâches de même nom sont refusées.
+// TestDuplicateTaskNameIsRefused: two tasks with the same name are refused.
 //
-// Le nom EST la clé d'élection. Deux tâches homonymes s'excluraient donc
-// mutuellement : l'une des deux ne tournerait jamais, et le seul symptôme serait
-// un compte rendu « skipped » — indistinguable du cas nominal d'une réplique non
-// élue. Le défaut serait invisible aussi longtemps que personne ne s'aperçoit que
-// le travail n'est pas fait.
+// The name IS the election key. Two tasks with the same name would therefore
+// exclude each other: one of the two would never run, and the only symptom
+// would be a "skipped" report — indistinguishable from the nominal case of a
+// non-elected replica. The defect would stay invisible for as long as nobody
+// noticed the work was not being done.
 func TestDuplicateTaskNameIsRefused(t *testing.T) {
 	t.Parallel()
 
@@ -26,10 +26,10 @@ func TestDuplicateTaskNameIsRefused(t *testing.T) {
 	}
 
 	acquire, release := alwaysElected()
-	runner := newRunner(t, acquire, release, &journal{})
+	runner := newRunner(t, acquire, release, &reportLog{})
 
 	err := runner.Run(context.Background(), scheduled)
 	if !errors.Is(err, domain.ErrInvalidTask) {
-		t.Errorf("Run = %v, attendu ErrInvalidTask", err)
+		t.Errorf("Run = %v, want ErrInvalidTask", err)
 	}
 }

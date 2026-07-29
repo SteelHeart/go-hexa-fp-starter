@@ -1,36 +1,34 @@
-// Package memory implémente la persistance de l'inscription en mémoire.
+// Package memory implements registration persistence in memory.
 //
-// # Pourquoi ce pilote existe
+// # Why this driver exists
 //
-// Il n'est pas un bouchon de test : c'est le pilote PAR DÉFAUT du module, et
-// c'est lui qui rend vraie la promesse du socle — `hexa new` puis `go run`
-// démarre sans base, sans Docker, sans rien. Un module métier dont le seul
-// pilote exigerait PostgreSQL casserait cette promesse au premier module écrit,
-// c'est-à-dire au moment exact où l'on cherche à l'éprouver.
+// It is not a test stub: it is the module's DEFAULT driver, and it is what makes
+// the starter's promise true — `hexa new` then `go run` starts with no database,
+// no Docker, nothing at all. A business module whose only driver required
+// PostgreSQL would break that promise on the first module written, that is to
+// say at the exact moment one seeks to exercise it.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Unicité de l'adresse** : la carte est indexée par adresse normalisée, et
-//     `SaveUser` refuse un doublon avec `CodeEmailAlreadyExists` — le même code
-//     que le pilote SQL rendra sur une violation de contrainte. C'est ce qui rend
-//     les deux pilotes réellement substituables (ADR 003).
-//   - **Sûr en concurrence** : toutes les lectures et écritures passent par un
-//     RWMutex.
-//   - **Aucune mutation de l'entrée** : `domain.User` est une valeur, elle est
-//     copiée à l'entrée comme à la sortie.
+//   - **Address uniqueness**: the map is indexed by normalised address, and
+//     `SaveUser` refuses a duplicate with `CodeEmailAlreadyExists` — the same
+//     code the SQL driver will return on a constraint violation. That is what
+//     makes both drivers genuinely substitutable (ADR 003).
+//   - **Concurrency safe**: every read and write goes through an RWMutex.
+//   - **No mutation of the input**: `domain.User` is a value, it is copied on
+//     the way in as on the way out.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **Aucune durabilité.** Tout disparaît à l'arrêt du processus. C'est le
-//     comportement attendu d'un pilote mémoire, et il doit être choisi en
-//     connaissance de cause — jamais subi.
-//   - **Aucun partage entre répliques.** Deux instances ont deux magasins, donc
-//     deux vérités. L'unicité de l'adresse n'est garantie QUE dans un processus.
-//   - **Aucune transaction.** `RunInTx` du module se réduit à un appel direct :
-//     un échec après l'écriture ne l'annule pas. C'est la NON-garantie la plus
-//     coûteuse, et la raison pour laquelle ce pilote ne convient pas à la
-//     production.
-//   - **La mémoire croît sans fin.** Aucune purge, aucune borne.
+//   - **No durability.** Everything disappears when the process stops. That is
+//     the expected behaviour of a memory driver, and it must be chosen knowingly
+//     — never endured.
+//   - **No sharing between replicas.** Two instances have two stores, therefore
+//     two truths. Address uniqueness is guaranteed ONLY within one process.
+//   - **No transaction.** The module's `RunInTx` boils down to a direct call: a
+//     failure after the write does not cancel it. This is the costliest
+//     NON-GUARANTEE, and the reason why this driver is unfit for production.
+//   - **Memory grows without end.** No purge, no bound.
 package memory
 
 import (
@@ -42,30 +40,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Store retient les utilisateurs inscrits, indexés par adresse normalisée.
+// Store retains the registered users, indexed by normalised address.
 //
-// L'index est l'adresse et non l'identifiant : toutes les opérations du module
-// interrogent par adresse. Indexer par identifiant obligerait à parcourir la
-// carte à chaque vérification d'unicité — et surtout, rendrait l'unicité de
-// l'adresse dépendante d'une discipline d'appel plutôt que de la structure.
+// The index is the address and not the identifier: every operation of the module
+// queries by address. Indexing by identifier would force a walk over the map on
+// every uniqueness check — and above all, would make address uniqueness depend
+// on call discipline rather than on the structure.
 type Store struct {
 	mu      sync.RWMutex
 	byEmail map[domain.Email]domain.User
 }
 
-// New construit un magasin vide.
+// New builds an empty store.
 func New() *Store {
 	return &Store{byEmail: make(map[domain.Email]domain.User)}
 }
 
-// Save implémente ports.SaveUser.
+// Save implements ports.SaveUser.
 //
-// Le refus du doublon est ici et non dans le cas d'usage, délibérément. Le cas
-// d'usage vérifie déjà la disponibilité, mais entre sa vérification et son
-// écriture il existe une fenêtre : deux inscriptions simultanées sur la même
-// adresse la franchissent toutes les deux. Seul le magasin, qui détient le
-// verrou, peut trancher — exactement comme la contrainte d'unicité SQL tranche
-// pour le pilote postgres.
+// The duplicate refusal is here and not in the use case, deliberately. The use
+// case already checks availability, but between its check and its write there is
+// a window: two simultaneous registrations on the same address both cross it.
+// Only the store, which holds the lock, can settle it — exactly as the SQL
+// uniqueness constraint settles it for the postgres driver.
 func (s *Store) Save(_ context.Context, user domain.User) result.Result[domain.User, domain.Error] {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,9 +78,10 @@ func (s *Store) Save(_ context.Context, user domain.User) result.Result[domain.U
 	return result.Ok[domain.User, domain.Error](user)
 }
 
-// IsTaken implémente ports.EmailIsTaken.
+// IsTaken implements ports.EmailIsTaken.
 //
-// L'absence n'est PAS une erreur : elle vaut `false`. C'est le contrat du port.
+// An absence is NOT an error: it amounts to `false`. That is the port's
+// contract.
 func (s *Store) IsTaken(_ context.Context, email domain.Email) result.Result[bool, domain.Error] {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -92,10 +90,10 @@ func (s *Store) IsTaken(_ context.Context, email domain.Email) result.Result[boo
 	return result.Ok[bool, domain.Error](exists)
 }
 
-// FindByEmail implémente ports.FindUserByEmail.
+// FindByEmail implements ports.FindUserByEmail.
 //
-// Une absence retourne `None`, jamais une erreur : l'Option rend l'absence
-// explicite dans le type, donc impossible à confondre avec une panne.
+// An absence returns `None`, never an error: the Option makes absence explicit
+// in the type, therefore impossible to confuse with a breakdown.
 func (s *Store) FindByEmail(
 	_ context.Context,
 	email domain.Email,
@@ -110,10 +108,10 @@ func (s *Store) FindByEmail(
 	return result.Ok[fp.Option[domain.User], domain.Error](fp.Some(user))
 }
 
-// Count rend le nombre d'utilisateurs retenus.
+// Count returns the number of retained users.
 //
-// Exposé pour l'exploitation et les sondes, pas pour les tests : ceux-ci passent
-// par les ports, comme n'importe quel appelant.
+// Exposed for operations and probes, not for tests: those go through the ports,
+// like any other caller.
 func (s *Store) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

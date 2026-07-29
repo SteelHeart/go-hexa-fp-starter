@@ -1,44 +1,43 @@
-// Package memory implémente le magasin d'authentification en mémoire.
+// Package memory implements the authentication store in memory.
 //
-// # Pourquoi ce pilote existe
+// # Why this driver exists
 //
-// Il n'est pas un bouchon de test : c'est le pilote PAR DÉFAUT, et c'est lui qui
-// rend vraie la promesse du socle — `hexa new` puis `go run` démarre sans base,
-// sans Docker, **avec l'authentification active**. Un module `auth` dont le seul
-// pilote exigerait PostgreSQL casserait cette promesse au moment exact où l'on
-// cherche à la démontrer.
+// It is not a test stub: it is the DEFAULT driver, and it is what makes the
+// starter's promise true — `hexa new` then `go run` starts without a database,
+// without Docker, **with authentication enabled**. An `auth` module whose only
+// driver required PostgreSQL would break that promise at the exact moment one
+// sets out to demonstrate it.
 //
-// # Carte des fichiers
+// # File map
 //
-//	memory.go       le magasin lui-même, et ses garanties
-//	identities.go   identités et condensés
-//	sessions.go     jetons émis, révocation, purge
-//	roles.go        rôles, affectation, et la question « détient-il ce droit ? »
+//	memory.go       the store itself, and its guarantees
+//	identities.go   identities and digests
+//	sessions.go     issued tokens, revocation, purge
+//	roles.go        roles, assignment, and the "does it hold this right?" question
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Unicité du sujet** : indexé par sujet normalisé, `SaveIdentity` refuse un
-//     doublon avec `ErrSubjectTaken` — le même code qu'un pilote SQL rendra sur
-//     une violation de contrainte. C'est ce qui rend deux pilotes réellement
-//     substituables.
-//   - **Révocation immédiate** : une session supprimée cesse de valoir au prochain
-//     appel, un rôle retiré cesse d'accorder au prochain appel, et un compte fermé
-//     cesse de valoir partout au prochain appel. C'est la décision 1 de
-//     l'ADR 017, tenue par le magasin.
-//   - **Sûr en concurrence** : toutes les lectures et écritures passent par un
-//     RWMutex.
+//   - **Subject uniqueness**: indexed by normalised subject, `SaveIdentity`
+//     refuses a duplicate with `ErrSubjectTaken` — the same code an SQL driver
+//     will return on a constraint violation. That is what makes two drivers
+//     really substitutable.
+//   - **Immediate revocation**: a deleted session stops being worth anything on
+//     the next call, a withdrawn role stops granting on the next call, and a
+//     closed account stops being worth anything everywhere on the next call.
+//     That is decision 1 of ADR 017, upheld by the store.
+//   - **Concurrency safe**: every read and write goes through an RWMutex.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **Aucune durabilité.** Tout disparaît à l'arrêt : redémarrer déconnecte tout
-//     le monde et EFFACE LES COMPTES. C'est acceptable en développement et
-//     inacceptable ailleurs.
-//   - **Aucun partage entre répliques.** Deux instances ont deux magasins : une
-//     session émise par l'une est inconnue de l'autre. Derrière un répartiteur de
-//     charge, une requête sur deux échouerait en 401.
-//   - **Aucune purge automatique.** Les sessions expirées restent en mémoire
-//     jusqu'à un appel explicite à `PurgeExpired` ; elles ne valent plus rien,
-//     mais elles occupent.
+//   - **No durability.** Everything disappears on shutdown: restarting signs
+//     everyone out and ERASES THE ACCOUNTS. That is acceptable in development
+//     and unacceptable anywhere else.
+//   - **No sharing between replicas.** Two instances have two stores: a session
+//     issued by one is unknown to the other. Behind a load balancer, one request
+//     out of two would fail with a 401.
+//   - **No automatic purge.** Expired sessions stay in memory until an explicit
+//     call to `PurgeExpired`; they are no longer worth anything, but they take
+//     up room.
 package memory
 
 import (
@@ -47,12 +46,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// Store retient identités, secrets, rôles et sessions.
+// Store keeps identities, secrets, roles and sessions.
 //
-// Un SEUL verrou pour les quatre cartes, délibérément. Elles sont lues ensemble —
-// `Grants` traverse les créances ET les rôles — et des verrous séparés ne
-// gagneraient rien qu'un ordre de prise à respecter, donc un interblocage à
-// découvrir en production.
+// A SINGLE lock for the four maps, deliberately. They are read together —
+// `Grants` walks the credentials AND the roles — and separate locks would gain
+// nothing but an acquisition order to respect, hence a deadlock to discover in
+// production.
 type Store struct {
 	mu          sync.RWMutex
 	bySubject   map[string]domain.IdentityID
@@ -61,7 +60,7 @@ type Store struct {
 	sessions    map[string]domain.Session
 }
 
-// New construit un magasin vide.
+// New builds an empty store.
 func New() *Store {
 	return &Store{
 		bySubject:   make(map[string]domain.IdentityID),

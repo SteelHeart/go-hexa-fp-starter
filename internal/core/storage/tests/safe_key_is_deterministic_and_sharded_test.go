@@ -7,32 +7,32 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/domain"
 )
 
-// TestSafeKeyIsDeterministicAndSharded : deux appels sur le même nom donnent la
-// même clé, et la clé est répartie sur deux niveaux de répertoires.
+// TestSafeKeyIsDeterministicAndSharded: two calls on the same name give the
+// same key, and the key is spread over two levels of directories.
 //
-// La répartition n'est pas cosmétique : un répertoire plat à cent mille entrées
-// devient impraticable sur la plupart des systèmes de fichiers, et le magasin
-// ralentit d'un coup, tard, sans qu'on comprenne pourquoi.
+// The spreading is not cosmetic: a flat directory with a hundred thousand
+// entries becomes impractical on most file systems, and the store slows down
+// all at once, late, without anyone understanding why.
 func TestSafeKeyIsDeterministicAndSharded(t *testing.T) {
 	t.Parallel()
 
-	first, err := domain.SafeKey("facture-2026-07.pdf")
+	first, err := domain.SafeKey("invoice-2026-07.pdf")
 	if err != nil {
 		t.Fatalf("SafeKey: %v", err)
 	}
-	second, err := domain.SafeKey("facture-2026-07.pdf")
+	second, err := domain.SafeKey("invoice-2026-07.pdf")
 	if err != nil {
 		t.Fatalf("SafeKey: %v", err)
 	}
 	if first != second {
-		t.Errorf("clé instable: %q puis %q", first, second)
+		t.Errorf("unstable key: %q then %q", first, second)
 	}
 
 	parts := strings.Split(first.String(), "/")
 	if len(parts) != 3 {
-		t.Fatalf("clé = %q, attendu trois niveaux", first)
+		t.Fatalf("key = %q, want three levels", first)
 	}
 	if len(parts[0]) != 2 || len(parts[1]) != 2 {
-		t.Errorf("répartition = %q/%q, attendu deux niveaux de 2 caractères", parts[0], parts[1])
+		t.Errorf("spreading = %q/%q, want two levels of 2 characters", parts[0], parts[1])
 	}
 }

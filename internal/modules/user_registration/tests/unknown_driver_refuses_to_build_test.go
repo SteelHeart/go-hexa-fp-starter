@@ -8,13 +8,13 @@ import (
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
 )
 
-// TestUnknownDriverRefusesToBuild : un pilote inconnu refuse le montage.
+// TestUnknownDriverRefusesToBuild: an unknown driver refuses to be assembled.
 //
-// Deny par défaut, et l'enjeu est concret : se rabattre sur le pilote par défaut
-// serait BIEN PIRE que l'erreur. Une faute de frappe dans la configuration de
-// production — `postgersql` au lieu de `postgres` — ferait démarrer le service
-// en MÉMOIRE, sans rien signaler. Le service répondrait normalement, et la perte
-// de toutes les inscriptions ne se verrait qu'au premier redémarrage.
+// Deny by default, and what is at stake is concrete: falling back on the default
+// driver would be MUCH WORSE than the error. A typo in the production
+// configuration — `postgersql` instead of `postgres` — would start the service
+// IN MEMORY, without reporting anything. The service would answer normally, and
+// the loss of every registration would only be seen at the first restart.
 func TestUnknownDriverRefusesToBuild(t *testing.T) {
 	t.Parallel()
 
@@ -26,15 +26,15 @@ func TestUnknownDriverRefusesToBuild(t *testing.T) {
 		Now:          func() time.Time { return fixedInstant },
 	})
 	if err == nil {
-		t.Fatal("un pilote inconnu doit refuser le montage")
+		t.Fatal("an unknown driver must refuse to be assembled")
 	}
 
-	// Le module rendu doit être inerte : si New échoue mais rend quand même un
-	// module appelable, un appelant qui ignore l'erreur croirait fonctionner.
+	// The returned module must be inert: if New fails but still returns a
+	// callable module, a caller who ignores the error would believe it works.
 	if mod.Register != nil {
-		t.Error("un montage refusé ne doit rendre aucun cas d'usage appelable")
+		t.Error("a refused assembly must return no callable use case")
 	}
 	if !strings.Contains(err.Error(), "postgersql") {
-		t.Errorf("l'erreur doit nommer le pilote fautif, reçu: %v", err)
+		t.Errorf("the error must name the faulty driver, got: %v", err)
 	}
 }

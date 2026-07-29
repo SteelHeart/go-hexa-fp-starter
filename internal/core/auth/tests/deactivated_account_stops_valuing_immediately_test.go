@@ -8,18 +8,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestDeactivatedAccountStopsValuingImmediately couvre les TROIS portes à la fois.
+// TestDeactivatedAccountStopsValuingImmediately covers ALL THREE doors at once.
 //
-// # Pourquoi les trois, et pas une
+// # Why all three, and not one
 //
-// `Active` est consulté à trois endroits — l'authentification, la résolution d'un
-// jeton, et l'autorisation. N'en tester qu'un laisserait les deux autres dériver,
-// et la faute serait la pire de sa catégorie : un compte affiché comme fermé qui
-// continue de fonctionner par un chemin qu'on n'a pas regardé.
+// `Active` is consulted in three places — authentication, resolving a token,
+// and authorisation. Testing only one would let the other two drift, and the
+// fault would be the worst of its kind: an account displayed as closed that
+// keeps working through a path nobody looked at.
 //
-// Le jeton est émis AVANT la fermeture, exprès : c'est un jeton déjà en
-// circulation, celui qu'un attaquant détient au moment où l'on réagit. Aucune
-// expiration n'intervient.
+// The token is issued BEFORE the closure, on purpose: it is a token already in
+// circulation, the one an attacker holds at the moment you react. No expiry
+// comes into play.
 func TestDeactivatedAccountStopsValuingImmediately(t *testing.T) {
 	t.Parallel()
 
@@ -28,34 +28,36 @@ func TestDeactivatedAccountStopsValuingImmediately(t *testing.T) {
 
 	id := register(t, mod, subject)
 	cancel := permission(t, "billing.invoice.cancel")
-	grant(t, mod, id, "comptable", "billing.invoice.cancel")
+	grant(t, mod, id, "accountant", "billing.invoice.cancel")
 
 	session, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 
 	if err := mod.Deactivate(ctx, id); err != nil {
-		t.Fatalf("fermeture du compte: %v", err)
+		t.Fatalf("closing the account: %v", err)
 	}
 
 	if _, err := mod.Authenticate(ctx, subject, secret); !errors.Is(err, domain.ErrInvalidCredentials) {
-		t.Errorf("compte fermé, authentification : attendu ErrInvalidCredentials, obtenu %v", err)
+		t.Errorf("closed account, authentication: want ErrInvalidCredentials, got %v", err)
 	}
 	if _, err := mod.Verify(ctx, session.Token); !errors.Is(err, domain.ErrTokenUnknown) {
-		t.Errorf("compte fermé, jeton déjà émis : attendu ErrTokenUnknown, obtenu %v", err)
+		t.Errorf("closed account, token already issued: want ErrTokenUnknown, got %v", err)
 	}
 	if err := mod.Authorize(ctx, id, cancel); !errors.Is(err, domain.ErrForbidden) {
-		t.Errorf("compte fermé, autorisation : attendu ErrForbidden, obtenu %v", err)
+		t.Errorf("closed account, authorisation: want ErrForbidden, got %v", err)
 	}
 }
 
-// TestDeactivationIsIdempotentAndReversible garde les deux sens du geste.
+// TestDeactivationIsIdempotentAndReversible guards both directions of the
+// gesture.
 //
-// Idempotente : deux administrateurs qui réagissent au même incident ne doivent
-// pas s'annuler. Réversible : la fermeture est parfois une erreur, et un module
-// qui ne saurait que fermer ferait réparer cela à la main dans le magasin — donc
-// sans trace, et par quelqu'un qui a désormais un accès direct aux comptes.
+// Idempotent: two administrators reacting to the same incident must not cancel
+// each other out. Reversible: the closure is sometimes a mistake, and a module
+// that only knew how to close would have that repaired by hand in the store —
+// hence without a trace, and by someone who now has direct access to the
+// accounts.
 func TestDeactivationIsIdempotentAndReversible(t *testing.T) {
 	t.Parallel()
 
@@ -65,34 +67,34 @@ func TestDeactivationIsIdempotentAndReversible(t *testing.T) {
 
 	for range 2 {
 		if err := mod.Deactivate(ctx, id); err != nil {
-			t.Fatalf("fermeture répétée: %v", err)
+			t.Fatalf("repeated closure: %v", err)
 		}
 	}
 
 	if err := mod.Reactivate(ctx, id); err != nil {
-		t.Fatalf("réouverture: %v", err)
+		t.Fatalf("reopening: %v", err)
 	}
 	if _, err := mod.Authenticate(ctx, subject, secret); err != nil {
-		t.Fatalf("le compte rouvert doit s'authentifier : %v", err)
+		t.Fatalf("the reopened account must authenticate: %v", err)
 	}
 }
 
-// TestDeactivatingAnUnknownIdentityIsRefused interdit de fermer un compte
-// imaginaire en silence.
+// TestDeactivatingAnUnknownIdentityIsRefused forbids silently closing an
+// imaginary account.
 //
-// Un succès sur un identifiant inconnu ferait croire à l'administrateur qu'il
-// vient de fermer le compte compromis — alors qu'il s'est trompé de ligne, et que
-// le vrai compte est toujours ouvert.
+// A success on an unknown identifier would make the administrator believe they
+// have just closed the compromised account — when they picked the wrong row,
+// and the real account is still open.
 func TestDeactivatingAnUnknownIdentityIsRefused(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 
-	if err := mod.Deactivate(ctx, "personne"); err == nil {
-		t.Error("fermer une identité inconnue doit être refusé")
+	if err := mod.Deactivate(ctx, "nobody"); err == nil {
+		t.Error("closing an unknown identity must be refused")
 	}
 	if err := mod.Deactivate(ctx, ""); !errors.Is(err, domain.ErrIncomplete) {
-		t.Errorf("identité vide : attendu ErrIncomplete, obtenu %v", err)
+		t.Errorf("empty identity: want ErrIncomplete, got %v", err)
 	}
 }

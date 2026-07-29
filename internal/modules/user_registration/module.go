@@ -1,18 +1,18 @@
-// Package userregistration est la composition root du module métier.
+// Package userregistration is the composition root of the business module.
 //
-// C'est le SEUL fichier du module qui connaît les pilotes (ADR 012). Le cas
-// d'usage, lui, ne voit que des types fonction : changer de pilote ne touche pas
-// une ligne de `application/` ni de `domain/`.
+// It is the ONLY file in the module that knows the drivers (ADR 012). The use
+// case, for its part, only sees function types: changing driver does not touch a
+// single line of `application/` or `domain/`.
 //
-// # Ce module est la TRANCHE DE RÉFÉRENCE du socle
+// # This module is the REFERENCE SLICE of the starter
 //
-// Il n'est pas « l'application ». Il existe pour montrer la forme complète d'un
-// module métier — domaine pur, ports en types fonction, pipeline composé,
-// pilotes interchangeables, adaptateurs par surface — parce que c'est cette
-// forme qui sera copiée pour écrire `billing` ou `crm`.
+// It is not "the application". It exists to show the complete shape of a
+// business module — pure domain, ports as function types, composed pipeline,
+// interchangeable drivers, one adapter per surface — because that shape is the
+// one that will be copied to write `billing` or `crm`.
 //
-// `hexa new` doit pouvoir le supprimer d'un seul `rm -rf` sans rien casser
-// d'autre : aucun code du socle ne le nomme.
+// `hexa new` must be able to delete it with a single `rm -rf` without breaking
+// anything else: no starter code names it.
 package userregistration
 
 import (
@@ -28,63 +28,64 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Name est le nom du module.
+// Name is the name of the module.
 const Name = "user_registration"
 
-// Pilotes de persistance disponibles.
+// Available persistence drivers.
 //
-// `memory` est le défaut, et c'est une décision : il n'exige aucune
-// infrastructure, donc `go run` démarre. Voir les NON-garanties du paquet
-// drivers/memory avant de l'envisager ailleurs qu'en développement.
+// `memory` is the default, and that is a decision: it requires no
+// infrastructure, so `go run` starts. See the NON-GUARANTEES of the
+// drivers/memory package before considering it anywhere other than development.
 const (
 	DriverMemory = "memory"
 )
 
-// Module expose les ports primaires du module.
+// Module exposes the primary ports of the module.
 //
-// Une surface — HTTP, CLI, consommateur d'événements — ne reçoit QUE cette
-// structure. Elle ne peut donc pas atteindre un pilote, ni ouvrir une
-// transaction, ni contourner le cas d'usage.
+// A surface — HTTP, CLI, event consumer — receives ONLY this structure. It
+// therefore cannot reach a driver, nor open a transaction, nor bypass the use
+// case.
 type Module struct {
 	Register   ports.RegisterUser
 	CheckEmail ports.CheckEmailAvailability
 }
 
-// Deps porte les effets que le module ne fabrique pas lui-même.
+// Deps carries the effects the module does not build itself.
 //
-// Tous sont des types fonction : en test, chacun est une closure de trois
-// lignes, et aucune bibliothèque de simulacre n'est nécessaire — donc aucune
-// n'est autorisée (rules/dependances.md).
+// All of them are function types: in a test, each one is a three-line closure,
+// and no mocking library is needed — therefore none is allowed
+// (rules/dependances.md).
 type Deps struct {
-	// HashPassword vient de l'infrastructure de sécurité : le hachage est un
-	// effet coûteux et paramétré, jamais du domaine.
+	// HashPassword comes from the security infrastructure: hashing is a
+	// costly, parameterised effect, never domain.
 	HashPassword ports.HashPassword
-	// PublishEvent écrit dans l'outbox, DANS la transaction courante (ADR 006).
+	// PublishEvent writes into the outbox, WITHIN the current transaction
+	// (ADR 006).
 	PublishEvent ports.PublishEvent
-	// GenerateID et Now sont des ports pour que les tests soient déterministes.
+	// GenerateID and Now are ports so that tests are deterministic.
 	GenerateID ports.GenerateID
 	Now        ports.Now
 }
 
-// Erreurs du module.
+// Errors of the module.
 var (
-	// ErrDisabled signale un appel à un module désactivé.
+	// ErrDisabled reports a call to a disabled module.
 	//
-	// Un module désactivé échoue explicitement plutôt que de se rabattre sur un
-	// comportement inerte : une inscription silencieusement ignorée est le pire
-	// défaut possible, parce qu'elle ne se signale jamais.
-	ErrDisabled = errors.New("module user_registration désactivé")
+	// A disabled module fails explicitly rather than falling back on inert
+	// behaviour: a silently ignored registration is the worst possible defect,
+	// because it never reports itself.
+	ErrDisabled = errors.New("module user_registration disabled")
 
-	// ErrMissingDependency refuse un montage incomplet.
-	ErrMissingDependency = errors.New("dépendance obligatoire absente")
+	// ErrMissingDependency refuses an incomplete assembly.
+	ErrMissingDependency = errors.New("mandatory dependency missing")
 
-	errUnknownDriver = errors.New("pilote user_registration inconnu")
+	errUnknownDriver = errors.New("unknown user_registration driver")
 )
 
-// New construit le module selon le pilote demandé.
+// New builds the module according to the requested driver.
 //
-// Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
-// jamais en « le pilote le plus proche ». Deny par défaut.
+// An unknown driver REFUSES to start: a typo is never resolved into "the closest
+// driver". Deny by default.
 func New(driver string, deps Deps) (Module, error) {
 	if err := deps.validate(); err != nil {
 		return Module{}, err
@@ -101,11 +102,11 @@ func New(driver string, deps Deps) (Module, error) {
 	}
 }
 
-// validate refuse un montage incomplet AVANT toute construction.
+// validate refuses an incomplete assembly BEFORE any construction.
 //
-// Sans ce refus, une dépendance oubliée produirait un panic de pointeur nil à la
-// première requête réelle — donc en production, et avec une trace qui ne dit pas
-// laquelle manquait.
+// Without this refusal, a forgotten dependency would produce a nil pointer panic
+// on the first real request — therefore in production, and with a stack trace
+// that does not say which one was missing.
 func (d Deps) validate() error {
 	missing := map[string]bool{
 		"HashPassword": d.HashPassword == nil,
@@ -121,17 +122,17 @@ func (d Deps) validate() error {
 	return nil
 }
 
-// store est ce que le module attend d'un pilote de persistance.
+// store is what the module expects from a persistence driver.
 //
-// Déclaré ici et non dans `ports/` : c'est une commodité de composition interne,
-// pas un contrat public. Les ports du module restent des types fonction, et
-// c'est `assemble` qui en extrait les méthodes.
+// Declared here and not in `ports/`: it is an internal composition convenience,
+// not a public contract. The module's ports remain function types, and it is
+// `assemble` that extracts the methods from it.
 type store interface {
 	Save(context.Context, domain.User) result.Result[domain.User, domain.Error]
 	IsTaken(context.Context, domain.Email) result.Result[bool, domain.Error]
 }
 
-// assemble branche un pilote sur les cas d'usage.
+// assemble wires a driver onto the use cases.
 func assemble(s store, deps Deps) Module {
 	register := application.NewRegisterUser(application.Deps{
 		EmailIsTaken: s.IsTaken,
@@ -148,11 +149,11 @@ func assemble(s store, deps Deps) Module {
 	}
 }
 
-// Disabled rend un module qui refuse à l'appel.
+// Disabled returns a module that refuses when called.
 //
-// Il se monte toujours : c'est ce qui permet à la surface HTTP d'exister et de
-// répondre une erreur claire, plutôt que de faire échouer le démarrage entier du
-// serveur pour un module que personne n'a activé.
+// It always mounts: that is what allows the HTTP surface to exist and answer a
+// clear error, rather than failing the whole server start-up for a module nobody
+// enabled.
 func Disabled() Module {
 	failRegister := func(context.Context, domain.RegistrationCommand) result.Result[domain.User, domain.Error] {
 		return result.Err[domain.User, domain.Error](disabledError())
@@ -170,9 +171,9 @@ func disabledError() domain.Error {
 	).WithCause(ErrDisabled)
 }
 
-// SystemClock est l'horloge réelle, à passer en production.
+// SystemClock is the real clock, to be passed in production.
 //
-// Nommée plutôt qu'écrite `time.Now` au site d'appel : le composition root est
-// le SEUL endroit du dépôt autorisé à lire l'horloge, et lui donner un nom rend
-// la dérogation visible en relecture.
+// Named rather than written `time.Now` at the call site: the composition root is
+// the ONLY place in the repository allowed to read the clock, and giving it a
+// name makes the derogation visible in review.
 func SystemClock() ports.Now { return time.Now }

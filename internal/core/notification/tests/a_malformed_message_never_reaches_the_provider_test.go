@@ -8,114 +8,113 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification/domain"
 )
 
-// TestAMalformedMessageNeverReachesTheProvider garde le refus EN AMONT.
+// TestAMalformedMessageNeverReachesTheProvider guards the UPSTREAM refusal.
 //
-// # Pourquoi le cas d'usage revalide ce que le domaine sait déjà
+// # Why the use case revalidates what the domain already knows
 //
-// `domain.Message` a des champs EXPORTÉS : un appelant peut donc en fabriquer un
-// sans passer par `NewMessage`, et rien dans le type ne l'en empêche. Le cas
-// d'usage est le dernier endroit où l'on peut encore refuser avant qu'une
-// adresse vide n'atteigne un fournisseur — où elle deviendrait un rejet facturé
-// et journalisé chez un tiers.
+// `domain.Message` has EXPORTED fields: a caller can therefore build one without
+// going through `NewMessage`, and nothing in the type prevents it. The use case
+// is the last place where one can still refuse before an empty address reaches a
+// provider — where it would become a billed rejection logged at a third party.
 //
-// Le test construit délibérément des messages À LA MAIN, exactement comme le
-// ferait un appelant pressé.
+// The test deliberately builds messages BY HAND, exactly as a hurried caller
+// would.
 func TestAMalformedMessageNeverReachesTheProvider(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	mod, j := newModule(t, nil)
+	mod, logs := newModule(t, nil)
 
-	valide := message(t)
+	valid := message(t)
 	cases := map[string]domain.Message{
-		"sans destinataire": {Channel: domain.ChannelEmail, Subject: subject, Body: body},
-		"sans sujet":        {Channel: domain.ChannelEmail, To: valide.To, Body: body},
-		"sujet en espaces":  {Channel: domain.ChannelEmail, To: valide.To, Subject: "   ", Body: body},
-		"sans corps":        {Channel: domain.ChannelEmail, To: valide.To, Subject: subject},
-		"corps en espaces":  {Channel: domain.ChannelEmail, To: valide.To, Subject: subject, Body: "  \n "},
-		"message nu":        {},
+		"no recipient":       {Channel: domain.ChannelEmail, Subject: subject, Body: body},
+		"no subject":         {Channel: domain.ChannelEmail, To: valid.To, Body: body},
+		"whitespace subject": {Channel: domain.ChannelEmail, To: valid.To, Subject: "   ", Body: body},
+		"no body":            {Channel: domain.ChannelEmail, To: valid.To, Subject: subject},
+		"whitespace body":    {Channel: domain.ChannelEmail, To: valid.To, Subject: subject, Body: "  \n "},
+		"bare message":       {},
 	}
 
 	for name, msg := range cases {
 		err := mod.Send(ctx, msg)
 		if !errors.Is(err, domain.ErrIncomplete) && !errors.Is(err, domain.ErrUnknownChannel) {
-			t.Errorf("%s : attendu un refus du domaine, obtenu %v", name, err)
+			t.Errorf("%s: want a domain refusal, got %v", name, err)
 		}
 	}
 
-	if j.texte() != "" {
-		t.Fatalf("aucun message refusé ne doit atteindre le pilote : %s", j.texte())
+	if logs.text() != "" {
+		t.Fatalf("no refused message must reach the driver: %s", logs.text())
 	}
 }
 
-// TestAnUnservedChannelIsRefusedNeverSubstituted : deny par défaut sur le canal.
+// TestAnUnservedChannelIsRefusedNeverSubstituted: deny by default on the
+// channel.
 //
-// Se rabattre sur le courriel parce que le SMS n'est pas livré enverrait un code
-// de vérification à la mauvaise adresse — un canal choisi précisément parce que
-// l'autre ne convenait pas. Le catalogue dit ce qui EXISTE, et le domaine refuse
-// le reste.
+// Falling back to email because SMS is not shipped would send a verification
+// code to the wrong address — a channel chosen precisely because the other one
+// did not suit. The catalogue says what EXISTS, and the domain refuses the rest.
 func TestAnUnservedChannelIsRefusedNeverSubstituted(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	mod, j := newModule(t, nil)
-	valide := message(t)
+	mod, logs := newModule(t, nil)
+	valid := message(t)
 
-	for _, canal := range []domain.Channel{"sms", "push", "webhook", "", "EMAIL"} {
+	for _, channel := range []domain.Channel{"sms", "push", "webhook", "", "EMAIL"} {
 		err := mod.Send(ctx, domain.Message{
-			Channel: canal, To: valide.To, Subject: subject, Body: body,
+			Channel: channel, To: valid.To, Subject: subject, Body: body,
 		})
 		if !errors.Is(err, domain.ErrUnknownChannel) {
-			t.Errorf("canal %q : attendu ErrUnknownChannel, obtenu %v", canal, err)
+			t.Errorf("channel %q: want ErrUnknownChannel, got %v", channel, err)
 		}
 	}
 
-	if j.texte() != "" {
-		t.Fatalf("aucun canal refusé ne doit atteindre le pilote : %s", j.texte())
+	if logs.text() != "" {
+		t.Fatalf("no refused channel must reach the driver: %s", logs.text())
 	}
 }
 
-// TestRecipientIsNormalisedSoDeduplicationHolds garde la forme canonique.
+// TestRecipientIsNormalisedSoDeduplicationHolds guards the canonical form.
 //
-// `Alice@Example.COM ` et `alice@example.com` sont UNE adresse. Sans
-// normalisation, une déduplication d'envois laisserait passer le doublon — et le
-// destinataire recevrait deux fois le même courriel de bienvenue, ce qui est
-// exactement le symptôme que l'idempotence est censée supprimer.
+// `Alice@Example.COM ` and `alice@example.com` are ONE address. Without
+// normalisation, a send deduplication would let the duplicate through — and the
+// recipient would receive the same welcome email twice, which is exactly the
+// symptom idempotency is meant to remove.
 func TestRecipientIsNormalisedSoDeduplicationHolds(t *testing.T) {
 	t.Parallel()
 
-	for _, variante := range []string{"  Alice@Example.COM ", "ALICE@EXAMPLE.COM", "alice@example.com"} {
-		destinataire, err := domain.NewRecipient(variante)
+	for _, variant := range []string{"  Alice@Example.COM ", "ALICE@EXAMPLE.COM", "alice@example.com"} {
+		to, err := domain.NewRecipient(variant)
 		if err != nil {
-			t.Fatalf("adresse %q refusée: %v", variante, err)
+			t.Fatalf("address %q refused: %v", variant, err)
 		}
-		if destinataire.String() != recipient {
-			t.Errorf("adresse %q normalisée en %q, attendu %q", variante, destinataire.String(), recipient)
+		if to.String() != recipient {
+			t.Errorf("address %q normalised to %q, want %q", variant, to.String(), recipient)
 		}
 	}
 }
 
-// TestAMalformedRecipientIsRefused garde les bornes de l'adresse.
+// TestAMalformedRecipientIsRefused guards the bounds of the address.
 //
-// La validation est délibérément MINIMALE — pas d'expression rationnelle
-// « conforme RFC 5322 ». Elles rejettent des adresses valides (apostrophes,
-// accents, sous-adresses `+`), et un destinataire refusé à tort ne reçoit jamais
-// rien sans que personne s'en aperçoive. Ce test garde donc les refus
-// INCONTESTABLES, et vérifie que les formes exotiques passent.
+// The validation is deliberately MINIMAL — no "RFC 5322 compliant" regular
+// expression. They reject valid addresses (apostrophes, accents, `+`
+// sub-addresses), and a recipient wrongly refused never receives anything
+// without anyone noticing. This test therefore guards the INDISPUTABLE refusals,
+// and checks that exotic forms pass.
 func TestAMalformedRecipientIsRefused(t *testing.T) {
 	t.Parallel()
 
-	refusees := []string{"", "   ", "sans-arobase", "@example.com", "alice@", "a@b@c.com", "ali ce@x.com"}
-	for _, raw := range refusees {
+	refused := []string{"", "   ", "no-at-sign", "@example.com", "alice@", "a@b@c.com", "ali ce@x.com"}
+	for _, raw := range refused {
 		if _, err := domain.NewRecipient(raw); !errors.Is(err, domain.ErrIncomplete) {
-			t.Errorf("adresse %q : attendu ErrIncomplete, obtenu %v", raw, err)
+			t.Errorf("address %q: want ErrIncomplete, got %v", raw, err)
 		}
 	}
 
-	acceptees := []string{"alice+facture@example.com", "l'éve@example.com", "a@b.co", "prénom.nom@sous.domaine.fr"}
-	for _, raw := range acceptees {
+	accepted := []string{"alice+facture@example.com", "l'éve@example.com", "a@b.co", "prénom.nom@sous.domaine.fr"}
+	for _, raw := range accepted {
 		if _, err := domain.NewRecipient(raw); err != nil {
-			t.Errorf("adresse %q valide refusée : %v", raw, err)
+			t.Errorf("valid address %q refused: %v", raw, err)
 		}
 	}
 }

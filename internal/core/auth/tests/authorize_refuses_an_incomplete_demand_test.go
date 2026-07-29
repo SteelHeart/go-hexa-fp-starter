@@ -8,73 +8,73 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestAuthorizeRefusesAnIncompleteDemand : la valeur zéro n'ouvre rien.
+// TestAuthorizeRefusesAnIncompleteDemand: the zero value opens nothing.
 //
-// # Le cas qu'un magasin permissif rendrait catastrophique
+// # The case a permissive store would make catastrophic
 //
-// Une `Permission{}` non construite porte la chaîne vide, et une `IdentityID`
-// vide aussi. Sans ce refus en amont, les deux atteindraient le magasin où elles
-// deviendraient des clés légitimes — et la première ligne enregistrée sous une
-// clé vide accorderait à quiconque n'envoie rien.
+// A `Permission{}` that was never built carries the empty string, and so does
+// an empty `IdentityID`. Without this upstream refusal, both would reach the
+// store where they would become legitimate keys — and the first row recorded
+// under an empty key would grant access to anyone who sends nothing.
 //
-// Le refus est distinct de `ErrForbidden` : la demande elle-même est mal formée,
-// ce qu'une surface HTTP traduit en 422 et non en 403.
+// The refusal is distinct from `ErrForbidden`: the request itself is malformed,
+// which an HTTP surface translates into a 422 and not a 403.
 func TestAuthorizeRefusesAnIncompleteDemand(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 	id := register(t, mod, subject)
-	grant(t, mod, id, "comptable", "billing.invoice.cancel")
+	grant(t, mod, id, "accountant", "billing.invoice.cancel")
 
 	cases := map[string]struct {
 		identity   domain.IdentityID
 		permission domain.Permission
 	}{
-		"identité vide":             {"", permission(t, "billing.invoice.cancel")},
-		"permission non construite": {id, domain.Permission{}},
-		"les deux":                  {"", domain.Permission{}},
+		"empty identity":     {"", permission(t, "billing.invoice.cancel")},
+		"permission unbuilt": {id, domain.Permission{}},
+		"both":               {"", domain.Permission{}},
 	}
 
 	for name, tc := range cases {
 		err := mod.Authorize(ctx, tc.identity, tc.permission)
 		if !errors.Is(err, domain.ErrIncomplete) {
-			t.Errorf("%s : attendu ErrIncomplete, obtenu %v", name, err)
+			t.Errorf("%s: want ErrIncomplete, got %v", name, err)
 		}
 		if errors.Is(err, domain.ErrForbidden) {
-			t.Errorf("%s : une demande mal formée n'est pas un refus de permission", name)
+			t.Errorf("%s: a malformed request is not a permission refusal", name)
 		}
 	}
 }
 
-// TestAuthorizeRefusesAnUnknownIdentity : un identifiant inventé n'accorde rien.
+// TestAuthorizeRefusesAnUnknownIdentity: an invented identifier grants nothing.
 //
-// Deny par défaut jusqu'au bout : `Grants` rend `false` pour ce qu'il ne connaît
-// pas, et le cas d'usage traduit en `ErrForbidden`. La faute inverse — traiter
-// « inconnu » comme « pas de restriction connue » — est la manière dont un
-// contrôle d'accès s'ouvre entièrement en une ligne.
+// Deny by default all the way: `Grants` returns `false` for what it does not
+// know, and the use case translates that into `ErrForbidden`. The opposite
+// mistake — treating "unknown" as "no known restriction" — is how an access
+// control opens up entirely in one line.
 func TestAuthorizeRefusesAnUnknownIdentity(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 
-	err := mod.Authorize(ctx, "identifiant-invente", permission(t, "billing.invoice.cancel"))
+	err := mod.Authorize(ctx, "invented-identifier", permission(t, "billing.invoice.cancel"))
 	if !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("identité inconnue : attendu ErrForbidden, obtenu %v", err)
+		t.Fatalf("unknown identity: want ErrForbidden, got %v", err)
 	}
 }
 
-// TestVerifyAndAuthorizeStayTwoCalls constate la SÉPARATION des deux gestes.
+// TestVerifyAndAuthorizeStayTwoCalls records the SEPARATION of the two gestures.
 //
-// `Verify` rend une identité et ne dit rien des permissions ; `Authorize` rend un
-// refus ou rien et ne dit rien de l'identité. Les fusionner en un
-// `verifyAndAuthorize(token, permission)` ramènerait les permissions dans le
-// périmètre du jeton par la porte de derrière, et la prochaine optimisation
-// naturelle serait de les y mettre pour de bon.
+// `Verify` returns an identity and says nothing about permissions; `Authorize`
+// returns a refusal or nothing and says nothing about the identity. Merging
+// them into a `verifyAndAuthorize(token, permission)` would bring permissions
+// back within the token's scope through the back door, and the next natural
+// optimisation would be to put them in there for good.
 //
-// Le test constate qu'une identité PARFAITEMENT valide n'obtient rien sans
-// permission accordée.
+// The test records that a PERFECTLY valid identity obtains nothing without a
+// granted permission.
 func TestVerifyAndAuthorizeStayTwoCalls(t *testing.T) {
 	t.Parallel()
 
@@ -84,18 +84,18 @@ func TestVerifyAndAuthorizeStayTwoCalls(t *testing.T) {
 
 	session, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 
 	identity, err := mod.Verify(ctx, session.Token)
 	if err != nil {
-		t.Fatalf("le jeton est valide : %v", err)
+		t.Fatalf("the token is valid: %v", err)
 	}
 	if identity.ID != id {
-		t.Fatalf("attendu l'identité %q, obtenu %q", id, identity.ID)
+		t.Fatalf("want identity %q, got %q", id, identity.ID)
 	}
 
 	if err := mod.Authorize(ctx, identity.ID, permission(t, "billing.invoice.cancel")); !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("authentifié n'est pas autorisé : attendu ErrForbidden, obtenu %v", err)
+		t.Fatalf("authenticated is not authorised: want ErrForbidden, got %v", err)
 	}
 }

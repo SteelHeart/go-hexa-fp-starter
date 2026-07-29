@@ -8,9 +8,9 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestMarkFailedReschedulesInTheFuture : après un échec, le message ne doit PAS
-// être immédiatement rejouable — sinon le worker boucle à plein régime sur un
-// message cassé.
+// TestMarkFailedReschedulesInTheFuture: after a failure, the message must NOT
+// be immediately claimable again — otherwise the worker loops at full speed on
+// a broken message.
 func TestMarkFailedReschedulesInTheFuture(t *testing.T) {
 	t.Parallel()
 
@@ -23,16 +23,16 @@ func TestMarkFailedReschedulesInTheFuture(t *testing.T) {
 
 	attempt := domain.NextAttempt(claimed[0],
 		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
-		fixedNow(), "réseau indisponible")
+		fixedNow(), "network unavailable")
 	if err := mod.MarkFailed(ctx, attempt); err != nil {
 		t.Fatalf("MarkFailed: %v", err)
 	}
 
 	again, _ := mod.Claim(ctx, 10)
 	if len(again) != 0 {
-		t.Errorf("le message est redevenu réservable immédiatement après un échec")
+		t.Errorf("the message became claimable again immediately after a failure")
 	}
 	if count, _ := mod.PendingCount(ctx); count != 1 {
-		t.Errorf("un message en attente de réessai doit rester pending, count=%d", count)
+		t.Errorf("a message awaiting a retry must stay pending, count=%d", count)
 	}
 }

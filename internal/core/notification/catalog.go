@@ -2,34 +2,32 @@ package notification
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// Aucun fichier du framework ne nomme `notification` : le catalogue est
-// construit ici, à côté de la fabrique `New`, et il PARTAGE ses constantes avec
-// elle. La divergence entre ce qui est déclarable et ce qui est constructible
-// devient donc impossible.
+// No file of the framework names `notification`: the catalogue is built here,
+// next to the `New` factory, and it SHARES its constants with it. Divergence
+// between what is declarable and what is constructible therefore becomes
+// impossible.
 //
-// # Un seul pilote, et il n'envoie rien
+// # A single driver, and it sends nothing
 //
-// `smtp`, `mailjet`, `ses` sont décrits dans
-// documentation/technique/modules-noyau.md et ne sont PAS écrits. Ce dépôt a
-// déjà payé la faute inverse : huit paquets de pilotes ont vécu des mois avec
-// zéro test, à aucun niveau (#37), et deux défauts de production y dormaient. Un
-// pilote SMTP écrit sans serveur pour l'éprouver est du code qui a l'air de
-// marcher — et sur ce module, « a l'air de marcher » veut dire que personne ne
-// reçoit rien pendant des semaines.
+// `smtp`, `mailjet`, `ses` are described in
+// documentation/technique/modules-noyau.md and are NOT written. This repository
+// has already paid the opposite mistake: eight driver packages lived for months
+// with zero tests, at any level (#37), and two production defects were sleeping
+// in there. An SMTP driver written without a server to exercise it is code that
+// looks like it works — and on this module, "looks like it works" means nobody
+// receives anything for weeks.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : ni serveur SMTP, ni compte chez un
-			// fournisseur. C'est ce qui permet à la chaîne complète —
-			// inscription, outbox, relais, notification — de partir d'un
-			// `go run`.
+			// The default requires NOTHING: no SMTP server, no account at a
+			// provider. That is what lets the complete chain — registration,
+			// outbox, relay, notification — start from a `go run`.
 			Default: driverLog,
 			Drivers: map[string]config.Resources{
-				// N'envoie à personne : voir les NON-garanties du paquet
-				// drivers/log avant de l'envisager ailleurs qu'en
-				// développement.
+				// Sends to nobody: see the NON-GUARANTEES of the drivers/log
+				// package before considering it anywhere but in development.
 				driverLog: {Options: []string{OptionBody}},
 			},
 		},

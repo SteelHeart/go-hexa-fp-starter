@@ -7,46 +7,47 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// Guard protège une opération par une permission.
+// Guard protects an operation with a permission.
 //
-// # Ce que ce type rend enfin joignable
+// # What this type finally makes reachable
 //
-// `Authorize` était prouvé par 39 tests et exposé par aucune surface : personne
-// ne pouvait s'en servir depuis l'extérieur. Il n'a pas été écrit plus tôt
-// délibérément — un garde sans route à protéger est du code mort, et ce dépôt
-// vient d'en fermer trois. Il arrive avec ses premières routes.
+// `Authorize` was proven by 39 tests and exposed by no surface: nobody could
+// use it from the outside. It was not written earlier deliberately — a guard
+// with no route to protect is dead code, and this repository has just closed
+// three of those. It arrives with its first routes.
 //
-// # Pourquoi un appel EXPLICITE et non un intergiciel
+// # Why an EXPLICIT call and not a middleware
 //
-// Un intergiciel qui déposerait l'identité dans le contexte violerait la
-// décision 5 de l'ADR 017 — *l'identité entre par la commande, jamais par le
-// contexte*. Elle rendrait aussi INVISIBLE le fait qu'une opération dépend de
-// qui appelle : on lit la signature d'un gestionnaire sans savoir s'il est
-// protégé, et la protection disparaît le jour où quelqu'un déplace la route hors
-// du groupe intergicié.
+// A middleware that dropped the identity into the context would violate
+// decision 5 of ADR 017 — *the identity enters through the command, never
+// through the context*. It would also make it INVISIBLE that an operation
+// depends on who is calling: you read a handler's signature without knowing
+// whether it is protected, and the protection vanishes the day someone moves
+// the route out of the middleware group.
 //
-// Ici, chaque opération protégée commence par une ligne qui NOMME sa permission.
-// Retirer la protection demande de supprimer cette ligne — visible en revue.
+// Here, every protected operation starts with a line that NAMES its permission.
+// Removing the protection requires deleting that line — visible on review.
 type Guard struct {
 	Module auth.Module
 }
 
-// Require exige une permission et rend l'identité de l'appelant.
+// Require demands a permission and returns the caller's identity.
 //
-// # Les deux appels ne sont PAS fusionnés
+// # The two calls are NOT merged
 //
-// `Verify` puis `Authorize` : le jeton authentifie, il n'autorise pas. Un seul
-// appel qui ferait les deux ramènerait les permissions dans le périmètre du
-// jeton par la porte de derrière, et la prochaine optimisation naturelle serait
-// de les y mettre pour de bon.
+// `Verify` then `Authorize`: the token authenticates, it does not authorise. A
+// single call doing both would bring permissions back within the token's scope
+// through the back door, and the next natural optimisation would be to put them
+// in there for good.
 //
-// # L'ordre des refus compte
+// # The order of the refusals matters
 //
-// Un jeton invalide rend **401** avant toute question de permission : dire
-// « permission refusée » à quelqu'un qui n'est pas authentifié lui apprendrait
-// que la route existe et qu'un droit la garde. Un porteur authentifié mais sans
-// le droit rend **403** — et cette distinction-là est utile, elle lui évite de
-// se reconnecter en boucle pour un droit qu'il n'aura pas davantage.
+// An invalid token returns **401** before any question of permission: saying
+// "permission denied" to someone who is not authenticated would teach them that
+// the route exists and that a right guards it. A bearer who is authenticated
+// but lacks the right gets **403** — and that distinction is useful, it spares
+// them signing in over and over for a right they will not have any more than
+// before.
 func (g Guard) Require(
 	ctx context.Context, header string, permission domain.Permission,
 ) (domain.Identity, error) {
@@ -66,21 +67,21 @@ func (g Guard) Require(
 	return identity, nil
 }
 
-// mustPermission construit une permission au MONTAGE, pas à l'appel.
+// mustPermission builds a permission at MOUNT time, not at call time.
 //
-// Une permission mal formée est une faute de programmation, pas une condition
-// d'exécution : elle ne dépend d'aucune entrée. La découvrir au premier appel
-// protégé rendrait un 500 en production pour une chaîne fautive écrite des mois
-// plus tôt — et la route paraîtrait fonctionner jusque-là.
+// A malformed permission is a programming mistake, not a runtime condition: it
+// depends on no input. Discovering it on the first protected call would return
+// a 500 in production for a faulty string written months earlier — and the
+// route would appear to work until then.
 //
-// La panique est donc VOLONTAIRE et vit dans un adaptateur, jamais dans le cœur
-// (rules/README.md : aucun `panic` dans `domain/`, `ports/`, `application/`).
-// Elle survient au montage des routes, c'est-à-dire au démarrage, c'est-à-dire
-// avant qu'un seul appelant ne soit servi.
+// The panic is therefore DELIBERATE and lives in an adapter, never in the core
+// (rules/README.md: no `panic` in `domain/`, `ports/`, `application/`). It
+// happens when the routes are mounted, that is at startup, that is before a
+// single caller has been served.
 func mustPermission(raw string) domain.Permission {
 	permission, err := domain.NewPermission(raw)
 	if err != nil {
-		panic("permission mal formée au montage: " + raw + ": " + err.Error())
+		panic("malformed permission at mount time: " + raw + ": " + err.Error())
 	}
 	return permission
 }

@@ -8,13 +8,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/domain"
 )
 
-// TestTraversalKeysAreRefusedOnRead : à la LECTURE, la clé n'a pas été dérivée par
-// SafeKey — elle vient d'une URL, donc d'un inconnu.
+// TestTraversalKeysAreRefusedOnRead: on READ, the key has not been derived by
+// SafeKey — it comes from a URL, hence from a stranger.
 //
-// C'est le trou que la protection à l'écriture ne couvre pas : hacher les noms
-// entrants ne sert à rien si `GET /files/../../etc/passwd` est servi. La
-// vérification a donc lieu AVANT de toucher au disque, pour la lecture comme pour
-// la suppression.
+// This is the hole that protection on write does not cover: hashing incoming
+// names is useless if `GET /files/../../etc/passwd` is served. The check
+// therefore takes place BEFORE touching the disk, for reading as well as for
+// deletion.
 func TestTraversalKeysAreRefusedOnRead(t *testing.T) {
 	t.Parallel()
 
@@ -22,13 +22,13 @@ func TestTraversalKeysAreRefusedOnRead(t *testing.T) {
 	ctx := context.Background()
 
 	keys := map[string]domain.Key{
-		"remontée":           "../secret.pem",
-		"remontée profonde":  "../../../etc/passwd",
-		"absolue":            "/etc/passwd",
-		"remontée au milieu": "ab/../../cd",
-		"parent nu":          "..",
-		"vide":               "",
-		"Windows":            "..\\secret.pem",
+		"climb":               "../secret.pem",
+		"deep climb":          "../../../etc/passwd",
+		"absolute":            "/etc/passwd",
+		"climb in the middle": "ab/../../cd",
+		"bare parent":         "..",
+		"empty":               "",
+		"Windows":             "..\\secret.pem",
 	}
 
 	for name, key := range keys {
@@ -36,10 +36,10 @@ func TestTraversalKeysAreRefusedOnRead(t *testing.T) {
 			t.Parallel()
 
 			if _, err := mod.Get(ctx, key); !errors.Is(err, domain.ErrUnsafeName) {
-				t.Errorf("Get(%q) = %v, attendu ErrUnsafeName", key, err)
+				t.Errorf("Get(%q) = %v, want ErrUnsafeName", key, err)
 			}
 			if err := mod.Delete(ctx, key); !errors.Is(err, domain.ErrUnsafeName) {
-				t.Errorf("Delete(%q) = %v, attendu ErrUnsafeName", key, err)
+				t.Errorf("Delete(%q) = %v, want ErrUnsafeName", key, err)
 			}
 		})
 	}

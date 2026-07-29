@@ -8,33 +8,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestTakenEmailIsRefusedBeforeHashing : l'adresse déjà prise est refusée AVANT le
-// hachage.
+// TestTakenEmailIsRefusedBeforeHashing: an already taken address is refused
+// BEFORE hashing.
 //
-// L'ordre n'est pas cosmétique. Argon2id est délibérément lent et gourmand en
-// mémoire — c'est sa raison d'être. Hacher avant de vérifier la disponibilité
-// offrirait à quiconque un moyen de saturer le serveur en soumettant en boucle une
-// adresse dont il sait qu'elle existe déjà.
+// The order is not cosmetic. Argon2id is deliberately slow and memory hungry —
+// that is its reason to exist. Hashing before checking availability would hand
+// anyone a way of saturating the server by submitting, over and over, an address
+// they know already exists.
 //
-// Le test vérifie donc les deux choses : le bon code d'erreur, ET le fait que le
-// port coûteux n'a pas été appelé.
+// The test therefore verifies both things: the right error code, AND the fact
+// that the costly port was not called.
 func TestTakenEmailIsRefusedBeforeHashing(t *testing.T) {
 	t.Parallel()
 
-	observe := &journal{}
-	deps := depsNominales(observe)
+	observed := &callLog{}
+	deps := nominalDeps(observed)
 	deps.EmailIsTaken = func(context.Context, domain.Email) result.Result[bool, domain.Error] {
-		observe.note("EmailIsTaken")
+		observed.note("EmailIsTaken")
 		return result.Ok[bool, domain.Error](true)
 	}
 
-	if got := codeDe(t, inscrit(deps)); got != domain.CodeEmailAlreadyExists {
-		t.Errorf("code = %q, attendu %q", got, domain.CodeEmailAlreadyExists)
+	if got := codeOf(t, register(deps)); got != domain.CodeEmailAlreadyExists {
+		t.Errorf("code = %q, want %q", got, domain.CodeEmailAlreadyExists)
 	}
-	if observe.aAppele("HashPassword") {
-		t.Error("le hachage ne doit PAS être payé pour une adresse déjà prise")
+	if observed.called("HashPassword") {
+		t.Error("hashing must NOT be paid for an already taken address")
 	}
-	if observe.aAppele("SaveUser") {
-		t.Error("aucune écriture ne doit avoir lieu")
+	if observed.called("SaveUser") {
+		t.Error("no write must take place")
 	}
 }

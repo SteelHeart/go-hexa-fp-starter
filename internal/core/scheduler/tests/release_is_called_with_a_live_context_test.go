@@ -9,14 +9,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestReleaseIsCalledWithALiveContext : la libération ne doit pas hériter d'un
-// contexte déjà mort.
+// TestReleaseIsCalledWithALiveContext: the release must not inherit an already
+// dead context.
 //
-// Le piège est réel et fréquent : le travail épuise son délai, le contexte
-// d'exécution est annulé, et la libération faite avec ce même contexte échoue
-// instantanément. Le verrou reste alors pris jusqu'à sa péremption — c'est-à-dire
-// jusqu'à la mort de la réplique pour un verrou de session — et la tâche ne tourne
-// plus du tout. Un délai dépassé deviendrait une panne définitive.
+// The trap is real and frequent: the work exhausts its timeout, the execution
+// context is cancelled, and the release made with that same context fails
+// instantly. The lock then stays taken until it expires — that is to say until
+// the replica dies, for a session lock — and the task no longer runs at all. An
+// overrun timeout would become a permanent outage.
 func TestReleaseIsCalledWithALiveContext(t *testing.T) {
 	t.Parallel()
 
@@ -27,12 +27,12 @@ func TestReleaseIsCalledWithALiveContext(t *testing.T) {
 		return nil
 	}
 
-	log := &journal{}
+	log := &reportLog{}
 	runner := newRunner(t, acquire, release, log)
 
-	// Une tâche dont le délai est minuscule et dont le travail attend l'annulation :
-	// le contexte d'exécution est donc mort au moment de la libération.
-	expired := domain.Task{Name: "lente", Every: time.Hour, Timeout: time.Millisecond}
+	// A task whose timeout is tiny and whose work waits for cancellation: the
+	// execution context is therefore dead by the time of the release.
+	expired := domain.Task{Name: "slow", Every: time.Hour, Timeout: time.Millisecond}
 	runner.RunOnce(context.Background(), application.Scheduled{
 		Task: expired,
 		Job: func(ctx context.Context) error {
@@ -42,6 +42,6 @@ func TestReleaseIsCalledWithALiveContext(t *testing.T) {
 	})
 
 	if releaseErr != nil {
-		t.Errorf("Release a reçu un contexte annulé (%v) : le verrou resterait pris", releaseErr)
+		t.Errorf("Release received a cancelled context (%v): the lock would stay taken", releaseErr)
 	}
 }

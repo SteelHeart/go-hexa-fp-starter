@@ -9,55 +9,55 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/cache"
 )
 
-// TestCacheSurvivesARoundTripAndReportsAMiss éprouve le paquet `cache`, qui
-// n'avait AUCUN test — pas même de compilation exercée (#37).
+// TestCacheSurvivesARoundTripAndReportsAMiss exercises the `cache` package,
+// which had NO test at all — not even compilation exercised (#37).
 //
-// La raison de cette absence est structurelle : `cache.New` fait un `Ping` à la
-// construction et `cache.JSON` exige un client. Ce paquet n'est donc atteignable
-// qu'à ce niveau, jamais par `go test ./...`.
+// The reason for that absence is structural: `cache.New` performs a `Ping` at
+// construction and `cache.JSON` requires a client. This package is therefore
+// only reachable at this level, never by `go test ./...`.
 //
-// Ce que le test garde : l'aller-retour d'une valeur typée, et surtout le
-// comportement en ABSENCE. `Getter` traite l'absence et la panne de la même
-// façon — une option vide — parce que dans les deux cas l'appelant n'a pas la
-// valeur et doit se rabattre sur la source de vérité. Ce choix est délibéré, et
-// il ne se vérifie que contre un vrai Redis.
+// What the test guards: the round trip of a typed value, and above all the
+// behaviour on ABSENCE. `Getter` treats absence and failure the same way — an
+// empty option — because in both cases the caller does not have the value and
+// has to fall back on the source of truth. That choice is deliberate, and it
+// can only be verified against a real Redis.
 func TestCacheSurvivesARoundTripAndReportsAMiss(t *testing.T) {
 	ctx := ctxTest(t)
 	client := redisClient(t)
 
-	type profil struct {
-		Nom string `json:"nom"`
-		Age int    `json:"age"`
+	type profile struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
 	}
 
 	namespace := unique(t, "integration-cache")
-	get, set, del := cache.JSON[profil](client, namespace, time.Minute)
+	get, set, del := cache.JSON[profile](client, namespace, time.Minute)
 
-	// Absence AVANT toute écriture : l'option doit être vide.
-	if absent := get(ctx, "inconnu"); absent.IsSome() {
-		t.Fatal("une clé jamais écrite doit rendre une option vide")
+	// Absence BEFORE any write: the option must be empty.
+	if absent := get(ctx, "unknown"); absent.IsSome() {
+		t.Fatal("a key never written must return an empty option")
 	}
 
-	// `Setter` et `Deleter` ne retournent RIEN, et c'est une décision : un cache
-	// qui tombe ne doit jamais faire échouer une requête métier. La conséquence
-	// est qu'une écriture muette est indiscernable d'une écriture réussie — d'où
-	// la relecture qui suit, seule preuve possible.
-	attendu := profil{Nom: "alice", Age: 30}
-	set(ctx, "cle", attendu)
-	t.Cleanup(func() { del(ctxTest(t), "cle") })
+	// `Setter` and `Deleter` return NOTHING, and that is a decision: a cache
+	// that falls over must never make a business request fail. The consequence
+	// is that a silent write is indistinguishable from a successful one — hence
+	// the read-back that follows, the only proof available.
+	want := profile{Name: "alice", Age: 30}
+	set(ctx, "key", want)
+	t.Cleanup(func() { del(ctxTest(t), "key") })
 
-	lu := get(ctx, "cle")
-	if lu.IsNone() {
-		t.Fatal("la valeur écrite doit être relue : sinon le cache ne cache rien")
+	read := get(ctx, "key")
+	if read.IsNone() {
+		t.Fatal("the written value must be read back: otherwise the cache caches nothing")
 	}
-	if got := lu.ValueOr(profil{}); got != attendu {
-		t.Errorf("valeur relue = %+v, attendu %+v", got, attendu)
+	if got := read.ValueOr(profile{}); got != want {
+		t.Errorf("value read back = %+v, want %+v", got, want)
 	}
 
-	// Après suppression, retour à l'absence.
-	del(ctx, "cle")
-	if apres := get(ctx, "cle"); apres.IsSome() {
-		t.Fatal("une clé supprimée doit redevenir absente — une invalidation qui " +
-			"n'invalide rien est pire que pas de cache")
+	// After deletion, back to absence.
+	del(ctx, "key")
+	if after := get(ctx, "key"); after.IsSome() {
+		t.Fatal("a deleted key must become absent again — an invalidation that " +
+			"invalidates nothing is worse than no cache at all")
 	}
 }

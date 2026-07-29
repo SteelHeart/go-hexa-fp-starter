@@ -8,20 +8,22 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestUnknownSubjectAndWrongSecretAreIndistinguishable ferme l'oracle d'existence
-// de comptes.
+// TestUnknownSubjectAndWrongSecretAreIndistinguishable closes the account
+// existence oracle.
 //
-// # Ce que la faute produit quand elle est là
+// # What the fault produces when it is there
 //
-// Un formulaire qui répond « cet identifiant n'existe pas » d'un côté et « mot de
-// passe incorrect » de l'autre est un service d'énumération : on lui soumet mille
-// adresses, on note lesquelles répondent différemment, et on sait exactement où
-// concentrer l'effort. C'est la faute la plus répandue du domaine, et elle est
-// invisible à la relecture parce que chaque message est, isolément, plus utile.
+// A form that answers "this identifier does not exist" on one side and
+// "incorrect password" on the other is an enumeration service: you submit a
+// thousand addresses to it, note which ones answer differently, and you know
+// exactly where to concentrate the effort. It is the most widespread mistake in
+// this domain, and it is invisible on review because each message is, taken
+// alone, more helpful.
 //
-// Les trois causes — sujet mal formé, sujet inconnu, secret faux — doivent rendre
-// la MÊME erreur. Le test compare les trois entre elles, pas à une valeur
-// attendue : c'est l'indiscernabilité qui est la propriété, pas le libellé.
+// The three causes — malformed subject, unknown subject, wrong secret — must
+// return the SAME error. The test compares the three against each other, not
+// against an expected value: indistinguishability is the property, not the
+// wording.
 func TestUnknownSubjectAndWrongSecretAreIndistinguishable(t *testing.T) {
 	t.Parallel()
 
@@ -30,23 +32,23 @@ func TestUnknownSubjectAndWrongSecretAreIndistinguishable(t *testing.T) {
 	register(t, mod, subject)
 
 	cases := map[string]struct{ subject, secret string }{
-		"sujet inconnu":   {"personne@example.com", secret},
-		"secret faux":     {subject, "un-autre-secret-long"},
-		"sujet mal formé": {"   ", secret},
-		"secret vide":     {subject, ""},
+		"unknown subject":   {"nobody@example.com", secret},
+		"wrong secret":      {subject, "another-long-secret"},
+		"malformed subject": {"   ", secret},
+		"empty secret":      {subject, ""},
 	}
 
 	messages := make(map[string]bool)
 	for name, tc := range cases {
 		_, err := mod.Authenticate(ctx, tc.subject, tc.secret)
 		if !errors.Is(err, domain.ErrInvalidCredentials) {
-			t.Fatalf("%s : attendu ErrInvalidCredentials, obtenu %v", name, err)
+			t.Fatalf("%s: want ErrInvalidCredentials, got %v", name, err)
 		}
 		messages[err.Error()] = true
 	}
 
 	if len(messages) != 1 {
-		t.Fatalf("les refus doivent être indiscernables ; %d messages distincts : %v",
+		t.Fatalf("the refusals must be indistinguishable; %d distinct messages: %v",
 			len(messages), messages)
 	}
 }

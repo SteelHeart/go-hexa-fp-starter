@@ -8,19 +8,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
 )
 
-// TestMemoryDriverNeedsNoDatabaseNorCache verrouille la promesse de l'ADR 012 :
-// `hexa new` puis `go run` doit démarrer sans base, sans Redis, sans Docker.
+// TestMemoryDriverNeedsNoDatabaseNorCache locks down the promise of ADR 012:
+// `hexa new` then `go run` must start without a database, without Redis,
+// without Docker.
 func TestMemoryDriverNeedsNoDatabaseNorCache(t *testing.T) {
 	t.Parallel()
 
 	mod, err := idempotency.New(
 		config.Module{Enabled: true, Driver: "memory"},
-		idempotency.Deps{}, // ni Pool, ni Cache, ni horloge
+		idempotency.Deps{}, // no Pool, no Cache, no clock
 	)
 	if err != nil {
-		t.Fatalf("le pilote par défaut ne doit réclamer aucune dépendance: %v", err)
+		t.Fatalf("the default driver must claim no dependency: %v", err)
 	}
-	if _, err := mod.Reserve(context.Background(), request("k1", "charge")); err != nil {
-		t.Errorf("réservation sur le pilote mémoire: %v", err)
+	if _, err := mod.Reserve(context.Background(), request("k1", "payload")); err != nil {
+		t.Errorf("reservation on the memory driver: %v", err)
 	}
 }

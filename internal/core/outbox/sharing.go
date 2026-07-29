@@ -5,35 +5,34 @@ import (
 	"fmt"
 )
 
-// ErrNotShared refuse un pilote qui ne franchit pas la frontière du processus.
+// ErrNotShared refuses a driver that does not cross the process boundary.
 //
-// # Le défaut que ce refus empêche
+// # The defect this refusal prevents
 //
-// Le pilote `memory` vit DANS le processus. Un dépileur lancé comme binaire
-// séparé interrogerait donc son propre magasin — vide — pendant que les
-// événements écrits par le serveur resteraient dans la mémoire du serveur.
+// The `memory` driver lives INSIDE the process. A dispatcher launched as a
+// separate binary would therefore query its own store — empty — while the
+// events written by the server would stay in the server's memory.
 //
-// Il tournerait sans rien publier ET sans aucune erreur : les journaux seraient
-// propres, la sonde verte, le processus vivant. Le défaut ne se découvrirait que
-// le jour où quelqu'un demande pourquoi un client n'a jamais reçu son courriel —
-// et il faudrait alors remonter toute la chaîne pour trouver que le maillon
-// tournait à vide depuis le premier jour.
+// It would run publishing nothing AND without any error: the logs would be
+// clean, the probe green, the process alive. The defect would only be
+// discovered the day someone asks why a customer never received their email —
+// and one would then have to walk back the whole chain to find that the link
+// had been running empty since day one.
 //
-// Un composant silencieusement inerte est le pire défaut possible : c'est le
-// seul qui ne se signale jamais.
-var ErrNotShared = errors.New("pilote d'outbox non partagé entre processus")
+// A silently inert component is the worst possible defect: it is the only one
+// that never signals itself.
+var ErrNotShared = errors.New("outbox driver not shared across processes")
 
-// SharedAcrossProcesses indique si un pilote est visible depuis un AUTRE
-// processus que celui qui écrit.
+// SharedAcrossProcesses states whether a driver is visible from a process
+// OTHER than the one that writes.
 //
-// Cette connaissance vit ici, dans le module, et non chez l'appelant : le module
-// est le seul à savoir ce que chacun de ses pilotes garantit. Un nouveau pilote
-// ajoute donc sa réponse ici, au même endroit que son montage — plutôt que dans
-// une liste tenue à jour ailleurs, qui finirait par diverger.
+// This knowledge lives here, in the module, and not in the caller: the module
+// is the only one that knows what each of its drivers guarantees. A new driver
+// therefore adds its answer here, in the same place as its wiring — rather than
+// in a list kept up to date elsewhere, which would end up diverging.
 //
-// Deny par défaut : un pilote inconnu est réputé NON partagé. Se tromper dans ce
-// sens fait échouer un démarrage ; se tromper dans l'autre fait tourner un
-// dépileur à vide.
+// Deny by default: an unknown driver is deemed NOT shared. Erring in that
+// direction fails a startup; erring in the other makes a dispatcher run empty.
 func SharedAcrossProcesses(driver string) bool {
 	switch driver {
 	case driverPostgres:
@@ -45,17 +44,17 @@ func SharedAcrossProcesses(driver string) bool {
 	}
 }
 
-// RequireSharedDriver refuse une configuration sur laquelle un dépileur SÉPARÉ
-// ne verrait jamais rien.
+// RequireSharedDriver refuses a configuration on which a SEPARATE dispatcher
+// would never see anything.
 //
-// À appeler par tout binaire de dépilage, jamais par le serveur : celui-ci écrit
-// dans l'outbox et n'a donc aucune raison d'exiger un pilote partagé.
+// To be called by any dispatching binary, never by the server: the latter
+// writes to the outbox and therefore has no reason to require a shared driver.
 func RequireSharedDriver(driver string) error {
 	if SharedAcrossProcesses(driver) {
 		return nil
 	}
 	return fmt.Errorf(
-		"%w: %q. Un dépileur lancé séparément ne verrait jamais les événements "+
-			"écrits par le serveur. Basculer modules.%s.driver sur un pilote partagé",
+		"%w: %q. A separately launched dispatcher would never see the events "+
+			"written by the server. Switch modules.%s.driver to a shared driver",
 		ErrNotShared, driver, Name)
 }

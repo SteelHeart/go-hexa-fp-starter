@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du module idempotency : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests contains the BLACK BOX tests of the idempotency module: they
+// use nothing but the public API, exactly like a caller.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for the black box,
+// `{package}/internal_test.go` for the unexported identifiers. One file per
+// test — the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// clock est une horloge pilotée : un test d'expiration ne doit jamais attendre.
+// clock is a driven clock: an expiry test must never wait.
 type clock struct {
 	mu sync.Mutex
 	at time.Time
@@ -38,8 +38,8 @@ func (c *clock) advance(d time.Duration) {
 	c.at = c.at.Add(d)
 }
 
-// newMemoryModule construit le module sur son pilote par défaut, sans aucune
-// dépendance externe. Un `ttl` vide laisse jouer la valeur par défaut du module.
+// newMemoryModule builds the module on its default driver, without any external
+// dependency. An empty `ttl` lets the module's default value apply.
 func newMemoryModule(t *testing.T, clk *clock, ttl string) idempotency.Module {
 	t.Helper()
 	cfg := config.Module{Enabled: true, Driver: "memory"}
@@ -48,12 +48,12 @@ func newMemoryModule(t *testing.T, clk *clock, ttl string) idempotency.Module {
 	}
 	mod, err := idempotency.New(cfg, idempotency.Deps{Now: clk.now})
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	return mod
 }
 
-// request forge une requête complète.
+// request forges a complete request.
 func request(key string, payload any) domain.Request {
 	return domain.Request{Key: domain.Key(key), Fingerprint: domain.Fingerprint(payload)}
 }

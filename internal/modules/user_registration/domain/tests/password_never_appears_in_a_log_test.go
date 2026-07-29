@@ -8,35 +8,35 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestPasswordNeverAppearsInALog est le test de sécurité le plus important du
-// domaine.
+// TestPasswordNeverAppearsInALog is the most important security test of the
+// domain.
 //
-// Un mot de passe en clair dans un journal est une fuite définitive : les journaux
-// sont conservés longtemps, dupliqués vers des agrégateurs, et lus par des humains.
-// Le rotationner ne suffit pas — il faut prévenir tous les utilisateurs.
+// A clear-text password in a log is a definitive leak: logs are kept for a long
+// time, duplicated towards aggregators, and read by humans. Rotating it is not
+// enough — every user has to be warned.
 //
-// La protection est structurelle : `String()` rend un marqueur, donc `%v` et `%s`
-// masquent la valeur. Ce test vérifie aussi le cas qui fait vraiment les fuites —
-// un `%+v` sur une STRUCTURE qui contient le mot de passe, écrit sans y penser
-// dans un journal de débogage.
+// The protection is structural: `String()` returns a marker, so `%v` and `%s`
+// mask the value. This test also covers the case that really causes leaks — a
+// `%+v` on a STRUCTURE that contains the password, written without a second
+// thought into a debug log.
 func TestPasswordNeverAppearsInALog(t *testing.T) {
 	t.Parallel()
 
-	const secret = "correct cheval batterie agrafe"
+	const secret = "correct horse battery staple"
 	value, _, ok := domain.NewRawPassword(secret).Get()
 	if !ok {
-		t.Fatal("le mot de passe de test devait être accepté")
+		t.Fatal("the test password should have been accepted")
 	}
 
-	// Le passage par fmt est DÉLIBÉRÉ, et gocritic a tort de proposer
-	// `value.String()` : c'est précisément le chemin `fmt` qu'on teste. Un
-	// développeur qui laisse fuir un mot de passe ne le fait jamais en appelant
-	// String() — il le fait en passant la valeur à un `%v` de journal. Appeler
-	// String() ici testerait la méthode au lieu du chemin de fuite, et le test
-	// resterait vert le jour où quelqu'un retire l'implémentation de Stringer.
+	// Going through fmt is DELIBERATE, and gocritic is wrong to suggest
+	// `value.String()`: it is precisely the `fmt` path that is being tested. A
+	// developer who leaks a password never does it by calling String() — they
+	// do it by passing the value to a `%v` in a log. Calling String() here would
+	// test the method instead of the leak path, and the test would stay green
+	// the day someone removes the Stringer implementation.
 	formats := map[string]string{
-		"%v":  fmt.Sprintf("%v", value), //nolint:gocritic // le chemin fmt EST l'objet du test, pas un détour
-		"%s":  fmt.Sprintf("%s", value), //nolint:gocritic,staticcheck // idem : String() contournerait la fuite testée
+		"%v":  fmt.Sprintf("%v", value), //nolint:gocritic // the fmt path IS the subject of the test, not a detour
+		"%s":  fmt.Sprintf("%s", value), //nolint:gocritic,staticcheck // same: String() would bypass the tested leak
 		"%+v": fmt.Sprintf("%+v", struct{ Password domain.RawPassword }{value}),
 		"%v struct": fmt.Sprintf("%v", struct {
 			Email    string
@@ -44,15 +44,16 @@ func TestPasswordNeverAppearsInALog(t *testing.T) {
 		}{"alice@example.com", value}),
 	}
 
-	for format, rendu := range formats {
-		if strings.Contains(rendu, secret) {
-			t.Errorf("%s a laissé fuir le mot de passe: %q", format, rendu)
+	for format, rendered := range formats {
+		if strings.Contains(rendered, secret) {
+			t.Errorf("%s leaked the password: %q", format, rendered)
 		}
 	}
 
-	// Expose reste le seul chemin vers la valeur, et il est nommé pour se voir en
-	// revue : il ne doit y avoir qu'un appel dans tout le dépôt, celui du hachage.
+	// Expose remains the only path to the value, and it is named so as to be
+	// seen in review: there must be a single call in the whole repository, the
+	// one made by the hashing port.
 	if value.Expose() != secret {
-		t.Error("Expose doit rendre la valeur réelle : c'est sa seule raison d'être")
+		t.Error("Expose must return the real value: that is its only reason to exist")
 	}
 }

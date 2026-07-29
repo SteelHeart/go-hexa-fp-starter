@@ -8,13 +8,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/domain"
 )
 
-// TestIncompleteEntryIsRefused : une entrée d'audit incomplète est pire
-// qu'absente. Elle donne l'illusion d'une traçabilité — on croit pouvoir répondre
-// à « qui a fait ça » jusqu'au jour où on essaie.
+// TestIncompleteEntryIsRefused: an incomplete audit entry is worse than an
+// absent one. It gives the illusion of traceability — one believes one can
+// answer "who did that" until the day one tries.
 //
-// Le refus est déclaré dans le DOMAINE, donc identique quel que soit le pilote
-// branché, et reconnaissable par errors.Is. C'est la forme opérationnelle de la
-// substituabilité (ADR 003).
+// The refusal is declared in the DOMAIN, hence identical whichever driver is
+// plugged in, and recognisable through errors.Is. This is the operational form
+// of substitutability (ADR 003).
 func TestIncompleteEntryIsRefused(t *testing.T) {
 	t.Parallel()
 
@@ -22,18 +22,18 @@ func TestIncompleteEntryIsRefused(t *testing.T) {
 	ctx := context.Background()
 
 	cases := map[string]func(domain.Entry) domain.Entry{
-		"sans acteur": func(e domain.Entry) domain.Entry { e.Actor = ""; return e },
-		"sans action": func(e domain.Entry) domain.Entry { e.Action = ""; return e },
-		"sans type":   func(e domain.Entry) domain.Entry { e.EntityType = ""; return e },
-		"sans id":     func(e domain.Entry) domain.Entry { e.EntityID = ""; return e },
-		"entrée vide": func(domain.Entry) domain.Entry { return domain.Entry{} },
+		"without actor":  func(e domain.Entry) domain.Entry { e.Actor = ""; return e },
+		"without action": func(e domain.Entry) domain.Entry { e.Action = ""; return e },
+		"without type":   func(e domain.Entry) domain.Entry { e.EntityType = ""; return e },
+		"without id":     func(e domain.Entry) domain.Entry { e.EntityID = ""; return e },
+		"empty entry":    func(domain.Entry) domain.Entry { return domain.Entry{} },
 	}
 
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if err := mod.Record(ctx, mutate(completeEntry())); !errors.Is(err, domain.ErrIncomplete) {
-				t.Errorf("Record = %v, attendu ErrIncomplete", err)
+				t.Errorf("Record = %v, want ErrIncomplete", err)
 			}
 		})
 	}

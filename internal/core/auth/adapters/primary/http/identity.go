@@ -9,27 +9,28 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// identityOutput porte l'identité résolue.
+// identityOutput carries the resolved identity.
 type identityOutput struct {
 	Body contract.IdentityResponse
 }
 
-// mountIdentity expose la résolution du jeton en identité.
+// mountIdentity exposes the resolution of the token into an identity.
 //
-// # Ce que cette route ne fait PAS
+// # What this route does NOT do
 //
-// Elle n'autorise rien. Elle dit QUI présente le jeton, et un client qui en
-// déduirait ce qu'il a le droit de faire se tromperait au premier retrait de
-// droit. La décision se demande à chaque fois — c'est la décision 1 de
-// l'ADR 017, et c'est aussi pourquoi la réponse ne porte aucune permission.
+// It authorises nothing. It says WHO presents the token, and a client that
+// deduced from it what they are allowed to do would be wrong at the first
+// withdrawal of a right. The decision must be asked for every time — that is
+// decision 1 of ADR 017, and it is also why the response carries no
+// permission.
 func mountIdentity(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
 		OperationID: "resolve-identity",
 		Method:      contract.IdentityRoute.Method,
 		Path:        contract.IdentityRoute.Path,
-		Summary:     "Résoudre le jeton présenté",
-		Description: "Rend l'identité rattachée au jeton. " +
-			"N'autorise RIEN : le jeton authentifie, il n'autorise pas.",
+		Summary:     "Resolve the presented token",
+		Description: "Returns the identity attached to the token. " +
+			"Authorises NOTHING: the token authenticates, it does not authorise.",
 		Tags: []string{apiTag},
 	}, func(ctx context.Context, in *bearerInput) (*identityOutput, error) {
 		token, err := bearer(in.Authorization)

@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// TestARevokedTokenStopsResolving éprouve la révocation DE BOUT EN BOUT.
+// TestARevokedTokenStopsResolving exercises revocation END TO END.
 //
-// Trois requêtes : ouvrir, fermer, réessayer. C'est le parcours qu'un client
-// fait réellement, et c'est celui qu'un jeton signé autoportant ne saurait pas
-// interrompre sans liste de révocation — donc sans retomber sur le magasin qu'il
-// prétendait éviter (ADR 017 § 2 bis).
+// Three requests: open, close, try again. That is the journey a client really
+// makes, and it is the one a self-contained signed token could not interrupt
+// without a revocation list — hence without falling back on the store it
+// claimed to avoid (ADR 017 § 2 bis).
 func TestARevokedTokenStopsResolving(t *testing.T) {
 	t.Parallel()
 
@@ -19,28 +19,29 @@ func TestARevokedTokenStopsResolving(t *testing.T) {
 	token := tokenOf(t, openSession(t, server, subject, secret))
 
 	if resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token); resp.status != http.StatusOK {
-		t.Fatalf("le jeton vient d'être émis : attendu 200, obtenu %d — %s", resp.status, resp.raw)
+		t.Fatalf("the token has just been issued: want 200, got %d — %s", resp.status, resp.raw)
 	}
 
 	resp := withBearer(t, server, http.MethodDelete, currentPath, "Bearer "+token)
 	if resp.status != http.StatusNoContent {
-		t.Fatalf("fermeture : attendu 204, obtenu %d — %s", resp.status, resp.raw)
+		t.Fatalf("closure: want 204, got %d — %s", resp.status, resp.raw)
 	}
 	if strings.TrimSpace(resp.raw) != "" {
-		t.Fatalf("un 204 ne porte pas de corps, obtenu %q", resp.raw)
+		t.Fatalf("a 204 carries no body, got %q", resp.raw)
 	}
 
 	after := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token)
 	if after.status != http.StatusUnauthorized {
-		t.Fatalf("jeton révoqué : attendu 401, obtenu %d — %s", after.status, after.raw)
+		t.Fatalf("revoked token: want 401, got %d — %s", after.status, after.raw)
 	}
 }
 
-// TestClosingATwiceClosedSessionStillAnswers204 garde l'idempotence à la surface.
+// TestClosingATwiceClosedSessionStillAnswers204 guards idempotency at the
+// surface.
 //
-// Un client qui se déconnecte deux fois n'a rien fait de mal — un double clic
-// suffit. Rendre 401 au second appel ferait afficher une erreur au moment précis
-// où l'utilisateur vient de réussir à partir.
+// A client who signs out twice has done nothing wrong — a double click is
+// enough. Returning 401 on the second call would display an error at the very
+// moment the user has just succeeded in leaving.
 func TestClosingATwiceClosedSessionStillAnswers204(t *testing.T) {
 	t.Parallel()
 
@@ -50,17 +51,17 @@ func TestClosingATwiceClosedSessionStillAnswers204(t *testing.T) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		resp := withBearer(t, server, http.MethodDelete, currentPath, "Bearer "+token)
 		if resp.status != http.StatusNoContent {
-			t.Fatalf("fermeture n°%d : attendu 204, obtenu %d — %s", attempt, resp.status, resp.raw)
+			t.Fatalf("closure no. %d: want 204, got %d — %s", attempt, resp.status, resp.raw)
 		}
 	}
 }
 
-// TestResolvingAnIdentityCarriesNoPermission constate ce que la réponse NE porte
-// PAS.
+// TestResolvingAnIdentityCarriesNoPermission records what the response does NOT
+// carry.
 //
-// Elle dit QUI présente le jeton. Un client qui en déduirait ce qu'il a le droit
-// de faire se tromperait au premier retrait de droit — et c'est très exactement
-// le jour où l'on ne veut pas se tromper.
+// It says WHO presents the token. A client that deduced from it what they are
+// allowed to do would be wrong at the first withdrawal of a right — and that is
+// precisely the day one does not want to be wrong.
 func TestResolvingAnIdentityCarriesNoPermission(t *testing.T) {
 	t.Parallel()
 
@@ -69,21 +70,21 @@ func TestResolvingAnIdentityCarriesNoPermission(t *testing.T) {
 
 	resp := withBearer(t, server, http.MethodGet, identityPath, "Bearer "+token)
 	if resp.status != http.StatusOK {
-		t.Fatalf("attendu 200, obtenu %d — %s", resp.status, resp.raw)
+		t.Fatalf("want 200, got %d — %s", resp.status, resp.raw)
 	}
 	if got, _ := resp.body["subject"].(string); got != subject {
-		t.Fatalf("attendu le sujet %q, obtenu %q", subject, got)
+		t.Fatalf("want subject %q, got %q", subject, got)
 	}
 
 	for _, forbidden := range []string{"permission", "permissions", "scope", "scopes", "token"} {
 		if _, present := resp.body[forbidden]; present {
-			t.Fatalf("la réponse porte %q : %s", forbidden, resp.raw)
+			t.Fatalf("the response carries %q: %s", forbidden, resp.raw)
 		}
 	}
 	if strings.Contains(resp.raw, token) {
-		t.Fatalf("le jeton est renvoyé par une route de lecture : %s", resp.raw)
+		t.Fatalf("the token is returned by a read route: %s", resp.raw)
 	}
-	if strings.Contains(resp.raw, "condensé") {
-		t.Fatalf("le condensé fuite : %s", resp.raw)
+	if strings.Contains(resp.raw, "digest") {
+		t.Fatalf("the digest leaks: %s", resp.raw)
 	}
 }

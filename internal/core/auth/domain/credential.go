@@ -2,54 +2,54 @@ package domain
 
 import "fmt"
 
-// Credential porte une identité ET le condensé de son secret.
+// Credential carries an identity AND the digest of its secret.
 //
-// # Pourquoi ce type existe plutôt que deux valeurs de retour
+// # Why this type exists rather than two return values
 //
-// La règle d'architecture borne les fonctions du noyau à DEUX valeurs de retour,
-// et un port qui rendrait `(Identity, string, error)` serait refusé. Elle a
-// raison ici pour une raison propre au sujet : deux `string` de suite —
-// « le sujet » et « le condensé » — s'inversent silencieusement, et l'inversion
-// produirait une comparaison qui réussit toujours.
+// The architecture rule bounds core functions to TWO return values, and a port
+// that returned `(Identity, string, error)` would be refused. It is right here
+// for a reason specific to the subject matter: two `string` in a row — "the
+// subject" and "the digest" — get silently swapped, and the swap would produce
+// a comparison that always succeeds.
 //
-// # Ce type ne se journalise jamais
+// # This type is never logged
 //
-// Il implémente `Stringer` et `GoStringer` pour MASQUER le condensé. Un condensé
-// Argon2id n'est pas un mot de passe, mais il se casse hors ligne : le publier
-// dans un journal transforme une fuite de logs en fuite de comptes.
+// It implements `Stringer` and `GoStringer` in order to MASK the digest. An
+// Argon2id digest is not a password, but it can be cracked offline: publishing
+// it in a log turns a log leak into an account leak.
 //
-// Les deux implémentations sont nécessaires, pas redondantes : `%v` passe par
-// `String()`, `%#v` par `GoString()`. Il a fallu un test pour découvrir que
-// couvrir l'un laissait l'autre fuiter.
+// Both implementations are necessary, not redundant: `%v` goes through
+// `String()`, `%#v` through `GoString()`. It took a test to discover that
+// covering one left the other leaking.
 type Credential struct {
 	identity   Identity
 	secretHash string
 }
 
-// NewCredential assemble une identité et le condensé de son secret.
+// NewCredential assembles an identity and the digest of its secret.
 func NewCredential(identity Identity, secretHash string) (Credential, error) {
 	if identity.ID == "" {
-		return Credential{}, fmt.Errorf("%w: l'identité est obligatoire", ErrIncomplete)
+		return Credential{}, fmt.Errorf("%w: the identity is mandatory", ErrIncomplete)
 	}
 	if secretHash == "" {
-		return Credential{}, fmt.Errorf("%w: le condensé du secret est obligatoire", ErrIncomplete)
+		return Credential{}, fmt.Errorf("%w: the secret digest is mandatory", ErrIncomplete)
 	}
 	return Credential{identity: identity, secretHash: secretHash}, nil
 }
 
-// Identity rend l'identité portée.
+// Identity returns the carried identity.
 func (c Credential) Identity() Identity { return c.identity }
 
-// SecretHash rend le condensé, POUR COMPARAISON uniquement.
+// SecretHash returns the digest, FOR COMPARISON only.
 //
-// Nommée explicitement plutôt qu'exposée en champ : un accès au condensé se voit
-// alors en relecture, et se cherche en une commande.
+// Named explicitly rather than exposed as a field: an access to the digest is
+// then visible on review, and can be searched for in a single command.
 func (c Credential) SecretHash() string { return c.secretHash }
 
-// String masque le condensé. Voir la documentation du type.
+// String masks the digest. See the type documentation.
 func (c Credential) String() string {
 	return "Credential{identity: " + string(c.identity.ID) + ", secretHash: ***}"
 }
 
-// GoString masque le condensé sous `%#v` aussi.
+// GoString masks the digest under `%#v` too.
 func (c Credential) GoString() string { return c.String() }

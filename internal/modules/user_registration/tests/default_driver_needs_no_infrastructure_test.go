@@ -6,16 +6,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestDefaultDriverNeedsNoInfrastructure : le module se monte et INSCRIT sans
-// base, sans cache, sans conteneur.
+// TestDefaultDriverNeedsNoInfrastructure: the module mounts and REGISTERS with
+// no database, no cache, no container.
 //
-// C'est la promesse commerciale du socle, pas une commodité de test : `hexa new`
-// puis `go run` doit répondre sur une machine vierge. Un module métier dont le
-// seul pilote exigerait PostgreSQL la briserait au premier module écrit —
-// c'est-à-dire au moment exact où un évaluateur l'éprouve.
+// This is the commercial promise of the starter, not a test convenience: `hexa
+// new` then `go run` must answer on a blank machine. A business module whose
+// only driver required PostgreSQL would break it on the first module written —
+// that is to say at the exact moment an evaluator exercises it.
 //
-// Le test vérifie le chemin COMPLET, pas seulement le montage : un module qui se
-// construit puis échoue à la première écriture ne prouverait rien.
+// The test verifies the COMPLETE path, not only the assembly: a module that
+// builds then fails on the first write would prove nothing.
 func TestDefaultDriverNeedsNoInfrastructure(t *testing.T) {
 	t.Parallel()
 
@@ -25,14 +25,14 @@ func TestDefaultDriverNeedsNoInfrastructure(t *testing.T) {
 	user := register(t, mod, "alice@example.com", validPassword)
 
 	if user.ID.IsZero() {
-		t.Error("l'utilisateur inscrit doit porter un identifiant")
+		t.Error("the registered user must carry an identifier")
 	}
 	if user.Status != domain.StatusPending {
-		t.Errorf("statut = %q, attendu %q — un compte ne naît jamais actif",
+		t.Errorf("status = %q, want %q — an account is never born active",
 			user.Status, domain.StatusPending)
 	}
 	if !user.CreatedAt.Equal(fixedInstant) {
-		t.Errorf("créé le %v, attendu %v — l'horloge doit venir du port",
+		t.Errorf("created at %v, want %v — the clock must come from the port",
 			user.CreatedAt, fixedInstant)
 	}
 }

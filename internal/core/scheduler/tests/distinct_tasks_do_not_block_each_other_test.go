@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// TestDistinctTasksDoNotBlockEachOther : deux tâches différentes s'exécutent en
-// parallèle. L'exclusion porte sur UNE tâche, jamais sur l'ordonnanceur entier.
+// TestDistinctTasksDoNotBlockEachOther: two different tasks run in parallel.
+// The exclusion bears on ONE task, never on the whole scheduler.
 //
-// Un verrou global serait plus simple à écrire et catastrophique à exploiter : une
-// tâche longue empêcherait toutes les autres de tourner, et le symptôme —
-// « certaines tâches ne partent plus » — ne désignerait pas la coupable.
+// A global lock would be simpler to write and catastrophic to operate: a long
+// task would stop all the others from running, and the symptom — "some tasks no
+// longer start" — would not point at the culprit.
 func TestDistinctTasksDoNotBlockEachOther(t *testing.T) {
 	t.Parallel()
 
@@ -19,14 +19,14 @@ func TestDistinctTasksDoNotBlockEachOther(t *testing.T) {
 
 	elected, err := mod.Acquire(ctx, "purge")
 	if err != nil || !elected {
-		t.Fatalf("élection de purge: elected=%v err=%v", elected, err)
+		t.Fatalf("election of purge: elected=%v err=%v", elected, err)
 	}
 
-	elected, err = mod.Acquire(ctx, "rappels")
+	elected, err = mod.Acquire(ctx, "reminders")
 	if err != nil {
-		t.Fatalf("élection de rappels: %v", err)
+		t.Fatalf("election of reminders: %v", err)
 	}
 	if !elected {
-		t.Error("une autre tâche ne doit pas être bloquée par la première")
+		t.Error("another task must not be blocked by the first")
 	}
 }

@@ -16,18 +16,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// Tests des identifiants NON EXPORTÉS du composition root du dépileur.
+// Tests of the NON EXPORTED identifiers of the dispatcher's composition root.
 //
-// `{paquet}/internal_test.go` et non `{paquet}/tests/` : `rules/tests.md` réserve
-// le second à l'API publique d'un paquet, et Go INTERDIT d'importer un paquet
-// `main`. Un test en boîte noire de ce binaire est donc impossible — c'est une
-// contrainte du langage, pas une préférence.
+// `{package}/internal_test.go` and not `{package}/tests/`: `rules/tests.md`
+// reserves the latter for the public API of a package, and Go FORBIDS
+// importing a `main` package. A black-box test of this binary is therefore
+// impossible — that is a constraint of the language, not a preference.
 //
-// Ce qui est ÉPROUVÉ ici : les décisions de câblage, celles qui n'appartiennent à
-// aucun module et qu'aucune règle d'architecture ne surveille. Le reste — le
-// rejeu, la trace, l'acheminement — est éprouvé dans les paquets concernés.
+// What is EXERCISED here: the wiring decisions, the ones that belong to no
+// module and that no architecture rule watches. The rest — the replay, the
+// trace, the routing — is exercised in the packages concerned.
 
-// modulesConfig forge la configuration de deux modules.
+// modulesConfig forges the configuration of two modules.
 func modulesConfig(notifOn, idemOn bool) config.Config {
 	return config.Config{Modules: config.Modules{
 		notification.Name: {Enabled: notifOn, Driver: "log"},
@@ -35,145 +35,145 @@ func modulesConfig(notifOn, idemOn bool) config.Config {
 	}}
 }
 
-// journalDeTest capte ce que le câblage écrit.
-func journalDeTest() (*bytes.Buffer, *slog.Logger) {
+// testLogger captures what the wiring writes.
+func testLogger() (*bytes.Buffer, *slog.Logger) {
 	buffer := &bytes.Buffer{}
 	return buffer, slog.New(slog.NewTextHandler(buffer, nil))
 }
 
-// brokerDeTest monte le relais en mémoire.
-func brokerDeTest(t *testing.T, logger *slog.Logger) messaging.Broker {
+// testBroker mounts the in-memory relay.
+func testBroker(t *testing.T, logger *slog.Logger) messaging.Broker {
 	t.Helper()
 
 	broker, err := messaging.New(config.Messaging{Driver: "inproc"}, logger)
 	if err != nil {
-		t.Fatalf("relais de test: %v", err)
+		t.Fatalf("test relay: %v", err)
 	}
 	t.Cleanup(func() { _ = broker.Close() })
 	return broker
 }
 
-// TestConsumingWithoutIdempotencyIsRefused garde contre le rejeu d'effets.
+// TestConsumingWithoutIdempotencyIsRefused guards against replaying effects.
 //
-// # Pourquoi un refus et non un avertissement
+// # Why a refusal and not a warning
 //
-// Tous les transports d'ici sont « au moins une fois » : la même enveloppe
-// arrive deux fois dès qu'un accusé de réception se perd, ce qui est banal.
-// S'abonner sans idempotence enverrait donc le courriel de bienvenue en double,
-// et le jour où un consommateur débitera une carte, ce sera le débit.
+// Every transport here is "at least once": the same envelope arrives twice as
+// soon as an acknowledgement is lost, which is commonplace. Subscribing
+// without idempotency would therefore send the welcome email twice, and the
+// day a consumer charges a card, it will be the charge.
 //
-// Un avertissement au démarrage est lu une fois puis jamais. Le refus, lui,
-// nomme ce qu'il faut changer et se répare en une ligne de configuration.
+// A warning at start-up is read once then never. The refusal, on the other
+// hand, names what has to change and is repaired in one line of configuration.
 func TestConsumingWithoutIdempotencyIsRefused(t *testing.T) {
 	t.Parallel()
 
-	_, logger := journalDeTest()
-	err := abonner(modulesConfig(true, false), brokerDeTest(t, logger), logger)
+	_, logger := testLogger()
+	err := subscribe(modulesConfig(true, false), testBroker(t, logger), logger)
 
-	if !errors.Is(err, errIdempotenceRequise) {
-		t.Fatalf("attendu errIdempotenceRequise, obtenu %v", err)
+	if !errors.Is(err, errIdempotencyRequired) {
+		t.Fatalf("want errIdempotencyRequired, got %v", err)
 	}
 }
 
-// TestADisabledNotificationSaysSoRatherThanStayingSilent nomme la conséquence.
+// TestADisabledNotificationSaysSoRatherThanStayingSilent names the consequence.
 //
-// Un module éteint est un état configuré, pas une panne : le démarrage ne doit
-// pas échouer. Mais le SILENCE serait pire que l'inaction — un dépileur qui
-// publie vers personne ressemble en tout point à un dépileur qui fonctionne :
-// les messages sont marqués publiés, l'outbox se vide, les métriques sont
-// vertes, et aucun effet n'a lieu.
+// A module that is off is a configured state, not a failure: the start-up must
+// not fail. But SILENCE would be worse than inaction — a dispatcher publishing
+// to nobody looks in every respect like a dispatcher that works: the messages
+// are marked published, the outbox drains, the metrics are green, and no
+// effect takes place.
 //
-// Le journal doit donc nommer la CONSÉQUENCE, pas seulement l'état.
+// The log must therefore name the CONSEQUENCE, not merely the state.
 func TestADisabledNotificationSaysSoRatherThanStayingSilent(t *testing.T) {
 	t.Parallel()
 
-	buffer, logger := journalDeTest()
-	// L'idempotence est désactivée elle aussi : sans abonnement, elle n'est pas
-	// requise. Le test constate donc AUSSI que le refus ne se déclenche pas à
-	// tort — un garde trop large est un garde qu'on finit par retirer.
-	if err := abonner(modulesConfig(false, false), brokerDeTest(t, logger), logger); err != nil {
-		t.Fatalf("un module éteint ne doit pas faire échouer le démarrage : %v", err)
+	buffer, logger := testLogger()
+	// Idempotency is disabled too: with no subscription, it is not required.
+	// The test therefore ALSO observes that the refusal does not fire when it
+	// should not — a guard that is too broad is a guard people end up removing.
+	if err := subscribe(modulesConfig(false, false), testBroker(t, logger), logger); err != nil {
+		t.Fatalf("a module that is off must not fail the start-up: %v", err)
 	}
 
 	trace := buffer.String()
 	if !strings.Contains(trace, "user.registered.v1") {
-		t.Fatalf("le journal doit nommer l'événement sans consommateur : %s", trace)
+		t.Fatalf("the log must name the event with no consumer: %s", trace)
 	}
-	if !strings.Contains(trace, "personne n'y réagit") {
-		t.Fatalf("le journal doit nommer la conséquence, pas seulement l'état : %s", trace)
+	if !strings.Contains(trace, "nobody reacts to them") {
+		t.Fatalf("the log must name the consequence, not merely the state: %s", trace)
 	}
 }
 
-// TestTheWelcomeHandlerReadsThePublishedContract garde le langage publié.
+// TestTheWelcomeHandlerReadsThePublishedContract guards the published language.
 //
-// La charge utile est décodée en `contract.UserRegisteredV1` — des types
-// primitifs, lisibles par un consommateur écrit dans un autre langage. Décoder
-// vers un type du domaine de `user_registration` recréerait le couplage que le
-// langage publié sert à éviter.
+// The payload is decoded into `contract.UserRegisteredV1` — primitive types,
+// readable by a consumer written in another language. Decoding into a type of
+// the `user_registration` domain would recreate the coupling the published
+// language serves to avoid.
 //
-// Le test passe par une enveloppe RÉELLE, sérialisée comme le producteur la
-// sérialise : c'est le seul moyen d'attraper un nom de champ JSON qui aurait
-// dérivé d'un côté sans l'autre.
+// The test goes through a REAL envelope, serialised the way the producer
+// serialises it: that is the only way to catch a JSON field name that would
+// have drifted on one side without the other.
 func TestTheWelcomeHandlerReadsThePublishedContract(t *testing.T) {
 	t.Parallel()
 
-	_, logger := journalDeTest()
+	_, logger := testLogger()
 	notif, err := notification.New(
 		config.Module{Enabled: true, Driver: "log"}, notification.Deps{Logger: logger})
 	if err != nil {
-		t.Fatalf("module notification: %v", err)
+		t.Fatalf("notification module: %v", err)
 	}
 
-	charge, err := json.Marshal(contract.UserRegisteredV1{
-		UserID: "compte-1", Email: "Alice@Example.COM",
+	payload, err := json.Marshal(contract.UserRegisteredV1{
+		UserID: "account-1", Email: "Alice@Example.COM",
 	})
 	if err != nil {
-		t.Fatalf("sérialisation: %v", err)
+		t.Fatalf("serialisation: %v", err)
 	}
 
-	err = bienvenue(notif)(context.Background(), messaging.Envelope{
-		ID: "evt-1", Type: contract.EventUserRegisteredV1, Payload: charge,
+	err = welcome(notif)(context.Background(), messaging.Envelope{
+		ID: "evt-1", Type: contract.EventUserRegisteredV1, Payload: payload,
 	})
 	if err != nil {
-		t.Fatalf("le courriel de bienvenue doit partir : %v", err)
+		t.Fatalf("the welcome email must go out: %v", err)
 	}
 }
 
-// TestAnUnreadablePayloadIsReportedNotSwallowed interdit l'oubli silencieux.
+// TestAnUnreadablePayloadIsReportedNotSwallowed forbids silent forgetting.
 //
-// Une charge utile illisible remonte comme une erreur. L'avaler ferait acquitter
-// l'enveloppe, donc perdre l'événement définitivement — et c'est au dépileur
-// d'abandonner après N tentatives, pas à ce gestionnaire de décider seul
-// d'oublier.
+// An unreadable payload travels up as an error. Swallowing it would
+// acknowledge the envelope, hence lose the event for good — and it is up to
+// the dispatcher to give up after N attempts, not up to this handler to decide
+// on its own to forget.
 //
-// Une adresse invalide suit le même chemin : elle vient du producteur, donc elle
-// signale un défaut chez lui, pas une panne de transport.
+// An invalid address follows the same path: it comes from the producer, so it
+// signals a defect there, not a transport failure.
 func TestAnUnreadablePayloadIsReportedNotSwallowed(t *testing.T) {
 	t.Parallel()
 
-	_, logger := journalDeTest()
+	_, logger := testLogger()
 	notif, err := notification.New(
 		config.Module{Enabled: true, Driver: "log"}, notification.Deps{Logger: logger})
 	if err != nil {
-		t.Fatalf("module notification: %v", err)
+		t.Fatalf("notification module: %v", err)
 	}
 
-	adresseVide, err := json.Marshal(contract.UserRegisteredV1{UserID: "compte-1"})
+	emptyAddress, err := json.Marshal(contract.UserRegisteredV1{UserID: "account-1"})
 	if err != nil {
-		t.Fatalf("sérialisation: %v", err)
+		t.Fatalf("serialisation: %v", err)
 	}
 
 	cases := map[string][]byte{
-		"charge illisible": []byte("{pas du json"),
-		"charge vide":      nil,
-		"adresse absente":  adresseVide,
+		"unreadable payload": []byte("{not json"),
+		"empty payload":      nil,
+		"missing address":    emptyAddress,
 	}
-	for name, charge := range cases {
-		err := bienvenue(notif)(context.Background(), messaging.Envelope{
-			ID: "evt-1", Type: contract.EventUserRegisteredV1, Payload: charge,
+	for name, payload := range cases {
+		err := welcome(notif)(context.Background(), messaging.Envelope{
+			ID: "evt-1", Type: contract.EventUserRegisteredV1, Payload: payload,
 		})
 		if err == nil {
-			t.Errorf("%s : l'erreur doit remonter, pas être avalée", name)
+			t.Errorf("%s: the error must travel up, not be swallowed", name)
 		}
 	}
 }

@@ -9,27 +9,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage"
 )
 
-// TestDisabledModuleRefusesLoudly : un stockage désactivé échoue à l'appel.
+// TestDisabledModuleRefusesLoudly: a disabled storage fails when called.
 //
-// Le repli inerte serait ici une perte de données franche : un téléversement
-// « réussi » qui n'écrit rien, et un utilisateur qui découvre l'absence de son
-// document des semaines plus tard.
+// The inert fallback would be outright data loss here: a "successful" upload
+// that writes nothing, and a user who discovers their document is missing weeks
+// later.
 func TestDisabledModuleRefusesLoudly(t *testing.T) {
 	t.Parallel()
 
 	mod, err := storage.New(config.Module{Enabled: false, Driver: "disk"}, storage.Deps{})
 	if err != nil {
-		t.Fatalf("un module désactivé se construit sans erreur: %v", err)
+		t.Fatalf("a disabled module builds without error: %v", err)
 	}
 	ctx := context.Background()
 
 	if _, err := mod.Put(ctx, object("doc.pdf", "x")); !errors.Is(err, storage.ErrDisabled) {
-		t.Errorf("Put = %v, attendu ErrDisabled", err)
+		t.Errorf("Put = %v, want ErrDisabled", err)
 	}
 	if _, err := mod.Get(ctx, "ab/cd/ef-doc.pdf"); !errors.Is(err, storage.ErrDisabled) {
-		t.Errorf("Get = %v, attendu ErrDisabled", err)
+		t.Errorf("Get = %v, want ErrDisabled", err)
 	}
 	if err := mod.Delete(ctx, "ab/cd/ef-doc.pdf"); !errors.Is(err, storage.ErrDisabled) {
-		t.Errorf("Delete = %v, attendu ErrDisabled", err)
+		t.Errorf("Delete = %v, want ErrDisabled", err)
 	}
 }

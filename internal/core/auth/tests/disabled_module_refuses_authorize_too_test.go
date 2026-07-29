@@ -10,49 +10,50 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestDisabledModuleRefusesAuthorizeToo garde la pire valeur par défaut imaginable.
+// TestDisabledModuleRefusesAuthorizeToo guards the worst default value
+// imaginable.
 //
-// # Le cas qu'on oublie
+// # The case one forgets
 //
-// Un module désactivé se monte quand même — c'est ce qui permet à une surface
-// d'exister et de répondre une erreur claire, plutôt que de faire échouer le
-// démarrage entier pour un module que personne n'a activé.
+// A disabled module mounts anyway — that is what lets a surface exist and
+// answer a clear error, rather than failing the whole startup for a module
+// nobody enabled.
 //
-// La tentation est alors d'écrire les refus « qui comptent » — s'inscrire, se
-// connecter — et de laisser `Authorize` à sa valeur zéro. Or le zéro d'un port
-// fonction est `nil`, et un `nil` appelé panique ; pire, une implémentation
-// « neutre » qui rendrait `nil` en erreur AUTORISERAIT tout. Un module
-// d'authentification éteint qui autorise tout est exactement l'inverse du deny
-// par défaut.
+// The temptation is then to write the refusals "that matter" — registering,
+// signing in — and to leave `Authorize` at its zero value. But the zero of a
+// function port is `nil`, and a called `nil` panics; worse, a "neutral"
+// implementation returning `nil` as its error would AUTHORISE everything. A
+// turned-off authentication module that authorises everything is exactly the
+// opposite of deny by default.
 func TestDisabledModuleRefusesAuthorizeToo(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, err := auth.New(config.Module{Enabled: false}, auth.Deps{})
 	if err != nil {
-		t.Fatalf("un module désactivé doit se monter : %v", err)
+		t.Fatalf("a disabled module must mount: %v", err)
 	}
 
-	if err := mod.Authorize(ctx, "n-importe-qui", permission(t, "billing.invoice.cancel")); !errors.Is(err, auth.ErrDisabled) {
-		t.Fatalf("Authorize sur module désactivé : attendu ErrDisabled, obtenu %v", err)
+	if err := mod.Authorize(ctx, "anyone-at-all", permission(t, "billing.invoice.cancel")); !errors.Is(err, auth.ErrDisabled) {
+		t.Fatalf("Authorize on a disabled module: want ErrDisabled, got %v", err)
 	}
 
 	if _, err := mod.Register(ctx, subject, secret); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("Register : attendu ErrDisabled, obtenu %v", err)
+		t.Errorf("Register: want ErrDisabled, got %v", err)
 	}
 	if _, err := mod.Authenticate(ctx, subject, secret); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("Authenticate : attendu ErrDisabled, obtenu %v", err)
+		t.Errorf("Authenticate: want ErrDisabled, got %v", err)
 	}
 	if _, err := mod.Verify(ctx, domain.Token{}); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("Verify : attendu ErrDisabled, obtenu %v", err)
+		t.Errorf("Verify: want ErrDisabled, got %v", err)
 	}
 	if err := mod.Revoke(ctx, domain.Token{}); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("Revoke : attendu ErrDisabled, obtenu %v", err)
+		t.Errorf("Revoke: want ErrDisabled, got %v", err)
 	}
-	if err := mod.DefineRole(ctx, "comptable", nil); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("DefineRole : attendu ErrDisabled, obtenu %v", err)
+	if err := mod.DefineRole(ctx, "accountant", nil); !errors.Is(err, auth.ErrDisabled) {
+		t.Errorf("DefineRole: want ErrDisabled, got %v", err)
 	}
-	if err := mod.AssignRoles(ctx, "n-importe-qui", nil); !errors.Is(err, auth.ErrDisabled) {
-		t.Errorf("AssignRoles : attendu ErrDisabled, obtenu %v", err)
+	if err := mod.AssignRoles(ctx, "anyone-at-all", nil); !errors.Is(err, auth.ErrDisabled) {
+		t.Errorf("AssignRoles: want ErrDisabled, got %v", err)
 	}
 }

@@ -6,18 +6,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// TestFingerprintDistinguishesPayloads : une clé réutilisée avec une charge
-// différente doit être détectée. Si les empreintes se confondaient, le second
-// appelant recevrait la réponse du premier — une fuite de données.
+// TestFingerprintDistinguishesPayloads: a key reused with a different payload
+// must be detected. If the fingerprints were confused, the second caller would
+// receive the response of the first one — a data leak.
 func TestFingerprintDistinguishesPayloads(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string][2]any{
-		"valeur différente":    {map[string]int{"montant": 100}, map[string]int{"montant": 101}},
-		"champ supplémentaire": {map[string]int{"montant": 100}, map[string]int{"montant": 100, "frais": 0}},
-		"type différent":       {map[string]any{"montant": 100}, map[string]any{"montant": "100"}},
-		"nil contre vide":      {nil, map[string]any{}},
-		"valeurs permutées":    {map[string]int{"a": 1, "b": 2}, map[string]int{"a": 2, "b": 1}},
+		"different value":   {map[string]int{"amount": 100}, map[string]int{"amount": 101}},
+		"extra field":       {map[string]int{"amount": 100}, map[string]int{"amount": 100, "fee": 0}},
+		"different type":    {map[string]any{"amount": 100}, map[string]any{"amount": "100"}},
+		"nil against empty": {nil, map[string]any{}},
+		"swapped values":    {map[string]int{"a": 1, "b": 2}, map[string]int{"a": 2, "b": 1}},
 	}
 
 	for name, pair := range cases {
@@ -25,7 +25,7 @@ func TestFingerprintDistinguishesPayloads(t *testing.T) {
 			t.Parallel()
 			left, right := domain.Fingerprint(pair[0]), domain.Fingerprint(pair[1])
 			if left == right {
-				t.Errorf("empreintes identiques pour deux charges différentes: %q", left)
+				t.Errorf("identical fingerprints for two different payloads: %q", left)
 			}
 		})
 	}

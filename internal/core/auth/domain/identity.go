@@ -6,54 +6,55 @@ import (
 	"time"
 )
 
-// subjectMaxLen borne la longueur d'un sujet.
+// subjectMaxLen bounds the length of a subject.
 //
-// Une borne explicite plutôt qu'aucune : sans elle, une entrée de plusieurs
-// mégaoctets traverserait le domaine jusqu'au magasin, où elle échouerait avec un
-// message de pilote au lieu d'un message métier.
+// An explicit bound rather than none: without it, an input several megabytes
+// long would cross the domain all the way to the store, where it would fail
+// with a driver message instead of a business one.
 const subjectMaxLen = 254
 
-// IdentityID identifie une identité de façon opaque.
+// IdentityID identifies an identity opaquely.
 //
-// Un type nommé plutôt qu'une chaîne : c'est ce qui empêche de passer un sujet là
-// où un identifiant est attendu, confusion que le compilateur ne verrait jamais
-// entre deux `string`.
+// A named type rather than a string: that is what prevents passing a subject
+// where an identifier is expected, a confusion the compiler would never see
+// between two `string`.
 type IdentityID string
 
-// Subject est ce que l'utilisateur saisit pour se désigner — adresse, login,
-// identifiant externe. Normalisé et validé.
+// Subject is what the user types to designate themselves — address, login,
+// external identifier. Normalised and validated.
 //
-// Le champ est privé : il est IMPOSSIBLE de fabriquer un Subject non normalisé
-// hors de ce paquet. Sans cela, `Alice@X.COM` et `alice@x.com` seraient DEUX
-// identités, et la seconde connexion échouerait sans que personne comprenne.
+// The field is private: it is IMPOSSIBLE to build a non-normalised Subject
+// outside this package. Without that, `Alice@X.COM` and `alice@x.com` would be
+// TWO identities, and the second sign-in would fail without anyone
+// understanding why.
 type Subject struct{ value string }
 
-// NewSubject normalise puis valide un sujet. Seul chemin de construction.
+// NewSubject normalises then validates a subject. The only construction path.
 func NewSubject(raw string) (Subject, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 
 	switch {
 	case normalized == "":
-		return Subject{}, fmt.Errorf("%w: le sujet est obligatoire", ErrIncomplete)
+		return Subject{}, fmt.Errorf("%w: the subject is mandatory", ErrIncomplete)
 	case len(normalized) > subjectMaxLen:
-		return Subject{}, fmt.Errorf("%w: le sujet est trop long", ErrIncomplete)
+		return Subject{}, fmt.Errorf("%w: the subject is too long", ErrIncomplete)
 	case strings.ContainsAny(normalized, " \t\n"):
-		return Subject{}, fmt.Errorf("%w: le sujet ne peut pas contenir d'espace", ErrIncomplete)
+		return Subject{}, fmt.Errorf("%w: the subject cannot contain a space", ErrIncomplete)
 	}
 	return Subject{value: normalized}, nil
 }
 
-// String rend le sujet normalisé.
+// String returns the normalised subject.
 func (s Subject) String() string { return s.value }
 
-// IsZero indique un sujet non construit.
+// IsZero reports a subject that was never built.
 func (s Subject) IsZero() bool { return s.value == "" }
 
-// Masked rend une forme masquée, destinée aux journaux.
+// Masked returns a masked form, intended for logs.
 //
-// Un sujet est une donnée personnelle : il ne se journalise jamais en clair
-// (rules/securite.md §5). Et c'est le journal d'authentification qu'on exporte
-// le plus volontiers vers un collecteur tiers.
+// A subject is personal data: it is never logged in clear
+// (rules/securite.md §5). And the authentication log is the one most readily
+// exported to a third-party collector.
 func (s Subject) Masked() string {
 	if len(s.value) <= 2 {
 		return "***"
@@ -65,11 +66,12 @@ func (s Subject) Masked() string {
 	return s.value[:1] + "***"
 }
 
-// Identity est un compte connu du module.
+// Identity is an account known to the module.
 //
-// Le CONDENSÉ du secret n'y figure pas, délibérément : il vit dans le pilote et
-// ne remonte jamais dans une valeur que quelqu'un pourrait journaliser, sérialiser
-// ou renvoyer par erreur. Ce module a le droit de le comparer, pas de le promener.
+// The secret's DIGEST does not appear in it, deliberately: it lives in the
+// driver and never surfaces in a value that someone could log, serialise or
+// return by mistake. This module is allowed to compare it, not to carry it
+// around.
 type Identity struct {
 	ID        IdentityID
 	Subject   Subject
@@ -78,22 +80,22 @@ type Identity struct {
 	CreatedAt time.Time
 }
 
-// NewIdentity construit une identité neuve, ACTIVE.
+// NewIdentity builds a fresh identity, ACTIVE.
 //
-// L'instant vient de l'appelant : le domaine ne lit jamais l'horloge, et un test
-// qui la lirait échouerait un jour, sans raison.
+// The instant comes from the caller: the domain never reads the clock, and a
+// test that read it would fail one day, for no reason.
 //
-// ⚠️ Contrairement à `user_registration` — dont le compte naît `pending` — une
-// identité d'authentification naît active. La nuance est réelle : `auth` ne crée
-// une identité QUE sur une demande déjà autorisée par son appelant, alors qu'une
-// inscription publique doit être confirmée. Confondre les deux rendrait soit
-// l'inscription trop permissive, soit l'administration impraticable.
+// ⚠️ Unlike `user_registration` — whose account is born `pending` — an
+// authentication identity is born active. The nuance is real: `auth` creates an
+// identity ONLY on a request already authorised by its caller, whereas a public
+// registration must be confirmed. Conflating the two would make either
+// registration too permissive, or administration unworkable.
 func NewIdentity(id IdentityID, subject Subject, roles []string, now time.Time) (Identity, error) {
 	if id == "" {
-		return Identity{}, fmt.Errorf("%w: l'identifiant est obligatoire", ErrIncomplete)
+		return Identity{}, fmt.Errorf("%w: the identifier is mandatory", ErrIncomplete)
 	}
 	if subject.IsZero() {
-		return Identity{}, fmt.Errorf("%w: le sujet est obligatoire", ErrIncomplete)
+		return Identity{}, fmt.Errorf("%w: the subject is mandatory", ErrIncomplete)
 	}
 
 	return Identity{
@@ -105,30 +107,29 @@ func NewIdentity(id IdentityID, subject Subject, roles []string, now time.Time) 
 	}, nil
 }
 
-// WithRoles retourne une COPIE portant les rôles donnés, NORMALISÉS.
+// WithRoles returns a COPY carrying the given roles, NORMALISED.
 //
-// # Le défaut que la normalisation ici corrige
+// # The defect that normalising here fixes
 //
-// `NewRole` met le nom du rôle en minuscules, et `NewIdentity` faisait de même
-// pour les rôles reçus — mais cette méthode, empruntée par l'affectation, copiait
-// les noms tels quels. Un rôle défini comme `Comptable` était donc retenu sous
-// `comptable`, affecté sous `Comptable`, et n'accordait RIEN.
+// `NewRole` lowercases the role name, and `NewIdentity` did the same for the
+// roles it received — but this method, taken by assignment, copied the names as
+// they came. A role defined as `Comptable` was therefore kept under
+// `comptable`, assigned under `Comptable`, and granted NOTHING.
 //
-// La faute ne produisait aucune erreur : l'administrateur voyait le rôle affecté,
-// la personne concernée recevait un 403, et rien dans les journaux ne mentionnait
-// une casse. Normaliser aux DEUX endroits est ce qui rend les chemins
-// indiscernables — en laisser un dehors suffit à rouvrir l'écart.
+// The fault produced no error at all: the administrator saw the role assigned,
+// the person concerned got a 403, and nothing in the logs mentioned a case
+// difference. Normalising in BOTH places is what makes the paths
+// indistinguishable — leaving one out is enough to reopen the gap.
 func (i Identity) WithRoles(roles []string) Identity {
 	i.Roles = normalizeRoles(roles)
 	return i
 }
 
-// normalizeRoles met les noms de rôle sous leur forme canonique.
+// normalizeRoles puts role names into their canonical form.
 //
-// La même que `NewRole` applique au nom qu'elle enregistre : minuscules, sans
-// espaces de bord. Les entrées vides sont écartées plutôt que refusées — une
-// ligne blanche dans un import n'accorde rien et ne mérite pas de faire échouer
-// le reste.
+// The same one `NewRole` applies to the name it records: lowercase, without
+// surrounding whitespace. Empty entries are dropped rather than refused — a
+// blank line in an import grants nothing and does not deserve to fail the rest.
 func normalizeRoles(roles []string) []string {
 	kept := make([]string, 0, len(roles))
 	for _, role := range roles {
@@ -140,24 +141,24 @@ func normalizeRoles(roles []string) []string {
 	return kept
 }
 
-// Deactivated retourne une COPIE désactivée.
+// Deactivated returns a DEACTIVATED copy.
 //
-// Une identité désactivée ne s'authentifie plus et ses jetons cessent de valoir —
-// c'est le pilote qui l'applique, mais la valeur le porte.
+// A deactivated identity no longer authenticates and its tokens stop being
+// worth anything — the driver is what applies that, but the value carries it.
 func (i Identity) Deactivated() Identity {
 	i.Active = false
 	return i
 }
 
-// Reactivated retourne une COPIE réactivée.
+// Reactivated returns a REACTIVATED copy.
 //
-// # Pourquoi deux méthodes plutôt qu'un `SetActive(bool)`
+// # Why two methods rather than one `SetActive(bool)`
 //
-// Un paramètre booléen ne se lit pas sur l'appel : `setActive(id, false)` oblige
-// à retrouver la signature pour savoir ce qui se passe, et `setActive(id, true)`
-// se glisse dans une relecture sans qu'on le remarque. Deux méthodes nommées
-// rendent la désactivation et son annulation visibles à l'endroit où elles sont
-// écrites — la même raison qui a fait éclater `SecurityHeaders(secure bool)`.
+// A boolean parameter cannot be read at the call site: `setActive(id, false)`
+// forces you to look up the signature to know what happens, and
+// `setActive(id, true)` slips through a review unnoticed. Two named methods
+// make deactivation and its undoing visible where they are written — the same
+// reason that split `SecurityHeaders(secure bool)` apart.
 func (i Identity) Reactivated() Identity {
 	i.Active = true
 	return i

@@ -7,11 +7,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestPublishedMessageIsMarkedDone : le chemin nominal, et le seul où la chaîne
-// asynchrone est réellement bouclée.
+// TestPublishedMessageIsMarkedDone: the nominal path, and the only one where
+// the asynchronous chain is genuinely closed.
 //
-// Publier sans marquer republierait le message au tour suivant, indéfiniment : le
-// consommateur recevrait le même événement toutes les deux secondes, pour toujours.
+// Publishing without marking would republish the message on the next round,
+// indefinitely: the consumer would receive the same event every two seconds,
+// forever.
 func TestPublishedMessageIsMarkedDone(t *testing.T) {
 	t.Parallel()
 
@@ -30,15 +31,15 @@ func TestPublishedMessageIsMarkedDone(t *testing.T) {
 		t.Fatalf("DrainOnce: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("messages traités = %d, attendu 1", count)
+		t.Errorf("processed messages = %d, want 1", count)
 	}
 	if len(delivered) != 1 || delivered[0] != "m-1" {
-		t.Errorf("messages publiés = %v, attendu [m-1]", delivered)
+		t.Errorf("published messages = %v, want [m-1]", delivered)
 	}
 	if len(observed.done) != 1 || observed.done[0] != "m-1" {
-		t.Errorf("messages marqués = %v, attendu [m-1]", observed.done)
+		t.Errorf("marked messages = %v, want [m-1]", observed.done)
 	}
 	if got := observed.lastOutcome(t).Event; got != domain.EventPublished {
-		t.Errorf("événement = %q, attendu %q", got, domain.EventPublished)
+		t.Errorf("event = %q, want %q", got, domain.EventPublished)
 	}
 }

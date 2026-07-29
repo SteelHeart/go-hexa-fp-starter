@@ -1,15 +1,15 @@
-// Package domain porte le vocabulaire de la configuration dynamique, sans
-// dépendance.
+// Package domain carries the vocabulary of dynamic configuration, with no
+// dependency.
 //
-// # La ligne de partage avec le paquet config
+// # The dividing line with the config package
 //
-// Ce qui exige un redéploiement pour changer — DSN, ports, délais — est dans
-// `config`. Ce qui doit pouvoir changer À CHAUD est ici : drapeaux de
-// fonctionnalité et réglages métier.
+// What requires a redeployment to change — DSN, ports, timeouts — is in
+// `config`. What must be able to change AT RUN TIME is here: feature flags and
+// business settings.
 //
-// Les drapeaux ne sont pas un luxe : le tronc unique (ADR 007) impose que le
-// travail incomplet passe derrière un drapeau plutôt que derrière une branche
-// longue. Sans cette brique, la règle est intenable.
+// Flags are not a luxury: trunk-based development (ADR 007) requires that
+// incomplete work go behind a flag rather than behind a long-lived branch.
+// Without this building block, the rule is untenable.
 package domain
 
 import (
@@ -18,84 +18,85 @@ import (
 	"strconv"
 )
 
-// Kind sépare les deux natures de valeur dynamique.
+// Kind separates the two natures of dynamic value.
 //
-// Séparées et non fondues dans un espace de noms unique : un drapeau se lit en
-// booléen avec un repli sur `false`, un réglage se lit en texte avec une absence
-// possible. Les confondre ferait passer un réglage vide pour un drapeau inactif.
+// Separated and not merged into a single namespace: a flag is read as a boolean
+// with a fallback on `false`, a setting is read as text with a possible
+// absence. Confusing the two would make an empty setting look like an inactive
+// flag.
 type Kind string
 
 const (
-	// KindFlag désigne un drapeau de fonctionnalité.
+	// KindFlag denotes a feature flag.
 	KindFlag Kind = "flag"
-	// KindSetting désigne un réglage métier.
+	// KindSetting denotes a business setting.
 	KindSetting Kind = "setting"
 )
 
-// FlagKey identifie un drapeau de fonctionnalité.
+// FlagKey identifies a feature flag.
 type FlagKey string
 
-// SettingKey identifie un réglage métier.
+// SettingKey identifies a business setting.
 type SettingKey string
 
-// Setting est le résultat de la lecture d'un réglage.
+// Setting is the result of reading a setting.
 //
-// `Found` distingue « absent » de « présent et vide » — deux situations que rien
-// ne doit confondre : la première appelle une valeur par défaut côté appelant, la
-// seconde est une décision d'exploitation.
+// `Found` distinguishes "absent" from "present and empty" — two situations
+// nothing must confuse: the first calls for a default value on the caller's
+// side, the second is an operations decision.
 type Setting struct {
 	Value string
 	Found bool
 }
 
-// ErrReadOnly signale un magasin qui n'accepte pas d'écriture.
+// ErrReadOnly signals a store that does not accept writes.
 //
-// Le pilote `file` lit des valeurs VERSIONNÉES : les réécrire à l'exécution
-// produirait une divergence entre le dépôt et ce qui tourne, invisible au
-// prochain déploiement qui les écraserait.
-var ErrReadOnly = errors.New("magasin de configuration dynamique en lecture seule")
+// The `file` driver reads VERSIONED values: rewriting them at run time would
+// produce a divergence between the repository and what is running, invisible
+// until the next deployment overwrote them.
+var ErrReadOnly = errors.New("dynamic configuration store is read-only")
 
-// ErrInvalidChange refuse une écriture incomplète ou de nature inconnue.
-var ErrInvalidChange = errors.New("modification de configuration dynamique invalide")
+// ErrInvalidChange refuses a write that is incomplete or of an unknown nature.
+var ErrInvalidChange = errors.New("invalid dynamic configuration change")
 
-// Change est une écriture de valeur dynamique.
+// Change is a write of a dynamic value.
 type Change struct {
 	Kind  Kind
 	Key   string
 	Value string
 }
 
-// IsValid indique si la modification est exploitable.
+// IsValid says whether the change is usable.
 //
-// La valeur peut être vide — c'est une valeur légitime. La clé et la nature, non.
+// The value may be empty — that is a legitimate value. The key and the nature
+// are not.
 func (c Change) IsValid() bool {
 	return c.Key != "" && (c.Kind == KindFlag || c.Kind == KindSetting)
 }
 
-// Qualify rend l'identifiant complet d'une valeur, nature comprise.
+// Qualify returns the full identifier of a value, nature included.
 //
-// Utilisé comme clé de cache et comme clé de recherche par tous les pilotes :
-// deux pilotes qui ne qualifieraient pas pareil ne seraient pas substituables.
+// Used as a cache key and as a lookup key by every driver: two drivers that did
+// not qualify in the same way would not be substitutable.
 func Qualify(kind Kind, key string) string { return string(kind) + "." + key }
 
-// ParseFlag interprète une valeur textuelle en booléen.
+// ParseFlag interprets a textual value as a boolean.
 //
-// # Deny par défaut
+// # Deny by default
 //
-// Une valeur illisible donne `false`. Un drapeau qui s'activerait sur une valeur
-// qu'on ne comprend pas serait exactement l'inverse de ce qu'on veut : la
-// fonctionnalité incomplète qu'il masque partirait en production sur une faute de
-// frappe.
+// An unreadable value gives `false`. A flag that switched itself on for a value
+// we do not understand would be exactly the opposite of what we want: the
+// incomplete feature it hides would go to production on a typo.
 //
-// C'est le seul endroit où cette interprétation existe, pour que tous les pilotes
-// répondent identiquement à `"1"`, `"true"` ou `"TRUE"`.
+// This is the only place where this interpretation exists, so that every driver
+// answers identically to `"1"`, `"true"` or `"TRUE"`.
 func ParseFlag(raw string) bool {
 	enabled, err := strconv.ParseBool(raw)
 	return err == nil && enabled
 }
 
-// FormatFlag rend la forme canonique d'un drapeau, pour l'écriture.
+// FormatFlag returns the canonical form of a flag, for writing.
 func FormatFlag(enabled bool) string { return strconv.FormatBool(enabled) }
 
-// Describe rend une modification lisible dans un message d'erreur.
+// Describe returns a change readable in an error message.
 func (c Change) Describe() string { return fmt.Sprintf("%s.%s", c.Kind, c.Key) }

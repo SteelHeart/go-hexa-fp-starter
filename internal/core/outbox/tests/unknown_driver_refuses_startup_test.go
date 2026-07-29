@@ -10,8 +10,8 @@ import (
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
-	// Deny par défaut : jamais de repli sur « le pilote le plus proche ».
+	// Deny by default: never a fallback on « the closest driver ».
 	if _, err := outbox.New(config.Module{Enabled: true, Driver: "postgresql"}, outbox.Deps{}); err == nil {
-		t.Error("un pilote inconnu doit refuser le démarrage")
+		t.Error("an unknown driver must refuse startup")
 	}
 }

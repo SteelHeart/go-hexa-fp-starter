@@ -9,19 +9,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit"
 )
 
-// TestDisabledModuleRefusesLoudly : un audit désactivé doit échouer à l'appel.
+// TestDisabledModuleRefusesLoudly: a disabled audit must fail when called.
 //
-// Le repli inerte serait ici le pire choix possible : une opération sensible
-// passerait en croyant laisser une trace, et l'absence de trace ne se découvrirait
-// qu'au moment où on en a besoin — c'est-à-dire trop tard.
+// The inert fallback would be the worst possible choice here: a sensitive
+// operation would go through believing it left a trace, and the absence of that
+// trace would only be discovered the moment it is needed — that is to say, too
+// late.
 func TestDisabledModuleRefusesLoudly(t *testing.T) {
 	t.Parallel()
 
 	mod, err := audit.New(config.Module{Enabled: false, Driver: "log"}, audit.Deps{})
 	if err != nil {
-		t.Fatalf("un module désactivé se construit sans erreur: %v", err)
+		t.Fatalf("a disabled module builds without error: %v", err)
 	}
 	if err := mod.Record(context.Background(), completeEntry()); !errors.Is(err, audit.ErrDisabled) {
-		t.Errorf("Record = %v, attendu ErrDisabled", err)
+		t.Errorf("Record = %v, want ErrDisabled", err)
 	}
 }

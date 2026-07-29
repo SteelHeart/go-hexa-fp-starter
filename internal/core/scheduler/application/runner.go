@@ -1,14 +1,14 @@
-// Package application orchestre l'exécution des tâches périodiques.
+// Package application orchestrates the execution of periodic tasks.
 //
-// Ce paquet ne connaît AUCUN pilote et ne fait AUCUNE I/O : il reçoit l'élection,
-// le compte rendu et l'horloge sous forme de types fonction. C'est ce qui permet de
-// le tester avec des closures, sans base et sans attendre — la politique
-// d'exécution est la partie qu'on veut vraiment prouver.
+// This package knows NO driver and does NO I/O: it receives the election, the
+// report and the clock in the form of function types. That is what makes it
+// possible to test it with closures, without a database and without waiting —
+// the execution policy is the part we really want to prove.
 //
-// Conformément à `rules/README.md` § « le cœur est pur » : ni `time.Now()`, ni
-// logger, ni `panic` ici. `time.NewTicker` reste, parce qu'un minuteur n'est ni une
-// lecture d'horloge ni une entrée-sortie — et parce qu'un ordonnanceur sans
-// minuteur n'ordonnance rien.
+// In accordance with `rules/README.md` § "the core is pure": no `time.Now()`,
+// no logger, no `panic` here. `time.NewTicker` stays, because a timer is
+// neither a clock read nor an input-output — and because a scheduler without a
+// timer schedules nothing.
 package application
 
 import (
@@ -21,17 +21,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/ports"
 )
 
-// Scheduled associe une description de tâche au travail à exécuter.
+// Scheduled associates a task description with the work to be run.
 type Scheduled struct {
 	Task domain.Task
 	Job  ports.Job
 }
 
-// Ports porte les contrats dont l'orchestration a besoin.
+// Ports carries the contracts the orchestration needs.
 //
-// Regroupés dans une structure plutôt qu'en paramètres : quatre arguments
-// positionnels de même forme — trois fonctions et une horloge — s'inversent au
-// premier ajout, et le compilateur ne dirait rien.
+// Grouped in a struct rather than passed as parameters: four positional
+// arguments of the same shape — three functions and a clock — get swapped at
+// the first addition, and the compiler would say nothing.
 type Ports struct {
 	Acquire ports.Acquire
 	Release ports.Release
@@ -39,19 +39,19 @@ type Ports struct {
 	Now     ports.Now
 }
 
-// Runner exécute les tâches enregistrées.
+// Runner runs the registered tasks.
 type Runner struct{ ports Ports }
 
-// ErrMissingPort refuse une orchestration incomplète.
-var ErrMissingPort = errors.New("port manquant pour l'ordonnanceur")
+// ErrMissingPort refuses an incomplete orchestration.
+var ErrMissingPort = errors.New("missing port for the scheduler")
 
-// ErrNoJob refuse une tâche sans travail associé.
-var ErrNoJob = errors.New("tâche planifiée sans travail")
+// ErrNoJob refuses a task with no associated work.
+var ErrNoJob = errors.New("scheduled task without work")
 
-// NewRunner construit l'exécutant.
+// NewRunner builds the runner.
 //
-// Refuse un port manquant plutôt que de laisser un nil paniquer au premier tick :
-// une panique dans une goroutine d'ordonnanceur emporte tout le processus.
+// Refuses a missing port rather than letting a nil panic on the first tick: a
+// panic in a scheduler goroutine takes the whole process with it.
 func NewRunner(p Ports) (*Runner, error) {
 	if p.Acquire == nil || p.Release == nil || p.Report == nil || p.Now == nil {
 		return nil, ErrMissingPort
@@ -59,11 +59,11 @@ func NewRunner(p Ports) (*Runner, error) {
 	return &Runner{ports: p}, nil
 }
 
-// Run exécute toutes les tâches jusqu'à l'annulation du contexte.
+// Run runs every task until the context is cancelled.
 //
-// Valide TOUT avant de démarrer quoi que ce soit : lancer trois tâches sur quatre
-// puis échouer laisserait un ordonnanceur à moitié vivant, l'état le plus difficile
-// à diagnostiquer.
+// Validates EVERYTHING before starting anything: launching three tasks out of
+// four then failing would leave a half-alive scheduler, the hardest state to
+// diagnose.
 func (r *Runner) Run(ctx context.Context, scheduled []Scheduled) error {
 	if err := validate(scheduled); err != nil {
 		return err
@@ -80,36 +80,36 @@ func (r *Runner) Run(ctx context.Context, scheduled []Scheduled) error {
 		<-done
 	}
 
-	// L'annulation est la fin NORMALE d'un ordonnanceur : un arrêt propre ne doit
-	// ressembler à une panne ni dans les comptes rendus, ni dans le code de retour.
+	// Cancellation is the NORMAL end of a scheduler: a clean stop must not look
+	// like an outage, neither in the reports, nor in the return code.
 	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("ordonnanceur interrompu: %w", err)
+		return fmt.Errorf("scheduler interrupted: %w", err)
 	}
 	return nil
 }
 
-// validate refuse un lot de tâches inexploitable.
+// validate refuses an unusable batch of tasks.
 func validate(scheduled []Scheduled) error {
 	seen := make(map[domain.TaskName]struct{}, len(scheduled))
 	for _, entry := range scheduled {
 		if err := entry.Task.Validate(); err != nil {
-			return fmt.Errorf("tâche planifiée refusée: %w", err)
+			return fmt.Errorf("scheduled task refused: %w", err)
 		}
 		if entry.Job == nil {
 			return fmt.Errorf("%w: %s", ErrNoJob, entry.Task.Name)
 		}
-		// Deux tâches de même nom partagent la clé d'élection : elles s'excluraient
-		// mutuellement et l'une des deux ne tournerait jamais, sans jamais se
-		// signaler autrement que par « skipped ».
+		// Two tasks with the same name share the election key: they would
+		// exclude each other and one of the two would never run, without ever
+		// signalling itself other than by "skipped".
 		if _, duplicate := seen[entry.Task.Name]; duplicate {
-			return fmt.Errorf("%w: %s déclarée deux fois", domain.ErrInvalidTask, entry.Task.Name)
+			return fmt.Errorf("%w: %s declared twice", domain.ErrInvalidTask, entry.Task.Name)
 		}
 		seen[entry.Task.Name] = struct{}{}
 	}
 	return nil
 }
 
-// loop répète une tâche jusqu'à l'annulation.
+// loop repeats a task until cancellation.
 func (r *Runner) loop(ctx context.Context, s Scheduled) {
 	ticker := time.NewTicker(s.Task.Every)
 	defer ticker.Stop()
@@ -124,11 +124,11 @@ func (r *Runner) loop(ctx context.Context, s Scheduled) {
 	}
 }
 
-// RunOnce tente une exécution unique : élection, travail, libération.
+// RunOnce attempts a single execution: election, work, release.
 //
-// Exportée pour qu'un déclencheur EXTERNE — ordonnanceur du système, tâche
-// planifiée d'un orchestrateur — applique exactement la même politique, et pour
-// qu'un test la vérifie sans dépendre d'un minuteur.
+// Exported so that an EXTERNAL trigger — the system scheduler, the scheduled
+// task of an orchestrator — applies exactly the same policy, and so that a test
+// verifies it without depending on a timer.
 func (r *Runner) RunOnce(ctx context.Context, s Scheduled) {
 	runCtx, cancel := context.WithTimeout(ctx, s.Task.Deadline())
 	defer cancel()
@@ -145,9 +145,10 @@ func (r *Runner) RunOnce(ctx context.Context, s Scheduled) {
 		return
 	}
 
-	// La libération utilise un contexte SANS annulation : si le travail a épuisé le
-	// délai, libérer avec le même contexte échouerait et le verrou resterait pris
-	// jusqu'à sa péremption — la tâche ne tournerait plus pendant tout ce temps.
+	// The release uses a context WITHOUT cancellation: if the work has
+	// exhausted the timeout, releasing with the same context would fail and the
+	// lock would stay taken until it expired — the task would not run during
+	// all that time.
 	defer func() {
 		if err := r.ports.Release(context.WithoutCancel(runCtx), s.Task.Name); err != nil {
 			r.ports.Report(runCtx, domain.Outcome{
@@ -159,7 +160,7 @@ func (r *Runner) RunOnce(ctx context.Context, s Scheduled) {
 	r.execute(runCtx, s)
 }
 
-// execute lance le travail et rend compte de son sort.
+// execute launches the work and reports on its fate.
 func (r *Runner) execute(ctx context.Context, s Scheduled) {
 	started := r.ports.Now()
 	err := s.Job(ctx)

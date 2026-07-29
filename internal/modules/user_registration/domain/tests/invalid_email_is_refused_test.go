@@ -7,37 +7,37 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestInvalidEmailIsRefused : le type Email ne peut PAS porter une valeur invalide.
+// TestInvalidEmailIsRefused: the Email type CANNOT carry an invalid value.
 //
-// Le champ est non exporté et `NewEmail` est le seul chemin de construction :
-// toute fonction qui reçoit un Email n'a donc plus à le valider. C'est le type qui
-// le garantit, pas une convention de revue — et ce test est ce qui rend cette
-// garantie vraie.
+// The field is unexported and `NewEmail` is the only construction path: any
+// function that receives an Email therefore no longer has to validate it. The
+// type guarantees it, not a review convention — and this test is what makes that
+// guarantee true.
 //
-// Le cas « Nom <a@b.c> » mérite une mention : `mail.ParseAddress` l'accepte
-// volontiers. Sans le refus explicite, deux saisies différentes donneraient le même
-// utilisateur, et le nom affiché viendrait d'une entrée non validée.
+// The "Name <a@b.c>" case deserves a mention: `mail.ParseAddress` happily
+// accepts it. Without the explicit refusal, two different inputs would yield the
+// same user, and the displayed name would come from unvalidated input.
 func TestInvalidEmailIsRefused(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"vide":                   "",
-		"espaces seuls":          "   ",
-		"sans arobase":           "alice.example.com",
-		"sans domaine":           "alice@",
-		"sans partie locale":     "@example.com",
-		"domaine sans point":     "alice@localhost",
-		"forme avec nom affiché": "Alice <alice@example.com>",
-		"deux arobases":          "alice@@example.com",
-		"espace intérieur":       "ali ce@example.com",
-		"trop longue":            strings.Repeat("a", 250) + "@example.com",
+		"empty":                    "",
+		"whitespace only":          "   ",
+		"no at sign":               "alice.example.com",
+		"no domain":                "alice@",
+		"no local part":            "@example.com",
+		"domain without a dot":     "alice@localhost",
+		"form with a display name": "Alice <alice@example.com>",
+		"two at signs":             "alice@@example.com",
+		"inner space":              "ali ce@example.com",
+		"too long":                 strings.Repeat("a", 250) + "@example.com",
 	}
 
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := codeDe(t, domain.NewEmail(raw)); got != domain.CodeInvalidEmail {
-				t.Errorf("code = %q, attendu %q", got, domain.CodeInvalidEmail)
+			if got := codeOf(t, domain.NewEmail(raw)); got != domain.CodeInvalidEmail {
+				t.Errorf("code = %q, want %q", got, domain.CodeInvalidEmail)
 			}
 		})
 	}

@@ -1,6 +1,6 @@
-// Package ports déclare le contrat du journal d'audit.
+// Package ports declares the contract of the audit log.
 //
-// Ce paquet ne contient que des déclarations de types.
+// This package contains only type declarations.
 package ports
 
 import (
@@ -9,12 +9,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/domain"
 )
 
-// Record enregistre un fait d'audit.
+// Record records an audit fact.
 //
-// Contrat : l'écriture passe par le querier du contexte, donc DANS la
-// transaction métier si elle existe. Un fait annulé ne laisse pas de trace
-// d'audit mensongère — c'est ce qui distingue un journal d'audit d'un log.
+// Contract: the write goes through the querier of the context, hence INSIDE
+// the business transaction if there is one. A rolled back fact leaves no lying
+// audit trace — that is what distinguishes an audit log from a log.
 //
-// Contrat d'erreur : une entrée incomplète est refusée (voir Entry.IsComplete).
-// Toute autre erreur est technique.
+// Error contract: an incomplete entry is refused (see Entry.IsComplete). Any
+// other error is technical.
 type Record = func(ctx context.Context, entry domain.Entry) error

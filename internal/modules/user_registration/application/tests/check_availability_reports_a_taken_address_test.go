@@ -9,43 +9,43 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestCheckAvailabilityReportsATakenAddress : une adresse prise n'est pas
-// disponible, et une panne n'est pas une disponibilité.
+// TestCheckAvailabilityReportsATakenAddress: a taken address is not available,
+// and a breakdown is not an availability.
 //
-// Le second point est le vrai piège. Si une base injoignable rendait « disponible »,
-// une panne transformerait le formulaire en machine à créer des doublons — que la
-// contrainte d'unicité refuserait ensuite, avec un message incompréhensible pour
-// l'utilisateur qui vient de voir une coche verte.
+// The second point is the real trap. If an unreachable database returned
+// "available", a breakdown would turn the form into a duplicate-making machine —
+// duplicates the uniqueness constraint would then refuse, with a message
+// incomprehensible to the user who has just seen a green tick.
 //
-// L'erreur remonte donc telle quelle : « je ne sais pas » n'est pas « oui ».
+// The error therefore travels up as it is: "I do not know" is not "yes".
 func TestCheckAvailabilityReportsATakenAddress(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	prise := application.NewCheckEmailAvailability(
+	taken := application.NewCheckEmailAvailability(
 		func(context.Context, domain.Email) result.Result[bool, domain.Error] {
 			return result.Ok[bool, domain.Error](true)
 		},
 	)
-	disponible, _, ok := prise(ctx, adresseValide).Get()
+	available, _, ok := taken(ctx, validAddress).Get()
 	if !ok {
-		t.Fatal("une adresse prise doit rendre un succès portant false, pas une erreur")
+		t.Fatal("a taken address must return a success carrying false, not an error")
 	}
-	if disponible {
-		t.Error("une adresse déjà enregistrée ne doit PAS être annoncée disponible")
+	if available {
+		t.Error("an already registered address must NOT be announced as available")
 	}
 
-	enPanne := application.NewCheckEmailAvailability(
+	brokenDown := application.NewCheckEmailAvailability(
 		func(context.Context, domain.Email) result.Result[bool, domain.Error] {
-			return echoue[bool](domain.CodeUnavailable, "base injoignable")
+			return failing[bool](domain.CodeUnavailable, "base injoignable")
 		},
 	)
-	_, err, ok := enPanne(ctx, adresseValide).Get()
+	_, err, ok := brokenDown(ctx, validAddress).Get()
 	if ok {
-		t.Fatal("une panne ne doit pas se transformer en disponibilité")
+		t.Fatal("a breakdown must not turn into an availability")
 	}
 	if err.Code != domain.CodeUnavailable {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeUnavailable)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeUnavailable)
 	}
 }

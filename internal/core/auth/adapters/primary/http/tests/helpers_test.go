@@ -1,16 +1,16 @@
-// Package tests éprouve la SURFACE HTTP du module d'authentification.
+// Package tests exercises the HTTP SURFACE of the authentication module.
 //
-// # En processus, sans aucune infrastructure
+// # In process, without any infrastructure
 //
-// Le serveur est monté en mémoire par `httptest` : ni port ouvert, ni binaire
-// lancé, ni service externe. Ces tests tournent donc dans `go test ./...`
-// ordinaire, sur n'importe quelle machine, en quelques millisecondes — et ils
-// cassent à la seconde où quelqu'un change un code de statut.
+// The server is mounted in memory by `httptest`: no port opened, no binary
+// launched, no external service. These tests therefore run in an ordinary
+// `go test ./...`, on any machine, in a few milliseconds — and they break the
+// second someone changes a status code.
 //
-// Ce qu'ils vérifient : la TRADUCTION, et les fuites. Le domaine et les cas
-// d'usage ont leurs propres tests ; ici on vérifie qu'un refus devient le bon
-// statut, qu'un secret ne ressort jamais, et que deux refus différents restent
-// indiscernables une fois traduits.
+// What they check: the TRANSLATION, and the leaks. The domain and the use cases
+// have their own tests; here we check that a refusal becomes the right status,
+// that a secret never comes back out, and that two different refusals stay
+// indistinguishable once translated.
 package tests
 
 import (
@@ -32,52 +32,53 @@ import (
 )
 
 const (
-	// subject désigne le compte utilisé par les tests.
+	// subject designates the account used by the tests.
 	subject = "alice@example.com"
 
-	// secret satisfait les bornes du module.
-	secret = "correct cheval batterie agrafe"
+	// secret satisfies the module's bounds.
+	secret = "correct horse battery staple"
 
-	// sessionsPath et identityPath doublent volontairement les constantes du
-	// contrat : un test qui les importerait resterait vert si quelqu'un
-	// renommait une route, et un changement de chemin est cassant pour tout
-	// client déjà déployé.
+	// sessionsPath and identityPath deliberately duplicate the contract's
+	// constants: a test that imported them would stay green if someone renamed
+	// a route, and a path change is breaking for every already deployed
+	// client.
 	sessionsPath   = "/v1/auth/sessions"
 	currentPath    = "/v1/auth/sessions/current"
 	identityPath   = "/v1/auth/identity"
 	identitiesPath = "/v1/auth/identities"
 	rolePath       = "/v1/auth/roles/admin"
 
-	// jetonFactice a la BONNE forme et n'a jamais été émis : 43 caractères,
-	// exactement ce que le domaine exige. C'est ce qui permet d'éprouver le
-	// refus d'un jeton bien formé mais inconnu.
-	jetonFactice = "0000000000000000000000000000000000000000000"
+	// unknownToken has the RIGHT shape and was never issued: 43 characters,
+	// exactly what the domain demands. That is what makes it possible to
+	// exercise the refusal of a well-formed but unknown token.
+	unknownToken = "0000000000000000000000000000000000000000000"
 )
 
-// hashSecret est un hachage FACTICE, instantané.
+// hashSecret is a DUMMY hash, instantaneous.
 //
-// Argon2id est délibérément lent. Le payer ici ferait durer chaque test des
-// dizaines de millisecondes sans rien éprouver de plus : ce qui est teste, c'est
-// la traduction HTTP, pas la solidité du condensé.
-func hashSecret(plain string) (string, error) { return "condensé:" + plain, nil }
+// Argon2id is deliberately slow. Paying for it here would make every test last
+// tens of milliseconds without exercising anything more: what is tested is the
+// HTTP translation, not the strength of the digest.
+func hashSecret(plain string) (string, error) { return "digest:" + plain, nil }
 
-func verifySecret(plain, encoded string) (bool, error) { return encoded == "condensé:"+plain, nil }
+func verifySecret(plain, encoded string) (bool, error) { return encoded == "digest:"+plain, nil }
 
-// newServer monte la surface sur un serveur en mémoire, avec un compte inscrit.
+// newServer mounts the surface on an in-memory server, with one registered
+// account.
 //
-// Le module tourne sur son pilote par défaut : chaque test a donc son propre
-// magasin, vierge, et peut s'exécuter en parallèle sans interférer.
+// The module runs on its default driver: each test therefore has its own store,
+// pristine, and can run in parallel without interfering.
 func newServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	mod := newModule(t, config.Module{Enabled: true, Driver: "memory"})
 	if _, err := mod.Register(context.Background(), subject, secret); err != nil {
-		t.Fatalf("inscription: %v", err)
+		t.Fatalf("registration: %v", err)
 	}
 	return serve(t, mod)
 }
 
-// newModule construit le module ou fait échouer le test.
+// newModule builds the module or fails the test.
 func newModule(t *testing.T, cfg config.Module) auth.Module {
 	t.Helper()
 
@@ -87,12 +88,12 @@ func newModule(t *testing.T, cfg config.Module) auth.Module {
 		Now:          func() time.Time { return time.Date(2026, time.July, 28, 9, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
-		t.Fatalf("montage du module: %v", err)
+		t.Fatalf("mounting the module: %v", err)
 	}
 	return mod
 }
 
-// serve monte un module sur un serveur en mémoire.
+// serve mounts a module on an in-memory server.
 func serve(t *testing.T, mod auth.Module) *httptest.Server {
 	t.Helper()
 
@@ -104,11 +105,11 @@ func serve(t *testing.T, mod auth.Module) *httptest.Server {
 	return server
 }
 
-// testConfig porte le minimum dont le routeur a besoin.
+// testConfig carries the minimum the router needs.
 //
-// ⚠️ Les limites de débit sont volontairement HAUTES : à zéro, le limiteur
-// refuserait tout et chaque test échouerait en 429 — un défaut dont la cause
-// serait invisible dans le message d'erreur.
+// ⚠️ The rate limits are deliberately HIGH: at zero, the limiter would refuse
+// everything and every test would fail with a 429 — a defect whose cause would
+// be invisible in the error message.
 func testConfig() config.Config {
 	return config.Config{
 		App:    config.App{Env: config.EnvTest, Name: "surface-auth-test", Version: "test"},
@@ -117,35 +118,36 @@ func testConfig() config.Config {
 	}
 }
 
-// discardLogger tait les journaux du routeur pendant les tests.
+// discardLogger silences the router's logs during the tests.
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// response est une réponse HTTP entièrement consommée.
+// response is a fully consumed HTTP response.
 //
-// Le corps BRUT est conservé à côté du décodé, et il compte autant : une fuite se
-// cherche dans le TEXTE, pas dans une carte. Un secret transporté par un champ au
-// nom anodin échapperait à toute inspection champ par champ.
+// The RAW body is kept alongside the decoded one, and it matters just as much:
+// a leak is looked for in the TEXT, not in a map. A secret carried by a field
+// with an innocuous name would escape any field-by-field inspection.
 type response struct {
 	status int
 	body   map[string]any
 	raw    string
 }
 
-// openSession demande une session et rend la réponse, corps lu et fermé.
+// openSession asks for a session and returns the response, body read and
+// closed.
 func openSession(t *testing.T, server *httptest.Server, subj, sec string) response {
 	t.Helper()
 
 	payload, err := json.Marshal(map[string]string{"subject": subj, "secret": sec})
 	if err != nil {
-		t.Fatalf("sérialisation: %v", err)
+		t.Fatalf("serialising: %v", err)
 	}
 
-	// bodyclose ne suit pas la fermeture faite par `consume`, qui la fait
-	// pourtant en `defer` sur tous les chemins.
+	// bodyclose does not follow the closing done by `consume`, which does it in
+	// a `defer` on every path nonetheless.
 	//
-	//nolint:noctx,bodyclose // httptest local ; le corps est lu et fermé par consume
+	//nolint:noctx,bodyclose // local httptest; the body is read and closed by consume
 	resp, err := server.Client().Post(
 		server.URL+sessionsPath, "application/json", bytes.NewReader(payload))
 	if err != nil {
@@ -154,23 +156,23 @@ func openSession(t *testing.T, server *httptest.Server, subj, sec string) respon
 	return consume(t, resp)
 }
 
-// withBearer envoie une requête portant un en-tête `Authorization`.
+// withBearer sends a request carrying an `Authorization` header.
 //
-// L'en-tête est passé BRUT et non construit à partir d'un jeton : c'est ce qui
-// permet d'éprouver un schéma absent, un schéma inconnu, ou une casse
-// inattendue — les cas où la surface décide seule, sans le module.
+// The header is passed RAW and not built from a token: that is what makes it
+// possible to exercise a missing scheme, an unknown scheme, or an unexpected
+// case — the cases where the surface decides on its own, without the module.
 func withBearer(t *testing.T, server *httptest.Server, method, path, header string) response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(context.Background(), method, server.URL+path, http.NoBody)
 	if err != nil {
-		t.Fatalf("construction de la requête: %v", err)
+		t.Fatalf("building the request: %v", err)
 	}
 	if header != "" {
 		req.Header.Set("Authorization", header)
 	}
 
-	//nolint:bodyclose // le corps est lu et fermé par consume
+	//nolint:bodyclose // the body is read and closed by consume
 	resp, err := server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
@@ -178,96 +180,97 @@ func withBearer(t *testing.T, server *httptest.Server, method, path, header stri
 	return consume(t, resp)
 }
 
-// consume lit intégralement la réponse et la ferme.
+// consume reads the response in full and closes it.
 //
-// Un corps vide est ACCEPTÉ sans erreur : 204 n'en a pas, et faire échouer le
-// test sur son absence obligerait chaque appelant à distinguer les cas.
+// An empty body is ACCEPTED without error: a 204 has none, and failing the test
+// on its absence would force every caller to tell the cases apart.
 func consume(t *testing.T, resp *http.Response) response {
 	t.Helper()
 	defer func() { _ = resp.Body.Close() }()
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("lecture du corps: %v", err)
+		t.Fatalf("reading the body: %v", err)
 	}
 
 	var payload map[string]any
 	if len(bytes.TrimSpace(raw)) > 0 {
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			t.Fatalf("corps de réponse illisible (%q): %v", raw, err)
+			t.Fatalf("unreadable response body (%q): %v", raw, err)
 		}
 	}
 	return response{status: resp.StatusCode, body: payload, raw: string(raw)}
 }
 
-// serveurAmorce monte la surface AVEC un compte d'amorçage administrateur.
+// bootstrappedServer mounts the surface WITH an administrator bootstrap
+// account.
 //
-// C'est le seul moyen d'éprouver une route protégée : sans rôle, tout rend 403,
-// et un test qui ne verrait que des 403 ne distinguerait pas un garde correct
-// d'un garde qui refuse tout.
-func serveurAmorce(t *testing.T) (server *httptest.Server, jetonAdmin string) {
+// It is the only way to exercise a protected route: without a role, everything
+// returns 403, and a test that only ever saw 403s would not tell a correct
+// guard from a guard that refuses everything.
+func bootstrappedServer(t *testing.T) (server *httptest.Server, adminToken string) {
 	t.Helper()
 
 	mod := newModule(t, config.Module{Enabled: true, Driver: "memory"})
 	report, err := auth.Bootstrap(context.Background(), mod, config.EnvDevelopment)
 	if err != nil {
-		t.Fatalf("amorçage: %v", err)
+		t.Fatalf("bootstrapping: %v", err)
 	}
 	if !report.Created {
-		t.Fatal("l'amorçage devait créer le compte administrateur")
+		t.Fatal("bootstrapping should have created the administrator account")
 	}
 
 	server = serve(t, mod)
 	return server, tokenOf(t, openSession(t, server, report.Subject, report.Secret))
 }
 
-// requete décrit un appel HTTP complet.
+// request describes a complete HTTP call.
 //
-// Une structure plutôt que six paramètres : la règle de forme en autorise cinq,
-// et surtout `entete` et `corps` sont deux chaînes voisines — les inverser
-// compile, et produit une requête sans corps portant un JSON en guise
-// d'autorisation. Nommer les champs rend l'inversion visible.
-type requete struct {
-	methode string
-	chemin  string
-	entete  string
-	corps   string
+// A structure rather than six parameters: the shape rule allows five, and above
+// all `header` and `body` are two neighbouring strings — swapping them
+// compiles, and produces a request without a body carrying a JSON document as
+// its authorisation. Naming the fields makes the swap visible.
+type request struct {
+	method string
+	path   string
+	header string
+	body   string
 }
 
-// porteur construit l'en-tête d'autorisation d'un jeton.
-func porteur(token string) string { return "Bearer " + token }
+// bearerOf builds the authorisation header of a token.
+func bearerOf(token string) string { return "Bearer " + token }
 
-// envoyer exécute la requête et rend la réponse, corps lu et fermé.
-func envoyer(t *testing.T, server *httptest.Server, r requete) response {
+// send runs the request and returns the response, body read and closed.
+func send(t *testing.T, server *httptest.Server, r request) response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(
-		context.Background(), r.methode, server.URL+r.chemin, strings.NewReader(r.corps))
+		context.Background(), r.method, server.URL+r.path, strings.NewReader(r.body))
 	if err != nil {
-		t.Fatalf("construction de la requête: %v", err)
+		t.Fatalf("building the request: %v", err)
 	}
-	if r.corps != "" {
+	if r.body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if r.entete != "" {
-		req.Header.Set("Authorization", r.entete)
+	if r.header != "" {
+		req.Header.Set("Authorization", r.header)
 	}
 
-	//nolint:bodyclose // le corps est lu et fermé par consume
+	//nolint:bodyclose // the body is read and closed by consume
 	resp, err := server.Client().Do(req)
 	if err != nil {
-		t.Fatalf("%s %s: %v", r.methode, r.chemin, err)
+		t.Fatalf("%s %s: %v", r.method, r.path, err)
 	}
 	return consume(t, resp)
 }
 
-// tokenOf extrait le jeton d'une réponse de connexion.
+// tokenOf extracts the token from a sign-in response.
 func tokenOf(t *testing.T, resp response) string {
 	t.Helper()
 
 	token, ok := resp.body["token"].(string)
 	if !ok || token == "" {
-		t.Fatalf("la réponse ne porte pas de jeton exploitable : %s", resp.raw)
+		t.Fatalf("the response carries no usable token: %s", resp.raw)
 	}
 	return token
 }

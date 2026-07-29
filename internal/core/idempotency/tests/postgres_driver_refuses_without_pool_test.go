@@ -8,14 +8,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
 )
 
-// TestPostgresDriverRefusesWithoutPool : un pilote qui exige une base sans base
-// refuse au démarrage, jamais à la première requête.
+// TestPostgresDriverRefusesWithoutPool: a driver that requires a database
+// without a database refuses at startup, never on the first request.
 func TestPostgresDriverRefusesWithoutPool(t *testing.T) {
 	t.Parallel()
 
 	_, err := idempotency.New(
 		config.Module{Enabled: true, Driver: "postgres"}, idempotency.Deps{})
 	if !errors.Is(err, idempotency.ErrPoolRequired) {
-		t.Errorf("erreur = %v, attendu ErrPoolRequired", err)
+		t.Errorf("error = %v, want ErrPoolRequired", err)
 	}
 }

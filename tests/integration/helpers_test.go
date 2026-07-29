@@ -1,36 +1,36 @@
 //go:build integration
 
-// Package integration éprouve les pilotes contre les SERVICES RÉELS.
+// Package integration exercises the drivers against the REAL SERVICES.
 //
-// # Ce que ce niveau ajoute, et pourquoi il n'était pas optionnel
+// # What this level adds, and why it was not optional
 //
-// Huit paquets de pilotes avaient zéro test, à aucun niveau (#37). Le pilote
-// `memory` d'`idempotency` a vingt-quatre tests prouvant l'exclusivité ; le
-// pilote `postgres`, celui qui tourne en PRODUCTION, en avait zéro.
+// Eight driver packages had zero tests, at any level (#37). The `memory`
+// driver of `idempotency` has twenty-four tests proving exclusivity; the
+// `postgres` driver, the one that runs in PRODUCTION, had none.
 //
-// Ce n'était pas un oubli mais une conséquence : ces pilotes exigent un
-// service, donc `go test ./...` sans tag ne peut pas les atteindre. Le tag
-// `integration` n'était porté par AUCUN fichier du dépôt, et la CI n'avait pas
-// de job correspondant — la dette était nommée, jamais payée.
+// This was not an oversight but a consequence: those drivers require a
+// service, so `go test ./...` without a tag cannot reach them. The
+// `integration` tag was carried by NO file in the repository, and the CI had
+// no matching job — the debt was named, never paid.
 //
-// # Ce que ce niveau ne fait PAS
+// # What this level does NOT do
 //
-// Il ne rejoue pas les tests de domaine. Les propriétés pures — refus d'une
-// clé vide, bornes du recul exponentiel, normalisation — sont déjà vérifiées en
-// microsecondes dans `{module}/tests/`. Les répéter ici coûterait un service
-// pour ne rien apprendre.
+// It does not replay the domain tests. The pure properties — refusal of an
+// empty key, bounds of the exponential backoff, normalisation — are already
+// verified in microseconds under `{module}/tests/`. Repeating them here would
+// cost a service to learn nothing.
 //
-// Il vérifie ce qu'eux ne PEUVENT pas vérifier : que le SQL est valide, que les
-// contraintes de la migration font ce qu'on croit, et surtout que les
-// garanties de CONCURRENCE tiennent — un `FOR UPDATE SKIP LOCKED` ou un verrou
-// consultatif ne se testent que contre un vrai moteur.
+// It verifies what they CANNOT verify: that the SQL is valid, that the
+// migration constraints do what we believe they do, and above all that the
+// CONCURRENCY guarantees hold — a `FOR UPDATE SKIP LOCKED` or an advisory lock
+// can only be tested against a real engine.
 //
-// # Aucun `t.Skip`, jamais
+// # No `t.Skip`, ever
 //
-// Un test sauté ressemble en tout point à un test réussi : c'est la forme même
-// que l'ADR 013 combat. Si le service est injoignable, ces tests ÉCHOUENT en
-// nommant la commande qui le démarre. Le faux vert n'a pas sa place ici, et
-// surtout pas au niveau qui garde le code de production.
+// A skipped test looks in every respect like a passing one: that is the very
+// shape ADR 013 fights. If the service is unreachable, these tests FAIL while
+// naming the command that starts it. The false green has no place here, and
+// least of all at the level that guards the production code.
 package integration
 
 import (
@@ -44,27 +44,28 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// dsnPostgres rend le DSN de migration, seul rôle autorisé à créer.
+// dsnPostgres returns the migration DSN, the only role allowed to create.
 //
-// `DB_MIGRATION_DSN` et non `DB_DSN` : le rôle applicatif n'a ni CREATE, ni
-// ALTER, ni DROP (ADR 011 §4). Ces tests nettoient leurs propres lignes, ce qui
-// exige des droits que le rôle applicatif ne doit PAS avoir.
+// `DB_MIGRATION_DSN` and not `DB_DSN`: the application role has neither
+// CREATE, nor ALTER, nor DROP (ADR 011 §4). These tests clean up their own
+// rows, which requires rights the application role must NOT have.
 func dsnPostgres(t *testing.T) string {
 	t.Helper()
 	if dsn := os.Getenv("DB_MIGRATION_DSN"); dsn != "" {
 		return dsn
 	}
-	// Le même défaut que `config/env/development.yaml`. Ne PAS échouer ici :
-	// l'absence de variable n'est pas l'absence de service, et c'est le Ping
-	// qui tranche. Échouer sur la variable enverrait chercher au mauvais endroit.
+	// The same default as `config/env/development.yaml`. Do NOT fail here: a
+	// missing variable is not a missing service, and it is the Ping that
+	// decides. Failing on the variable would send one looking in the wrong
+	// place.
 	return "postgres://hexa:hexa@localhost:5432/hexa?sslmode=disable"
 }
 
-// pool ouvre un pool Postgres et VÉRIFIE qu'il répond.
+// pool opens a Postgres pool and CHECKS that it answers.
 //
-// Le `Ping` est indispensable : `pgxpool.New` est paresseux et réussit contre
-// une adresse morte. Sans lui, le premier échec surviendrait au milieu d'un
-// test, et accuserait la requête plutôt que l'absence de service.
+// The `Ping` is indispensable: `pgxpool.New` is lazy and succeeds against a
+// dead address. Without it, the first failure would occur in the middle of a
+// test, and would accuse the query rather than the missing service.
 func pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
@@ -73,21 +74,21 @@ func pool(t *testing.T) *pgxpool.Pool {
 
 	p, err := pgxpool.New(ctx, dsnPostgres(t))
 	if err != nil {
-		t.Fatalf("ouverture du pool Postgres: %v", err)
+		t.Fatalf("opening the Postgres pool: %v", err)
 	}
 	if err := p.Ping(ctx); err != nil {
 		p.Close()
-		t.Fatalf("Postgres injoignable (%v) — démarrer la pile avec `task up`", err)
+		t.Fatalf("Postgres unreachable (%v) — start the stack with `task up`", err)
 	}
 	t.Cleanup(p.Close)
 	return p
 }
 
-// redisClient ouvre un client Redis et vérifie qu'il répond.
+// redisClient opens a Redis client and checks that it answers.
 func redisClient(t *testing.T) *redis.Client {
 	t.Helper()
 
-	// Même défaut que `config/data.yaml`.
+	// Same default as `config/data.yaml`.
 	addr := os.Getenv("REDIS_ADDR")
 	if addr == "" {
 		addr = "localhost:6379"
@@ -98,25 +99,25 @@ func redisClient(t *testing.T) *redis.Client {
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()
-		t.Fatalf("Redis injoignable (%v) — démarrer la pile avec `task up`", err)
+		t.Fatalf("Redis unreachable (%v) — start the stack with `task up`", err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }
 
-// unique rend un identifiant propre à un test.
+// unique returns an identifier specific to a test.
 //
-// Les tests de ce niveau partagent UNE base : ils tournent en parallèle et se
-// rejouent. Deux tests qui écrivent la même clé se contamineraient, et le
-// symptôme — un échec intermittent — coûte plus cher à diagnostiquer que le
-// défaut qu'il masque.
-func unique(t *testing.T, prefixe string) string {
+// The tests at this level share ONE database: they run in parallel and they
+// get replayed. Two tests writing the same key would contaminate each other,
+// and the symptom — an intermittent failure — costs more to diagnose than the
+// defect it hides.
+func unique(t *testing.T, prefix string) string {
 	t.Helper()
-	return fmt.Sprintf("%s-%s-%d", prefixe, t.Name(), time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s-%d", prefix, t.Name(), time.Now().UnixNano())
 }
 
-// ctxTest rend un contexte borné : un test qui attend un verrou ne doit pas
-// bloquer la suite entière.
+// ctxTest returns a bounded context: a test waiting on a lock must not block
+// the whole suite.
 func ctxTest(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

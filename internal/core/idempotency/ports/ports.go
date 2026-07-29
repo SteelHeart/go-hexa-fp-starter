@@ -1,27 +1,28 @@
-// Package ports déclare les contrats de l'idempotence.
+// Package ports declares the contracts of idempotency.
 //
-// Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface.
+// This package contains ONLY type declarations: no struct, no function, no
+// interface.
 //
-// # Pourquoi `error` et non `Result[T, domain.Error]`
+// # Why `error` and not `Result[T, domain.Error]`
 //
-// Un module NOYAU est technique : l'idempotence n'a pas de taxonomie d'erreur
-// métier à exposer. La frontière est nette et vérifiable — `internal/core/**`
-// utilise `error`, `internal/modules/**` utilise `Result`.
+// A CORE module is technical: idempotency has no business error taxonomy to
+// expose. The boundary is sharp and verifiable — `internal/core/**` uses
+// `error`, `internal/modules/**` uses `Result`.
 //
-// # Le protocole, en trois appels
+// # The protocol, in three calls
 //
 //	res, err := reserve(ctx, domain.Request{Key: k, Fingerprint: fp})
 //	switch {
-//	case errors.Is(err, domain.ErrInFlight): // 409 : réessayer, ne PAS exécuter
-//	case errors.Is(err, domain.ErrConflict): // 422 : le client a fauté
-//	case err != nil:                        // panne technique
-//	case res.Replayed:                      // retourner res.Response telle quelle
-//	default:                                // exécuter, puis complete() ou release()
+//	case errors.Is(err, domain.ErrInFlight): // 409: retry, do NOT execute
+//	case errors.Is(err, domain.ErrConflict): // 422: the client is at fault
+//	case err != nil:                        // technical failure
+//	case res.Replayed:                      // return res.Response as it is
+//	default:                                // execute, then complete() or release()
 //	}
 //
-// Oublier `release()` sur échec rend l'opération impossible jusqu'à expiration de
-// la clé : le remède serait pire que le mal. `defer` est le bon réflexe.
+// Forgetting `release()` on failure makes the operation impossible until the key
+// expires: the remedy would be worse than the disease. `defer` is the right
+// reflex.
 package ports
 
 import (
@@ -30,38 +31,38 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// Reserve tente d'obtenir l'exclusivité pour une clé.
+// Reserve attempts to obtain exclusivity for a key.
 //
-// # Contrat de conformité — tout pilote doit rendre ces cinq issues
+// # Conformance contract — every driver must return these five outcomes
 //
-//  1. Requête incomplète → `domain.ErrIncomplete`. Jamais de clé vide acceptée.
-//  2. Clé libre ou réservation expirée → `Reservation{}` et l'appelant exécute.
-//  3. Clé connue, empreinte différente → `domain.ErrConflict`.
-//  4. Clé connue, opération achevée → `Reservation{Replayed: true, Response: …}`.
-//  5. Clé connue, opération en cours → `domain.ErrInFlight`.
+//  1. Incomplete request → `domain.ErrIncomplete`. Never an empty key accepted.
+//  2. Free key or expired reservation → `Reservation{}` and the caller executes.
+//  3. Known key, different fingerprint → `domain.ErrConflict`.
+//  4. Known key, completed operation → `Reservation{Replayed: true, Response: …}`.
+//  5. Known key, operation in flight → `domain.ErrInFlight`.
 //
-// L'issue 5 exige de l'atomicité : deux appels concurrents sur une clé libre ne
-// peuvent JAMAIS obtenir tous les deux l'issue 2. Un pilote incapable de le
-// garantir n'est pas conforme — c'est la seule promesse du module.
+// Outcome 5 demands atomicity: two concurrent calls on a free key can NEVER both
+// obtain outcome 2. A driver unable to guarantee it is not conformant — this is
+// the module's only promise.
 //
-// En cas de doute, un pilote refuse (`ErrInFlight`) plutôt que d'autoriser :
-// faire réessayer un client est bénin, exécuter deux fois ne l'est pas.
+// When in doubt, a driver refuses (`ErrInFlight`) rather than allows: making a
+// client retry is benign, executing twice is not.
 type Reserve = func(ctx context.Context, req domain.Request) (domain.Reservation, error)
 
-// Complete mémorise la réponse pour les rejeux ultérieurs.
+// Complete memorises the response for later replays.
 //
-// Retourne `domain.ErrNotReserved` si la réservation n'existe plus. L'opération
-// métier, elle, a réussi : l'appelant journalise et poursuit.
+// Returns `domain.ErrNotReserved` if the reservation no longer exists. The
+// business operation itself succeeded: the caller logs and carries on.
 type Complete = func(ctx context.Context, key domain.Key, response []byte) error
 
-// Release libère une clé après un échec, pour que l'appelant puisse réessayer.
+// Release frees a key after a failure, so that the caller can retry.
 //
-// Ne libère JAMAIS une clé achevée : ce serait rouvrir la porte au rejeu que le
-// module existe pour fermer.
+// NEVER frees a completed key: that would reopen the door to the replay the
+// module exists to close.
 type Release = func(ctx context.Context, key domain.Key) error
 
-// Purge supprime les clés expirées et retourne leur nombre.
+// Purge deletes expired keys and returns their number.
 //
-// À appeler périodiquement par l'ordonnanceur. Un pilote dont le magasin expire
-// tout seul retourne 0 sans erreur.
+// To be called periodically by the scheduler. A driver whose store expires on
+// its own returns 0 without error.
 type Purge = func(ctx context.Context) (int64, error)

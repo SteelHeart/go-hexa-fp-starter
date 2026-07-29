@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestMetadataIsTheOnlyOptionalField : un fait d'audit sans contexte supplémentaire
-// reste exploitable. Exiger des métadonnées pousserait à en inventer, et le premier
-// champ inventé serait une donnée personnelle recopiée « au cas où ».
+// TestMetadataIsTheOnlyOptionalField: an audit fact with no additional context
+// stays usable. Requiring metadata would push people to invent some, and the
+// first invented field would be a personal datum copied over "just in case".
 func TestMetadataIsTheOnlyOptionalField(t *testing.T) {
 	t.Parallel()
 
@@ -16,6 +16,6 @@ func TestMetadataIsTheOnlyOptionalField(t *testing.T) {
 	entry.Metadata = nil
 
 	if err := mod.Record(context.Background(), entry); err != nil {
-		t.Errorf("une entrée sans métadonnées doit être acceptée: %v", err)
+		t.Errorf("an entry without metadata must be accepted: %v", err)
 	}
 }

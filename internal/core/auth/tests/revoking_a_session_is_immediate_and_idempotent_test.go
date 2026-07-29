@@ -8,17 +8,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestRevokingASessionIsImmediateAndIdempotent garde les deux propriétés d'une
-// déconnexion.
+// TestRevokingASessionIsImmediateAndIdempotent guards both properties of a
+// sign-out.
 //
-// Immédiate : c'est ce qu'on attend d'une déconnexion, et c'est ce qu'un jeton
-// signé autoportant ne sait pas faire sans liste de révocation — donc sans
-// retomber sur le magasin qu'il prétendait éviter.
+// Immediate: that is what one expects from a sign-out, and it is what a
+// self-contained signed token cannot do without a revocation list — hence
+// without falling back on the store it claimed to avoid.
 //
-// Idempotente : un client qui se déconnecte deux fois n'a rien fait de mal. Faire
-// échouer le second appel produirait une erreur que personne ne saurait traiter,
-// et que tout le monde finirait par ignorer — y compris quand elle signale autre
-// chose.
+// Idempotent: a client who signs out twice has done nothing wrong. Failing the
+// second call would produce an error nobody would know how to handle, and that
+// everyone would end up ignoring — including when it reports something else.
 func TestRevokingASessionIsImmediateAndIdempotent(t *testing.T) {
 	t.Parallel()
 
@@ -28,31 +27,31 @@ func TestRevokingASessionIsImmediateAndIdempotent(t *testing.T) {
 
 	session, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 	if _, err := mod.Verify(ctx, session.Token); err != nil {
-		t.Fatalf("le jeton vient d'être émis : %v", err)
+		t.Fatalf("the token has just been issued: %v", err)
 	}
 
 	if err := mod.Revoke(ctx, session.Token); err != nil {
-		t.Fatalf("révocation: %v", err)
+		t.Fatalf("revocation: %v", err)
 	}
 	if _, err := mod.Verify(ctx, session.Token); !errors.Is(err, domain.ErrTokenUnknown) {
-		t.Fatalf("jeton révoqué : attendu ErrTokenUnknown, obtenu %v", err)
+		t.Fatalf("revoked token: want ErrTokenUnknown, got %v", err)
 	}
 
 	if err := mod.Revoke(ctx, session.Token); err != nil {
-		t.Fatalf("révoquer deux fois ne doit pas être une erreur : %v", err)
+		t.Fatalf("revoking twice must not be an error: %v", err)
 	}
 }
 
-// TestRevokingOneSessionSparesTheOthers empêche qu'une déconnexion en devienne
-// une globale.
+// TestRevokingOneSessionSparesTheOthers prevents a sign-out from becoming a
+// global one.
 //
-// Deux connexions du même compte — un téléphone et un poste — produisent deux
-// jetons. Se déconnecter de l'un ne doit pas déconnecter l'autre. La faute
-// inverse, indexer la session sur l'identité plutôt que sur le jeton, se remarque
-// seulement le jour où quelqu'un se connecte depuis deux appareils.
+// Two sign-ins of the same account — a phone and a workstation — produce two
+// tokens. Signing out of one must not sign out the other. The opposite
+// mistake, indexing the session on the identity rather than on the token, is
+// only noticed the day someone signs in from two devices.
 func TestRevokingOneSessionSparesTheOthers(t *testing.T) {
 	t.Parallel()
 
@@ -62,29 +61,29 @@ func TestRevokingOneSessionSparesTheOthers(t *testing.T) {
 
 	first, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("première authentification: %v", err)
+		t.Fatalf("first authentication: %v", err)
 	}
 	second, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("seconde authentification: %v", err)
+		t.Fatalf("second authentication: %v", err)
 	}
 	if first.Token.Equals(second.Token) {
-		t.Fatal("deux authentifications doivent produire deux jetons distincts")
+		t.Fatal("two authentications must produce two distinct tokens")
 	}
 
 	if err := mod.Revoke(ctx, first.Token); err != nil {
-		t.Fatalf("révocation: %v", err)
+		t.Fatalf("revocation: %v", err)
 	}
 	if _, err := mod.Verify(ctx, second.Token); err != nil {
-		t.Fatalf("la seconde session ne devait pas être touchée : %v", err)
+		t.Fatalf("the second session should not have been touched: %v", err)
 	}
 }
 
-// TestVerifyRefusesAnEmptyToken : la valeur zéro n'ouvre rien.
+// TestVerifyRefusesAnEmptyToken: the zero value opens nothing.
 //
-// Un jeton non construit est une chaîne vide. Sans ce refus, il deviendrait une
-// clé légitime dans le magasin — et la première session enregistrée sous cette
-// clé ouvrirait à quiconque n'envoie aucun jeton.
+// A token that was never built is an empty string. Without this refusal, it
+// would become a legitimate key in the store — and the first session recorded
+// under that key would open the door to anyone who sends no token at all.
 func TestVerifyRefusesAnEmptyToken(t *testing.T) {
 	t.Parallel()
 
@@ -92,9 +91,9 @@ func TestVerifyRefusesAnEmptyToken(t *testing.T) {
 	mod, _ := newModule(t, nil)
 
 	if _, err := mod.Verify(ctx, domain.Token{}); !errors.Is(err, domain.ErrTokenUnknown) {
-		t.Fatalf("jeton vide : attendu ErrTokenUnknown, obtenu %v", err)
+		t.Fatalf("empty token: want ErrTokenUnknown, got %v", err)
 	}
 	if err := mod.Revoke(ctx, domain.Token{}); !errors.Is(err, domain.ErrIncomplete) {
-		t.Fatalf("révocation d'un jeton vide : attendu ErrIncomplete, obtenu %v", err)
+		t.Fatalf("revoking an empty token: want ErrIncomplete, got %v", err)
 	}
 }

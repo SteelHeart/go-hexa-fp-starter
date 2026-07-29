@@ -15,12 +15,12 @@ func TestMarkDoneRemovesFromPending(t *testing.T) {
 	id, _ := mod.Enqueue(ctx, domain.NewMessage{Type: "t"})
 
 	if count, _ := mod.PendingCount(ctx); count != 1 {
-		t.Fatalf("PendingCount = %d, attendu 1", count)
+		t.Fatalf("PendingCount = %d, want 1", count)
 	}
 	if err := mod.MarkDone(ctx, id); err != nil {
 		t.Fatalf("MarkDone: %v", err)
 	}
 	if count, _ := mod.PendingCount(ctx); count != 0 {
-		t.Errorf("PendingCount après MarkDone = %d, attendu 0", count)
+		t.Errorf("PendingCount after MarkDone = %d, want 0", count)
 	}
 }

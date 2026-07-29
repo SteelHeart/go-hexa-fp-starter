@@ -9,14 +9,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// TestReserveIsExclusiveUnderConcurrency : le contrat de ports.Reserve exige que
-// deux appels concurrents sur une clé libre ne l'obtiennent JAMAIS tous les deux.
-// C'est la seule promesse du module, donc le seul test qui la prouve.
+// TestReserveIsExclusiveUnderConcurrency: the ports.Reserve contract demands
+// that two concurrent calls on a free key NEVER both obtain it. This is the
+// module's only promise, hence the only test that proves it.
 func TestReserveIsExclusiveUnderConcurrency(t *testing.T) {
 	t.Parallel()
 
 	mod := newMemoryModule(t, newClock(), "1h")
-	req := request("k1", "charge")
+	req := request("k1", "payload")
 
 	const racers = 16
 	var (
@@ -43,9 +43,9 @@ func TestReserveIsExclusiveUnderConcurrency(t *testing.T) {
 	wg.Wait()
 
 	if granted != 1 {
-		t.Errorf("réservations accordées = %d, attendu exactement 1", granted)
+		t.Errorf("granted reservations = %d, want exactly 1", granted)
 	}
 	if refused != racers-1 {
-		t.Errorf("refus ErrInFlight = %d, attendu %d", refused, racers-1)
+		t.Errorf("ErrInFlight refusals = %d, want %d", refused, racers-1)
 	}
 }

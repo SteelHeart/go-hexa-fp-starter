@@ -5,57 +5,57 @@ import (
 	"fmt"
 )
 
-// boucler tient les DEUX boucles du dépileur jusqu'à l'annulation.
+// loop holds BOTH loops of the dispatcher until cancellation.
 //
-// # Pourquoi deux et pas une
+// # Why two and not one
 //
-// Le dépileur sort les messages de l'outbox et les publie ; le consommateur
-// reçoit les enveloppes et déclenche les effets. Avec le relais `inproc` les
-// deux vivent dans le même processus, et l'une remplit ce que l'autre vide.
+// The dispatcher takes the messages out of the outbox and publishes them; the
+// consumer receives the envelopes and triggers the effects. With the `inproc`
+// relay both live in the same process, and one fills what the other empties.
 //
-// # La panne de l'une doit arrêter l'autre
+// # The failure of one must stop the other
 //
-// Sans cela, un consommateur mort laisserait le dépileur publier vers personne —
-// et un dépileur qui publie vers personne ressemble EN TOUT POINT à un dépileur
-// qui fonctionne : les messages sont marqués publiés, l'outbox se vide, les
-// métriques sont vertes, et aucun effet n'a lieu.
+// Without that, a dead consumer would let the dispatcher publish to nobody —
+// and a dispatcher publishing to nobody looks IN EVERY RESPECT like a
+// dispatcher that works: the messages are marked published, the outbox drains,
+// the metrics are green, and no effect takes place.
 //
-// Le contexte est donc annulé dès la première sortie, quelle qu'elle soit, et
-// l'erreur remontée est celle qui a provoqué l'arrêt.
-func (w worker) boucler(ctx context.Context) error {
-	ctx, arreter := context.WithCancel(ctx)
-	defer arreter()
+// The context is therefore cancelled at the first exit, whichever it is, and
+// the error returned is the one that caused the shutdown.
+func (w worker) loop(ctx context.Context) error {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 
-	// Tampon de 2 : les deux boucles doivent pouvoir écrire même si personne ne
-	// lit plus. Sans tampon, la seconde resterait bloquée pour toujours sur
-	// l'envoi, et l'arrêt propre n'en serait plus un.
-	sorties := make(chan error, 2)
+	// A buffer of 2: both loops must be able to write even if nobody reads any
+	// more. Without a buffer, the second would stay blocked forever on the
+	// send, and the graceful shutdown would no longer be one.
+	exits := make(chan error, 2)
 
 	go func() {
 		if err := w.dispatch.Run(ctx); err != nil {
-			sorties <- fmt.Errorf("dépileur: %w", err)
+			exits <- fmt.Errorf("dispatcher: %w", err)
 			return
 		}
-		sorties <- nil
+		exits <- nil
 	}()
 
 	go func() {
 		if err := w.consume.Run(ctx); err != nil {
-			sorties <- fmt.Errorf("consommateur d'événements: %w", err)
+			exits <- fmt.Errorf("event consumer: %w", err)
 			return
 		}
-		sorties <- nil
+		exits <- nil
 	}()
 
-	// La PREMIÈRE sortie décide : elle annule le contexte, ce qui fait sortir
-	// l'autre boucle. On attend quand même les deux, pour ne pas quitter
-	// pendant qu'une réservation est encore ouverte.
-	premiere := <-sorties
-	arreter()
-	seconde := <-sorties
+	// The FIRST exit decides: it cancels the context, which makes the other
+	// loop exit. We still wait for both, so as not to leave while a
+	// reservation is still open.
+	first := <-exits
+	stop()
+	second := <-exits
 
-	if premiere != nil {
-		return premiere
+	if first != nil {
+		return first
 	}
-	return seconde
+	return second
 }

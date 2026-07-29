@@ -5,39 +5,39 @@ import (
 	"strings"
 )
 
-// Bornes d'un message.
+// Bounds of a message.
 //
-// Explicites plutôt qu'absentes : sans elles, un corps de plusieurs mégaoctets
-// traverserait le domaine jusqu'au fournisseur, où il échouerait avec un message
-// de bibliothèque tierce au lieu d'un message métier.
+// Explicit rather than absent: without them, a body of several megabytes would
+// cross the domain all the way to the provider, where it would fail with a
+// third-party library message instead of a business message.
 const (
 	subjectMaxLen = 300
 	bodyMaxLen    = 1 << 20
 )
 
-// Channel est le moyen d'acheminement.
+// Channel is the means of conveyance.
 //
-// Un type nommé plutôt qu'une chaîne : c'est ce qui empêche de passer un sujet
-// là où un canal est attendu, confusion que le compilateur ne verrait jamais
-// entre deux `string`.
+// A named type rather than a string: that is what prevents passing a subject
+// where a channel is expected, a confusion the compiler would never see between
+// two `string`s.
 type Channel string
 
-// Canaux SERVIS par ce module.
+// Channels SERVED by this module.
 //
-// La liste dit ce qui EXISTE, pas ce qui est prévu (ADR 014). `sms` et `push`
-// sont décrits dans documentation/technique/modules-noyau.md et ne sont pas
-// livrés : les déclarer ici les rendrait sélectionnables, et un message partirait
-// vers un canal que rien n'implémente.
+// The list says what EXISTS, not what is planned (ADR 014). `sms` and `push` are
+// described in documentation/technique/modules-noyau.md and are not shipped:
+// declaring them here would make them selectable, and a message would leave
+// towards a channel nothing implements.
 const (
-	// ChannelEmail est le seul canal livré.
+	// ChannelEmail is the only shipped channel.
 	ChannelEmail Channel = "email"
 )
 
-// Message est ce qu'on demande d'acheminer.
+// Message is what one asks to convey.
 //
-// Le CONTENU est fourni rendu, pas gabarité : ce module ne connaît aucun moteur
-// de gabarits, donc il n'en impose aucun. Le rendu appartient à l'appelant, qui
-// sait dans quelle langue et avec quelles données écrire.
+// The CONTENT is supplied already rendered, not templated: this module knows no
+// template engine, so it imposes none. Rendering belongs to the caller, who
+// knows in which language and with which data to write.
 type Message struct {
 	Channel Channel
 	To      Recipient
@@ -45,53 +45,53 @@ type Message struct {
 	Body    string
 }
 
-// NewMessage valide et normalise un message. Seul chemin de construction utile.
+// NewMessage validates and normalises a message. The only useful construction
+// path.
 //
-// # Pourquoi le canal est validé ICI et non au pilote
+// # Why the channel is validated HERE and not at the driver
 //
-// Un pilote qui refuserait le canal le ferait après que le message a traversé
-// le cas d'usage, donc après qu'un décorateur a pu le journaliser ou le compter
-// comme envoyé. Le refus le plus utile est le plus précoce.
+// A driver refusing the channel would do so after the message has crossed the
+// use case, hence after a decorator could have logged it or counted it as sent.
+// The most useful refusal is the earliest one.
 func NewMessage(channel Channel, to Recipient, subject, body string) (Message, error) {
 	if channel != ChannelEmail {
-		return Message{}, fmt.Errorf("%w: %q — seul %q est livré", ErrUnknownChannel, channel, ChannelEmail)
+		return Message{}, fmt.Errorf("%w: %q — only %q is shipped", ErrUnknownChannel, channel, ChannelEmail)
 	}
 	if to.IsZero() {
-		return Message{}, fmt.Errorf("%w: le destinataire est obligatoire", ErrIncomplete)
+		return Message{}, fmt.Errorf("%w: the recipient is required", ErrIncomplete)
 	}
 
 	trimmedSubject := strings.TrimSpace(subject)
 	switch {
 	case trimmedSubject == "":
-		return Message{}, fmt.Errorf("%w: le sujet est obligatoire", ErrIncomplete)
+		return Message{}, fmt.Errorf("%w: the subject is required", ErrIncomplete)
 	case len(trimmedSubject) > subjectMaxLen:
-		return Message{}, fmt.Errorf("%w: le sujet dépasse %d caractères", ErrIncomplete, subjectMaxLen)
+		return Message{}, fmt.Errorf("%w: the subject exceeds %d characters", ErrIncomplete, subjectMaxLen)
 	case strings.TrimSpace(body) == "":
-		return Message{}, fmt.Errorf("%w: le corps est obligatoire", ErrIncomplete)
+		return Message{}, fmt.Errorf("%w: the body is required", ErrIncomplete)
 	case len(body) > bodyMaxLen:
-		return Message{}, fmt.Errorf("%w: le corps dépasse %d octets", ErrIncomplete, bodyMaxLen)
+		return Message{}, fmt.Errorf("%w: the body exceeds %d bytes", ErrIncomplete, bodyMaxLen)
 	}
 
 	return Message{Channel: channel, To: to, Subject: trimmedSubject, Body: body}, nil
 }
 
-// String rend une forme SANS le corps ni l'adresse en clair.
+// String returns a form WITHOUT the body nor the address in clear.
 //
-// # Ce que le masquage empêche
+// # What the masking prevents
 //
-// Un corps de notification transporte régulièrement un secret : lien de
-// confirmation, jeton de réinitialisation, code à usage unique. Ce sont des
-// identifiants au porteur — qui les lit peut s'en servir. Les journaliser
-// transforme une fuite de journaux en prise de contrôle de comptes.
+// A notification body regularly carries a secret: confirmation link, reset
+// token, one-time code. These are bearer credentials — whoever reads them can
+// use them. Logging them turns a log leak into an account takeover.
 //
-// `Stringer` ET `GoStringer` sont implémentés, pas par redondance : `%v` passe
-// par le premier, `%#v` par le second, et couvrir l'un laisse l'autre fuiter.
-// Il a fallu un test pour le découvrir sur `auth.Credential`.
+// `Stringer` AND `GoStringer` are implemented, not out of redundancy: `%v` goes
+// through the first, `%#v` through the second, and covering one leaves the other
+// leaking. It took a test to discover this on `auth.Credential`.
 func (m Message) String() string {
 	return fmt.Sprintf(
-		"Message{channel: %s, to: %s, subject: %q, body: *** (%d octets)}",
+		"Message{channel: %s, to: %s, subject: %q, body: *** (%d bytes)}",
 		m.Channel, m.To.Masked(), m.Subject, len(m.Body))
 }
 
-// GoString masque le corps sous `%#v` aussi.
+// GoString masks the body under `%#v` too.
 func (m Message) GoString() string { return m.String() }

@@ -12,87 +12,88 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// BootstrapRole est le rôle accordé au compte d'amorçage.
+// BootstrapRole is the role granted to the bootstrap account.
 //
-// # Pourquoi l'amorçage accorde des droits, et pas seulement un compte
+// # Why bootstrapping grants rights, and not only an account
 //
-// Un compte sans rôle n'accorde RIEN — deny par défaut. L'amorçage produirait
-// donc un administrateur qui reçoit 403 sur chaque route d'administration : le
-// délai avant premier succès resterait infini, déplacé d'un cran.
+// An account with no role grants NOTHING — deny by default. Bootstrapping would
+// therefore produce an administrator who gets a 403 on every administration
+// route: the time to first success would stay infinite, merely moved one notch
+// along.
 //
-// Les permissions accordées sont celles de la surface d'administration, et rien
-// de plus. En particulier, ce rôle ne présume d'aucun droit MÉTIER : une
-// application qui monte ce socle compose les siens.
+// The permissions granted are those of the administration surface, and nothing
+// more. In particular, this role presumes no BUSINESS right: an application
+// that mounts this starter composes its own.
 const BootstrapRole = "admin"
 
-// BootstrapSubject désigne le compte d'amorçage.
+// BootstrapSubject designates the bootstrap account.
 //
-// Constante et non configurable : un sujet paramétrable inviterait à écrire le
-// compte administrateur de production dans un fichier versionné, et c'est
-// exactement ce qu'on veut rendre impossible. Ici, le nom dit ce qu'il est —
-// local, jetable, sans valeur ailleurs.
+// Constant and not configurable: a parameterisable subject would invite writing
+// the production administrator account into a versioned file, and that is
+// exactly what we want to make impossible. Here, the name says what it is —
+// local, disposable, worthless anywhere else.
 const BootstrapSubject = "admin@local"
 
-// bootstrapSecretBytes est la taille de l'aléa du secret engendré.
+// bootstrapSecretBytes is the size of the generated secret's randomness.
 //
-// 24 octets, soit 32 caractères en base64 — bien au-delà des douze exigés, et
-// assez court pour être recopié depuis un journal sans se tromper.
+// 24 bytes, that is 32 characters in base64 — well beyond the twelve required,
+// and short enough to be copied from a log without a mistake.
 const bootstrapSecretBytes = 24
 
-// BootstrapReport dit ce que l'amorçage a fait, sans le journaliser lui-même.
+// BootstrapReport says what bootstrapping did, without logging it itself.
 //
-// Le module ne journalise pas (`application/` non plus) : il rend compte. C'est
-// l'appelant qui décide du niveau, du format et de la destination — et c'est ce
-// qui permet de tester l'amorçage sans analyser des journaux.
+// The module does not log (`application/` does not either): it reports. It is
+// the caller that decides the level, the format and the destination — and that
+// is what makes it possible to test bootstrapping without parsing logs.
 type BootstrapReport struct {
-	// Created dit si un compte a été créé PAR CET APPEL.
+	// Created says whether an account was created BY THIS CALL.
 	Created bool
 
-	// Subject est le compte d'amorçage, vide si rien n'a été fait.
+	// Subject is the bootstrap account, empty if nothing was done.
 	Subject string
 
-	// Secret est le secret ENGENDRÉ, à afficher une seule fois.
+	// Secret is the GENERATED secret, to be displayed exactly once.
 	//
-	// ⚠️ Il ne sera plus jamais lisible : seul son condensé est retenu. Le champ
-	// est vide dès que `Created` est faux.
+	// ⚠️ It will never be readable again: only its digest is kept. The field is
+	// empty as soon as `Created` is false.
 	Secret string
 }
 
-// Bootstrap crée un compte d'amorçage — EN DÉVELOPPEMENT UNIQUEMENT.
+// Bootstrap creates a bootstrap account — IN DEVELOPMENT ONLY.
 //
-// # Le problème que ceci résout
+// # The problem this solves
 //
-// La surface d'authentification ne publie aucune opération d'administration :
-// les exposer sans les protéger ouvrirait la création de comptes à quiconque, et
-// les protéger exige un premier administrateur. Un serveur neuf rendait donc
-// **401 à tout le monde**, sans exception — le délai avant premier succès du
-// module était infini (#99).
+// The authentication surface publishes no administration operation: exposing
+// them without protecting them would open account creation to anyone, and
+// protecting them demands a first administrator. A fresh server therefore
+// answered **401 to everybody**, without exception — the module's time to first
+// success was infinite (#99).
 //
-// # Ce qui rend ce raccourci acceptable, et lui seul
+// # What makes this shortcut acceptable, and it alone
 //
-//  1. **Il ne s'applique qu'en local.** Hors `development` et `test`, la fonction
-//     ne crée RIEN et le dit dans son compte rendu. Ce n'est pas une erreur —
-//     faire échouer le démarrage d'une production parce qu'elle refuse un compte
-//     de démonstration serait absurde — c'est un refus d'agir.
-//  2. **Le secret est ENGENDRÉ, jamais écrit.** Aucun mot de passe par défaut
-//     n'existe dans un artefact versionné. C'est la faute qui compte vraiment
-//     ici : un socle livré avec `admin/admin` est un socle qui déploie
-//     `admin/admin`, et personne ne le change avant l'incident.
-//  3. **Il est idempotent.** Un sujet déjà pris n'est pas une erreur, et rien
-//     n'est recréé : redémarrer ne réinitialise pas un compte existant.
-//  4. **Il ne fait jamais échouer un démarrage.** Un module désactivé n'est pas
-//     une panne, c'est un état configuré : il n'y a rien à amorcer, et le dire
-//     par une erreur fatale empêcherait de démarrer tout environnement local où
-//     l'authentification est éteinte.
+//  1. **It only applies locally.** Outside `development` and `test`, the
+//     function creates NOTHING and says so in its report. This is not an
+//     error — failing the startup of a production because it refuses a demo
+//     account would be absurd — it is a refusal to act.
+//  2. **The secret is GENERATED, never written down.** No default password
+//     exists in a versioned artefact. That is the mistake that really matters
+//     here: a starter shipped with `admin/admin` is a starter that deploys
+//     `admin/admin`, and nobody changes it before the incident.
+//  3. **It is idempotent.** An already taken subject is not an error, and
+//     nothing is recreated: restarting does not reset an existing account.
+//  4. **It never fails a startup.** A disabled module is not an outage, it is a
+//     configured state: there is nothing to bootstrap, and saying so through a
+//     fatal error would prevent starting any local environment where
+//     authentication is turned off.
 //
-// # Pourquoi le secret est rendu plutôt que journalisé ici
+// # Why the secret is returned rather than logged here
 //
-// Parce qu'un module noyau ne journalise pas. L'appelant le reçoit et décide —
-// et cette frontière est ce qui garantit qu'un secret ne part pas dans un
-// collecteur d'observabilité parce qu'un module a cru bien faire.
+// Because a core module does not log. The caller receives it and decides — and
+// that boundary is what guarantees a secret does not end up in an observability
+// collector because a module thought it was being helpful.
 func Bootstrap(ctx context.Context, mod Module, env config.Environment) (BootstrapReport, error) {
 	if !env.IsLocal() {
-		// Refus d'agir, pas erreur. Le compte rendu vide EST la réponse.
+		// Refusal to act, not an error. The empty report IS the answer.
 		return BootstrapReport{}, nil
 	}
 
@@ -104,25 +105,25 @@ func Bootstrap(ctx context.Context, mod Module, env config.Environment) (Bootstr
 	identity, err := mod.Register(ctx, BootstrapSubject, secret)
 	if err != nil {
 		if errors.Is(err, domain.ErrSubjectTaken) || errors.Is(err, ErrDisabled) {
-			// Deux « rien à faire » distincts, et le même compte rendu vide :
+			// Two distinct "nothing to do", and the same empty report:
 			//
-			//   ErrSubjectTaken — déjà amorcé. On ne recrée pas, et on ne rend
-			//   pas le secret d'un compte dont on ne connaît plus le mot de
-			//   passe.
+			//   ErrSubjectTaken — already bootstrapped. We do not recreate, and
+			//   we do not return the secret of an account whose password we no
+			//   longer know.
 			//
-			//   ErrDisabled — le module est ÉTEINT. C'est un état configuré,
-			//   pas une panne : il n'y a simplement rien à amorcer.
+			//   ErrDisabled — the module is TURNED OFF. That is a configured
+			//   state, not an outage: there is simply nothing to bootstrap.
 			//
-			// ⚠️ Le second cas remontait comme une erreur fatale, et FAISAIT
-			// ÉCHOUER LE DÉMARRAGE dès qu'`auth` était désactivé. Il l'était en
-			// `test` — `IsLocal()` couvre `development` ET `test`, alors que
-			// l'activation ne vient que de la couche `development`. Trouvé par
-			// la CI end-to-end, jamais en local : la mesure locale avait porté
-			// sur `development` et `production`, donc jamais sur la seule
-			// combinaison qui casse, environnement local ET module éteint.
+			// ⚠️ The second case used to surface as a fatal error, and FAILED
+			// STARTUP as soon as `auth` was disabled. It was, in `test` —
+			// `IsLocal()` covers `development` AND `test`, whereas enabling
+			// only comes from the `development` layer. Found by the end-to-end
+			// CI, never locally: the local measurement had covered
+			// `development` and `production`, hence never the one combination
+			// that breaks, local environment AND module turned off.
 			return BootstrapReport{}, nil
 		}
-		return BootstrapReport{}, fmt.Errorf("amorçage du compte %q: %w", BootstrapSubject, err)
+		return BootstrapReport{}, fmt.Errorf("bootstrapping account %q: %w", BootstrapSubject, err)
 	}
 
 	if err := grantAdmin(ctx, mod, identity.ID); err != nil {
@@ -131,17 +132,18 @@ func Bootstrap(ctx context.Context, mod Module, env config.Environment) (Bootstr
 	return BootstrapReport{Created: true, Subject: BootstrapSubject, Secret: secret}, nil
 }
 
-// grantAdmin définit le rôle d'amorçage et l'accorde.
+// grantAdmin defines the bootstrap role and grants it.
 //
-// # L'ordre compte, et l'échec doit être bruyant
+// # Order matters, and failure must be loud
 //
-// Définir avant d'affecter : l'inverse fonctionnerait — un rôle affecté avant
-// d'exister n'accorde rien puis accorde — mais laisserait une fenêtre pendant
-// laquelle le compte annoncé comme administrateur ne peut rien faire.
+// Define before assigning: the reverse would work — a role assigned before it
+// exists grants nothing, then grants — but would leave a window during which
+// the account announced as administrator can do nothing.
 //
-// Un échec ici REMONTE plutôt que d'être avalé. Rendre un compte rendu « créé »
-// sur un compte sans droits produirait le pire message possible : l'exploitant
-// lit un secret, se connecte, et reçoit 403 partout sans savoir pourquoi.
+// A failure here SURFACES rather than being swallowed. Returning a "created"
+// report on an account with no rights would produce the worst possible message:
+// the operator reads a secret, signs in, and gets a 403 everywhere without
+// knowing why.
 func grantAdmin(ctx context.Context, mod Module, id domain.IdentityID) error {
 	permissions := []string{
 		contract.PermissionIdentityCreate,
@@ -150,24 +152,24 @@ func grantAdmin(ctx context.Context, mod Module, id domain.IdentityID) error {
 		contract.PermissionRoleWrite,
 	}
 	if err := mod.DefineRole(ctx, BootstrapRole, permissions); err != nil {
-		return fmt.Errorf("définition du rôle %q: %w", BootstrapRole, err)
+		return fmt.Errorf("defining role %q: %w", BootstrapRole, err)
 	}
 	if err := mod.AssignRoles(ctx, id, []string{BootstrapRole}); err != nil {
-		return fmt.Errorf("affectation du rôle %q: %w", BootstrapRole, err)
+		return fmt.Errorf("assigning role %q: %w", BootstrapRole, err)
 	}
 	return nil
 }
 
-// randomSecret tire un secret d'une source cryptographiquement sûre.
+// randomSecret draws a secret from a cryptographically secure source.
 //
-// `crypto/rand` et non `math/rand`, pour la même raison que les jetons : un
-// secret prévisible est une authentification contournée. Le fait qu'il soit
-// « seulement » de développement ne change rien — un poste de développement est
-// souvent joignable depuis le réseau local.
+// `crypto/rand` and not `math/rand`, for the same reason as tokens: a
+// predictable secret is a bypassed authentication. The fact that it is "only"
+// for development changes nothing — a development workstation is often
+// reachable from the local network.
 func randomSecret() (string, error) {
 	raw := make([]byte, bootstrapSecretBytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("entropie indisponible: %w", err)
+		return "", fmt.Errorf("entropy unavailable: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }

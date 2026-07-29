@@ -10,35 +10,35 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/domain"
 )
 
-// TestDisabledModuleDeniesReadsAndRefusesWrites documente la seule exception du
-// dépôt à « un module désactivé échoue bruyamment ».
+// TestDisabledModuleDeniesReadsAndRefusesWrites documents the only exception in
+// the repository to "a disabled module fails loudly".
 //
-// La lecture ne peut PAS échouer : ports.IsEnabled ne retourne pas d'erreur. La
-// seule réponse possible, `false`, est justement celle de « deny par défaut » —
-// l'inertie coïncide ici avec le refus, ce qui n'est le cas d'aucun autre module.
+// Reading can NOT fail: ports.IsEnabled does not return an error. The only
+// possible answer, `false`, is precisely the "deny by default" one — inertia
+// coincides with refusal here, which is the case for no other module.
 //
-// L'écriture, elle, PEUT parler : elle refuse. Un appelant qui croirait avoir
-// changé un drapeau sur un module éteint est le seul vrai piège possible ici.
+// Writing, for its part, CAN speak: it refuses. A caller that believed it had
+// changed a flag on a switched-off module is the only real trap possible here.
 func TestDisabledModuleDeniesReadsAndRefusesWrites(t *testing.T) {
 	t.Parallel()
 
 	mod, err := dynconf.New(config.Module{Enabled: false, Driver: "file"}, dynconf.Deps{})
 	if err != nil {
-		t.Fatalf("un module désactivé se construit sans erreur: %v", err)
+		t.Fatalf("a disabled module builds without error: %v", err)
 	}
 	ctx := context.Background()
 
-	if mod.IsEnabled(ctx, "nouveau_paiement") {
-		t.Error("un module désactivé ne doit activer aucun drapeau")
+	if mod.IsEnabled(ctx, "new_payment") {
+		t.Error("a disabled module must activate no flag")
 	}
-	if got := mod.GetSetting(ctx, "seuil"); got.Found {
-		t.Error("un module désactivé ne doit trouver aucun réglage")
+	if got := mod.GetSetting(ctx, "threshold"); got.Found {
+		t.Error("a disabled module must find no setting")
 	}
 
-	change := domain.Change{Kind: domain.KindFlag, Key: "nouveau_paiement", Value: "true"}
+	change := domain.Change{Kind: domain.KindFlag, Key: "new_payment", Value: "true"}
 	if err := mod.Set(ctx, change); !errors.Is(err, dynconf.ErrDisabled) {
-		t.Errorf("Set = %v, attendu ErrDisabled", err)
+		t.Errorf("Set = %v, want ErrDisabled", err)
 	}
 
-	mod.Invalidate() // ne doit pas paniquer sur un module éteint
+	mod.Invalidate() // must not panic on a switched-off module
 }

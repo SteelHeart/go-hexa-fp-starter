@@ -11,19 +11,20 @@ import (
 	pgdyn "github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/drivers/postgres"
 )
 
-// TestDynconfAnUnknownFlagIsDenied éprouve le deny-par-défaut jusque dans la
-// base.
+// TestDynconfAnUnknownFlagIsDenied exercises deny-by-default all the way down
+// into the database.
 //
-// C'est la propriété la plus importante de ce module et la plus facile à
-// perdre : un drapeau absent, une base injoignable, une requête en erreur —
-// tous doivent rendre ÉTEINT. Rendre « allumé » sur une panne activerait une
-// fonctionnalité que personne n'a demandée, au pire moment.
+// It is the most important property of this module and the easiest to lose: a
+// missing flag, an unreachable database, a query in error — all of them must
+// return OFF. Returning "on" on a failure would enable a feature nobody asked
+// for, at the worst possible moment.
 //
-// Le test vérifie les deux sens contre la vraie table : absent = éteint,
-// écrit = allumé après invalidation du cache.
+// The test checks both directions against the real table: missing = off,
+// written = on after cache invalidation.
 //
-// Le TTL est mis à zéro : ce module met les valeurs en cache, et sans ça le
-// test mesurerait la fraîcheur du cache plutôt que le contenu de la base.
+// The TTL is set to zero: this module caches values, and without that the test
+// would measure the freshness of the cache rather than the content of the
+// database.
 func TestDynconfAnUnknownFlagIsDenied(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
@@ -33,7 +34,7 @@ func TestDynconfAnUnknownFlagIsDenied(t *testing.T) {
 
 	absent := domain.FlagKey(unique(t, "integration-absent"))
 	if store.Flag(ctx, absent) {
-		t.Fatal("un drapeau ABSENT doit valoir éteint : deny par défaut")
+		t.Fatal("a MISSING flag must be off: deny by default")
 	}
 
 	present := domain.FlagKey(unique(t, "integration-present"))
@@ -47,28 +48,29 @@ func TestDynconfAnUnknownFlagIsDenied(t *testing.T) {
 		Key:   string(present),
 		Value: "true",
 	}); err != nil {
-		t.Fatalf("écriture du drapeau: %v", err)
+		t.Fatalf("writing the flag: %v", err)
 	}
 	store.Invalidate()
 
 	if !store.Flag(ctx, present) {
-		t.Fatal("un drapeau écrit à `true` doit valoir allumé : sinon aucune " +
-			"bascule à chaud ne fonctionne, et le module ne sert à rien")
+		t.Fatal("a flag written to `true` must be on: otherwise no hot toggle " +
+			"works, and the module is good for nothing")
 	}
 
-	// Réécriture à `false` : la bascule doit se faire dans les deux sens. Un
-	// module qui ne sait qu'allumer ne permet pas d'éteindre en incident.
+	// Rewriting to `false`: the toggle has to work both ways. A module that
+	// only knows how to switch on does not allow switching off during an
+	// incident.
 	if err := store.Set(ctx, domain.Change{
 		Kind:  domain.KindFlag,
 		Key:   string(present),
 		Value: "false",
 	}); err != nil {
-		t.Fatalf("réécriture du drapeau: %v", err)
+		t.Fatalf("rewriting the flag: %v", err)
 	}
 	store.Invalidate()
 
 	if store.Flag(ctx, present) {
-		t.Fatal("un drapeau rebasculé à `false` doit valoir éteint — c'est le sens " +
-			"qu'on emprunte pendant un incident")
+		t.Fatal("a flag toggled back to `false` must be off — that is the " +
+			"direction taken during an incident")
 	}
 }

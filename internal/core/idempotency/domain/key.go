@@ -1,11 +1,11 @@
-// Package domain porte le vocabulaire de l'idempotence, sans dépendance.
+// Package domain carries the vocabulary of idempotency, without dependencies.
 //
-// # Pourquoi ce module existe
+// # Why this module exists
 //
-// Dès qu'un frontend mobile est servi, le réseau est instable : le client renvoie
-// sa requête sans savoir si la première a abouti. Sans clé d'idempotence, un POST
-// rejoué crée deux ressources — et le doublon est découvert par l'utilisateur,
-// pas par le service.
+// As soon as a mobile frontend is served, the network is unstable: the client
+// resends its request without knowing whether the first one went through.
+// Without an idempotency key, a replayed POST creates two resources — and the
+// duplicate is discovered by the user, not by the service.
 package domain
 
 import (
@@ -16,91 +16,92 @@ import (
 	"fmt"
 )
 
-// Key est la clé fournie par l'appelant. Deux requêtes portant la même clé
-// désignent la MÊME intention.
+// Key is the key supplied by the caller. Two requests carrying the same key
+// designate the SAME intent.
 type Key string
 
-// String rend la clé sous forme brute, pour les pilotes qui l'écrivent.
+// String returns the key in raw form, for the drivers that write it.
 func (k Key) String() string { return string(k) }
 
-// Status est l'état d'une réservation. Déclaré ici et non dans un pilote : tous
-// les pilotes doivent écrire le même vocabulaire, sinon un changement de pilote
-// rendrait les mémorisations existantes illisibles.
+// Status is the state of a reservation. Declared here and not in a driver: all
+// drivers must write the same vocabulary, otherwise changing driver would make
+// existing memorisations unreadable.
 type Status string
 
 const (
-	// StatusInFlight marque une opération commencée et non résolue.
+	// StatusInFlight marks an operation started and not resolved.
 	StatusInFlight Status = "in_flight"
-	// StatusDone marque une opération achevée dont la réponse est mémorisée.
+	// StatusDone marks a completed operation whose response is memorised.
 	StatusDone Status = "done"
 )
 
-// ErrConflict signale une clé réutilisée avec une empreinte différente.
+// ErrConflict reports a key reused with a different fingerprint.
 //
-// C'est un défaut du client : la même clé doit désigner la même requête, sinon
-// la garantie ne veut plus rien dire. On refuse plutôt que de deviner laquelle
-// des deux requêtes est la bonne.
-var ErrConflict = errors.New("clé d'idempotence réutilisée avec une requête différente")
+// This is a defect of the client: the same key must designate the same request,
+// otherwise the guarantee no longer means anything. We refuse rather than guess
+// which of the two requests is the right one.
+var ErrConflict = errors.New("idempotency key reused with a different request")
 
-// ErrInFlight signale qu'une requête identique est déjà en cours.
+// ErrInFlight reports that an identical request is already in flight.
 //
-// L'appelant doit réessayer plus tard, jamais exécuter. C'est le refus qui rend
-// la garantie vraie en concurrence.
-var ErrInFlight = errors.New("requête identique déjà en cours")
+// The caller must retry later, never execute. This is the refusal that makes the
+// guarantee true under concurrency.
+var ErrInFlight = errors.New("identical request already in flight")
 
-// ErrIncomplete refuse une requête sans clé ou sans empreinte.
+// ErrIncomplete refuses a request without a key or without a fingerprint.
 //
-// Une clé vide serait partagée par TOUS les appelants : le premier rejeu de
-// n'importe qui masquerait l'opération de n'importe quel autre. Un pilote qui
-// accepterait la clé vide transformerait une protection en fuite de données.
-var ErrIncomplete = errors.New("requête d'idempotence incomplète")
+// An empty key would be shared by ALL callers: the first replay from anyone
+// would mask the operation of anyone else. A driver that accepted the empty key
+// would turn a protection into a data leak.
+var ErrIncomplete = errors.New("incomplete idempotency request")
 
-// ErrNotReserved signale une mémorisation sans réservation vivante.
+// ErrNotReserved reports a memorisation without a live reservation.
 //
-// Arrive quand la réservation a expiré pendant l'opération. L'appelant a déjà
-// exécuté : il doit le journaliser, jamais annuler. Cette erreur dit « la
-// mémorisation a échoué », pas « l'opération a échoué ».
-var ErrNotReserved = errors.New("aucune réservation vivante pour cette clé")
+// Happens when the reservation expired during the operation. The caller has
+// already executed: it must log it, never roll back. This error says "the
+// memorisation failed", not "the operation failed".
+var ErrNotReserved = errors.New("no live reservation for this key")
 
-// Request est ce qu'une clé engage.
+// Request is what a key commits to.
 type Request struct {
 	Key Key
-	// Fingerprint est l'empreinte de la charge utile, calculée par Fingerprint.
+	// Fingerprint is the fingerprint of the payload, computed by Fingerprint.
 	Fingerprint string
 }
 
-// IsComplete indique si la requête porte le minimum exploitable.
+// IsComplete reports whether the request carries the usable minimum.
 func (r Request) IsComplete() bool {
 	return r.Key != "" && r.Fingerprint != ""
 }
 
-// Reservation est l'issue d'une réservation obtenue.
+// Reservation is the outcome of an obtained reservation.
 //
-// # Pourquoi une struct à deux champs et non fp.Option
+// # Why a two-field struct and not fp.Option
 //
-// Les ports d'un module noyau ne dépendent que de leur domaine
-// (arch-go.yml §4e) : ils ne peuvent pas nommer `fp.Option`. Le gain est réel —
-// `Replayed` se lit à l'appel, là où un `Option` vide se confond avec « réponse
-// mémorisée mais vide ».
+// The ports of a core module depend on nothing but their domain
+// (arch-go.yml §4e): they cannot name `fp.Option`. The gain is real —
+// `Replayed` reads at the call site, where an empty `Option` would be confused
+// with "memorised but empty response".
 type Reservation struct {
-	// Replayed à true signifie : NE PAS exécuter, retourner Response telle quelle.
+	// Replayed set to true means: DO NOT execute, return Response as it is.
 	Replayed bool
-	// Response est la réponse mémorisée du premier appel. Nil si Replayed est faux.
+	// Response is the memorised response of the first call. Nil if Replayed is
+	// false.
 	Response []byte
 }
 
-// Fingerprint calcule l'empreinte d'une charge utile.
+// Fingerprint computes the fingerprint of a payload.
 //
-// Déterministe : encoding/json ordonne les clés d'une map, donc deux appels sur
-// la même valeur rendent la même empreinte. Un changement de forme de la charge
-// change l'empreinte, ce qui est exactement le but — la clé ne doit pas couvrir
-// deux requêtes différentes.
+// Deterministic: encoding/json orders the keys of a map, so two calls on the
+// same value return the same fingerprint. A change in the shape of the payload
+// changes the fingerprint, which is exactly the point — the key must not cover
+// two different requests.
 func Fingerprint(payload any) string {
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		// Une charge non sérialisable est un défaut de programmation, pas une
-		// erreur d'exécution. On rend une empreinte qui ne collisionne pas plutôt
-		// que de propager une erreur sur un chemin purement défensif.
+		// A non-serialisable payload is a programming defect, not a runtime
+		// error. We return a fingerprint that does not collide rather than
+		// propagate an error on a purely defensive path.
 		raw = []byte(fmt.Sprintf("%#v", payload))
 	}
 	sum := sha256.Sum256(raw)

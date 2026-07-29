@@ -9,11 +9,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/domain"
 )
 
-// TestObjectWithoutContentIsRefused : un objet sans nom ou sans flux est refusé
-// avant toute écriture.
+// TestObjectWithoutContentIsRefused: an object without a name or without a
+// stream is refused before any write.
 //
-// Un `Content` nil ferait paniquer io.Copy dans le pilote : le refus explicite
-// transforme un plantage de processus en erreur que l'appelant peut traiter.
+// A nil `Content` would make io.Copy panic in the driver: the explicit refusal
+// turns a process crash into an error the caller can handle.
 func TestObjectWithoutContentIsRefused(t *testing.T) {
 	t.Parallel()
 
@@ -21,16 +21,16 @@ func TestObjectWithoutContentIsRefused(t *testing.T) {
 	ctx := context.Background()
 
 	cases := map[string]domain.Object{
-		"sans flux": {Name: "doc.pdf", Content: nil},
-		"sans nom":  {Name: "", Content: strings.NewReader("x")},
-		"vide":      {},
+		"without stream": {Name: "doc.pdf", Content: nil},
+		"without name":   {Name: "", Content: strings.NewReader("x")},
+		"empty":          {},
 	}
 
 	for name, obj := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if _, err := mod.Put(ctx, obj); !errors.Is(err, domain.ErrEmptyContent) {
-				t.Errorf("Put = %v, attendu ErrEmptyContent", err)
+				t.Errorf("Put = %v, want ErrEmptyContent", err)
 			}
 		})
 	}

@@ -1,7 +1,7 @@
-// Package idempotency est le module noyau qui rend une écriture rejouable.
+// Package idempotency is the core module that makes a write replayable.
 //
-// C'est le composition root du module : le SEUL endroit qui connaît les pilotes.
-// Un appelant reçoit des types fonction et ignore lequel est branché
+// This is the module's composition root: the ONLY place that knows the drivers.
+// A caller receives function types and ignores which one is wired in
 // ([ADR 012](../../../documentation/adr/012-anatomie-d-un-module-et-pilotes.md)).
 package idempotency
 
@@ -22,41 +22,42 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the module's name in config/modules.yaml.
 const Name = "idempotency"
 
-// Noms des pilotes de ce module.
+// Driver names for this module.
 //
-// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
-// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
-// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
-// une constante qui n'existe pas, un littéral mal orthographié passe.
+// They exist so that `Catalog` and the `switch` in `New` share the SAME
+// identifier. That is what makes divergence between the two IMPOSSIBLE, where
+// ADR 014 only promised to make it improbable — the compiler refuses a constant
+// that does not exist, a misspelt literal goes through.
 //
-// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
-// Il avait raison, et pour une raison plus forte que la sienne.
+// The `goconst` linter flagged the repetition as soon as the catalogue arrived.
+// It was right, and for a stronger reason than its own.
 const (
 	driverMemory   = "memory"
 	driverPostgres = "postgres"
 	driverRedis    = "redis"
 )
 
-// defaultTTL est la fenêtre pendant laquelle un rejeu est reconnu.
+// defaultTTL is the window during which a replay is recognised.
 //
-// Vingt-quatre heures couvre le cas qui motive le module : un mobile hors réseau
-// qui reprend le lendemain. Au-delà, un rejeu recrée la ressource — c'est un
-// arbitrage, pas un oubli, et il se règle par `options.ttl`.
+// Twenty-four hours covers the case that motivates the module: a mobile client
+// offline that resumes the next day. Beyond that, a replay recreates the
+// resource — that is a trade-off, not an oversight, and it is tuned through
+// `options.ttl`.
 const defaultTTL = 24 * time.Hour
 
-// defaultNamespace préfixe les clés du pilote redis.
+// defaultNamespace prefixes the keys of the redis driver.
 const defaultNamespace = "idempotency"
 
-// Clés d'options du module, partagées avec le catalogue (ADR 014, #93).
+// Option keys of the module, shared with the catalogue (ADR 014, #93).
 const (
 	OptionTTL       = "ttl"
 	OptionNamespace = "namespace"
 )
 
-// Module expose les ports de l'idempotence.
+// Module exposes the idempotency ports.
 type Module struct {
 	Reserve  ports.Reserve
 	Complete ports.Complete
@@ -64,36 +65,37 @@ type Module struct {
 	Purge    ports.Purge
 }
 
-// Deps porte les dépendances que les pilotes peuvent réclamer.
+// Deps carries the dependencies the drivers may claim.
 //
-// Pool et Cache peuvent être nil : le pilote `memory` n'a besoin d'aucun des
-// deux, et c'est précisément ce qui permet de démarrer sans base et sans Redis.
+// Pool and Cache may be nil: the `memory` driver needs neither of the two, and
+// that is precisely what allows starting without a database and without Redis.
 type Deps struct {
 	Pool  *pgxpool.Pool
 	Cache *goredis.Client
 	Now   func() time.Time
 }
 
-// ErrDisabled signale un appel à un module désactivé.
+// ErrDisabled reports a call to a disabled module.
 //
-// Un module désactivé échoue explicitement plutôt que de laisser passer : une
-// idempotence inerte qui « marche quand même » autoriserait les doublons sans
-// jamais se signaler. C'est le pire défaut possible, parce qu'il est invisible
-// jusqu'au jour où il coûte cher.
-var ErrDisabled = errors.New("module idempotency désactivé dans config/modules.yaml")
+// A disabled module fails explicitly rather than letting things through: an
+// inert idempotency that "works anyway" would allow duplicates without ever
+// reporting itself. That is the worst possible defect, because it is invisible
+// until the day it costs dearly.
+var ErrDisabled = errors.New("idempotency module disabled in config/modules.yaml")
 
-// ErrPoolRequired signale un pilote qui exige une base absente.
-var ErrPoolRequired = errors.New("le pilote postgres exige une connexion à la base")
+// ErrPoolRequired reports a driver that requires an absent database.
+var ErrPoolRequired = errors.New("the postgres driver requires a database connection")
 
-// ErrCacheRequired signale un pilote qui exige un cache absent.
-var ErrCacheRequired = errors.New("le pilote redis exige une connexion au cache")
+// ErrCacheRequired reports a driver that requires an absent cache.
+var ErrCacheRequired = errors.New("the redis driver requires a cache connection")
 
-var errUnknownDriver = errors.New("pilote idempotency inconnu")
+var errUnknownDriver = errors.New("unknown idempotency driver")
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 //
-// Un pilote inconnu refuse le démarrage : la validation de configuration l'a déjà
-// rejeté, et ce second refus garantit qu'aucun chemin ne contourne le premier.
+// An unknown driver refuses startup: configuration validation has already
+// rejected it, and this second refusal guarantees that no path bypasses the
+// first one.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return disabled(), nil
@@ -119,7 +121,7 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 }
 
-// withRedis construit le pilote redis, dont les options sont plus riches.
+// withRedis builds the redis driver, whose options are richer.
 func withRedis(cfg config.Module, deps Deps, ttl time.Duration) (Module, error) {
 	if deps.Cache == nil {
 		return Module{}, ErrCacheRequired
@@ -137,7 +139,7 @@ func withRedis(cfg config.Module, deps Deps, ttl time.Duration) (Module, error) 
 	}, nil
 }
 
-// fromMemory assemble les ports du pilote mémoire.
+// fromMemory assembles the ports of the memory driver.
 func fromMemory(store *memory.Store) Module {
 	return Module{
 		Reserve:  store.Reserve,
@@ -147,7 +149,7 @@ func fromMemory(store *memory.Store) Module {
 	}
 }
 
-// fromPostgres assemble les ports du pilote postgres.
+// fromPostgres assembles the ports of the postgres driver.
 func fromPostgres(store *postgres.Store) Module {
 	return Module{
 		Reserve:  store.Reserve,
@@ -157,7 +159,7 @@ func fromPostgres(store *postgres.Store) Module {
 	}
 }
 
-// disabled retourne des ports qui refusent explicitement.
+// disabled returns ports that refuse explicitly.
 func disabled() Module {
 	return Module{
 		Reserve: func(context.Context, domain.Request) (domain.Reservation, error) {

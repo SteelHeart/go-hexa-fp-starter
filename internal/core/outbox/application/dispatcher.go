@@ -1,22 +1,23 @@
-// Package application dépile l'outbox : réserver, publier, enregistrer le sort.
+// Package application dispatches the outbox: claim, publish, record the fate.
 //
-// Ce paquet ne connaît AUCUN pilote et ne fait AUCUNE I/O : il reçoit le magasin,
-// le publieur, le compte rendu et l'horloge sous forme de types fonction. C'est ce
-// qui permet de prouver la politique de dépilage — recul exponentiel, abandon
-// après N essais, survie à un message empoisonné — avec des closures, sans base et
-// sans attendre.
+// This package knows NO driver and does NO I/O: it receives the store, the
+// publisher, the report and the clock as function types. That is what makes it
+// possible to prove the dispatching policy — exponential backoff, giving up
+// after N attempts, surviving a poisoned message — with closures, without a
+// database and without waiting.
 //
-// Conformément à `rules/README.md` § « le cœur est pur » : ni `time.Now()`, ni
-// logger, ni `panic` levé ici.
+// In accordance with `rules/README.md` § « the core is pure »: no `time.Now()`,
+// no logger, no `panic` raised here.
 //
-// # Pourquoi ce dépileur n'utilise pas le module scheduler
+// # Why this dispatcher does not use the scheduler module
 //
-// L'ordonnanceur existe pour élire UNE réplique parmi N. Le dépileur n'en a pas
-// besoin : le contrat de `ports.Claim` garantit déjà que deux appels concurrents
-// ne retournent jamais le même message — `FOR UPDATE SKIP LOCKED` côté postgres, un
-// verrou local côté memory. Plusieurs dépileurs travaillent donc EN PARALLÈLE sans
-// se coordonner, ce qui est mieux qu'un seul élu : le débit croît avec les
-// répliques au lieu d'être plafonné par la plus lente.
+// The scheduler exists to elect ONE replica out of N. The dispatcher does not
+// need it: the contract of `ports.Claim` already guarantees that two concurrent
+// calls never return the same message — `FOR UPDATE SKIP LOCKED` on the
+// postgres side, a local lock on the memory side. Several dispatchers therefore
+// work IN PARALLEL without coordinating, which is better than a single elected
+// one: throughput grows with the replicas instead of being capped by the
+// slowest.
 package application
 
 import (
@@ -29,11 +30,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
-// Ports porte les contrats dont le dépileur a besoin.
+// Ports carries the contracts the dispatcher needs.
 //
-// Regroupés dans une structure plutôt qu'en paramètres : six arguments
-// positionnels de même forme s'inversent au premier ajout, et le compilateur ne
-// dirait rien — `MarkDone` et `MarkFailed` ont la même signature à un type près.
+// Grouped in a struct rather than as parameters: six positional arguments of
+// the same shape get swapped at the first addition, and the compiler would say
+// nothing — `MarkDone` and `MarkFailed` have the same signature but for one
+// type.
 type Ports struct {
 	Claim      ports.Claim
 	MarkDone   ports.MarkDone
@@ -43,39 +45,40 @@ type Ports struct {
 	Now        ports.Now
 }
 
-// Policy porte la politique de dépilage.
+// Policy carries the dispatching policy.
 type Policy struct {
-	// BatchSize borne un lot. Trop grand, une réplique monopolise le travail et
-	// tient ses verrous longtemps ; trop petit, le débit s'effondre en aller-retours.
+	// BatchSize bounds a batch. Too large, and a replica monopolises the work and
+	// holds its locks for a long time; too small, and throughput collapses into
+	// round trips.
 	BatchSize int
-	// Interval est la période de scrutation quand le dépileur tourne seul.
+	// Interval is the polling period when the dispatcher runs alone.
 	Interval time.Duration
-	// Retry appartient au DOMAINE : c'est lui qui sait ce qu'est un recul
-	// exponentiel borné, et c'est lui qu'on teste pour le prouver. L'orchestration
-	// ne fait que la transporter.
+	// Retry belongs to the DOMAIN: it is the one that knows what a bounded
+	// exponential backoff is, and it is the one that is tested to prove it.
+	// Orchestration merely carries it along.
 	Retry domain.RetryPolicy
 }
 
-// ErrMissingPort refuse un dépileur incomplet.
-var ErrMissingPort = errors.New("port manquant pour le dépileur de l'outbox")
+// ErrMissingPort refuses an incomplete dispatcher.
+var ErrMissingPort = errors.New("missing port for the outbox dispatcher")
 
-// ErrInvalidPolicy refuse une politique inexploitable.
-var ErrInvalidPolicy = errors.New("politique de dépilage invalide")
+// ErrInvalidPolicy refuses an unusable policy.
+var ErrInvalidPolicy = errors.New("invalid dispatching policy")
 
-// ErrHandlerPanicked signale un publieur qui a paniqué.
-var ErrHandlerPanicked = errors.New("le publieur a paniqué")
+// ErrHandlerPanicked signals a publisher that panicked.
+var ErrHandlerPanicked = errors.New("the publisher panicked")
 
-// Dispatcher dépile l'outbox.
+// Dispatcher dispatches the outbox.
 type Dispatcher struct {
 	ports  Ports
 	policy Policy
 }
 
-// NewDispatcher construit le dépileur.
+// NewDispatcher builds the dispatcher.
 //
-// Refuse un port nil ou une politique absurde plutôt que de paniquer au premier
-// tour : `time.NewTicker(0)` panique, et une panique dans la goroutine d'un worker
-// emporte tout le processus.
+// Refuses a nil port or an absurd policy rather than panicking at the first
+// round: `time.NewTicker(0)` panics, and a panic in a worker's goroutine takes
+// down the whole process.
 func NewDispatcher(p Ports, policy Policy) (*Dispatcher, error) {
 	if p.Claim == nil || p.MarkDone == nil || p.MarkFailed == nil ||
 		p.Handle == nil || p.Report == nil || p.Now == nil {
@@ -87,25 +90,25 @@ func NewDispatcher(p Ports, policy Policy) (*Dispatcher, error) {
 	return &Dispatcher{ports: p, policy: policy}, nil
 }
 
-// validate refuse une politique qui produirait un comportement absurde.
+// validate refuses a policy that would produce absurd behaviour.
 func validate(policy Policy) error {
 	switch {
 	case policy.BatchSize <= 0:
-		return fmt.Errorf("%w: lot de %d message(s)", ErrInvalidPolicy, policy.BatchSize)
+		return fmt.Errorf("%w: batch of %d message(s)", ErrInvalidPolicy, policy.BatchSize)
 	case policy.Retry.MaxAttempts <= 0:
-		// Zéro tentative signifierait « abandonner avant d'essayer » : tout message
-		// passerait en `failed` sans qu'aucune publication soit tentée.
-		return fmt.Errorf("%w: %d tentative(s) autorisée(s)", ErrInvalidPolicy, policy.Retry.MaxAttempts)
+		// Zero attempts would mean « give up before trying »: every message would
+		// go to `failed` without any publication being attempted.
+		return fmt.Errorf("%w: %d allowed attempt(s)", ErrInvalidPolicy, policy.Retry.MaxAttempts)
 	case policy.Retry.BaseBackoff <= 0:
-		// Un recul nul rejouerait un message en échec sans aucune pause, en boucle.
-		return fmt.Errorf("%w: recul de base de %v", ErrInvalidPolicy, policy.Retry.BaseBackoff)
+		// A zero backoff would replay a failed message without any pause, in a loop.
+		return fmt.Errorf("%w: base backoff of %v", ErrInvalidPolicy, policy.Retry.BaseBackoff)
 	case policy.Interval <= 0:
-		return fmt.Errorf("%w: période de scrutation de %v", ErrInvalidPolicy, policy.Interval)
+		return fmt.Errorf("%w: polling period of %v", ErrInvalidPolicy, policy.Interval)
 	}
 	return nil
 }
 
-// Run dépile jusqu'à l'annulation du contexte.
+// Run dispatches until the context is cancelled.
 func (d *Dispatcher) Run(ctx context.Context) error {
 	ticker := time.NewTicker(d.policy.Interval)
 	defer ticker.Stop()
@@ -113,10 +116,10 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			// L'annulation est la fin NORMALE d'un worker : un arrêt propre ne doit
-			// ressembler à une panne ni dans le code de retour, ni dans les alertes.
+			// Cancellation is the NORMAL end of a worker: a clean shutdown must not
+			// look like an outage, neither in the exit code nor in the alerts.
 			if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("dépileur de l'outbox interrompu: %w", err)
+				return fmt.Errorf("outbox dispatcher interrupted: %w", err)
 			}
 			return nil
 		case <-ticker.C:
@@ -125,18 +128,19 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	}
 }
 
-// maxRounds borne le rattrapage d'un tour de scrutation.
+// maxRounds bounds the catch-up of a polling round.
 //
-// Sans borne, un retard de cent mille messages monopoliserait la boucle : le
-// `select` ne serait plus jamais atteint, et le worker ignorerait la demande
-// d'arrêt jusqu'à avoir tout vidé — un déploiement se transformerait en attente.
+// Without a bound, a backlog of a hundred thousand messages would monopolise
+// the loop: the `select` would never be reached again, and the worker would
+// ignore the shutdown request until it had drained everything — a deployment
+// would turn into a wait.
 const maxRounds = 10
 
-// catchUp enchaîne les lots tant qu'ils reviennent pleins.
+// catchUp chains batches as long as they come back full.
 //
-// Un lot plein signifie « il en reste probablement » : attendre le tick suivant
-// ferait avancer le rattrapage d'un seul lot par période, et le retard ne se
-// résorberait jamais si le débit d'entrée dépasse un lot par tour.
+// A full batch means « there are probably more »: waiting for the next tick
+// would advance the catch-up by a single batch per period, and the backlog
+// would never be absorbed if the input rate exceeds one batch per round.
 func (d *Dispatcher) catchUp(ctx context.Context) {
 	for range maxRounds {
 		if ctx.Err() != nil {
@@ -149,15 +153,16 @@ func (d *Dispatcher) catchUp(ctx context.Context) {
 	}
 }
 
-// DrainOnce réserve un lot et le traite. Rend le nombre de messages traités.
+// DrainOnce claims a batch and processes it. Returns the number of messages
+// processed.
 //
-// Exportée pour qu'un déclencheur externe — un ordonnanceur, un test, une commande
-// d'exploitation — applique exactement la même politique sans la boucle.
+// Exported so that an external trigger — a scheduler, a test, an operations
+// command — applies exactly the same policy without the loop.
 func (d *Dispatcher) DrainOnce(ctx context.Context) (int, error) {
 	messages, err := d.ports.Claim(ctx, d.policy.BatchSize)
 	if err != nil {
 		d.ports.Report(ctx, domain.Outcome{Event: domain.EventClaimFailed, Err: err})
-		return 0, fmt.Errorf("réservation d'un lot de l'outbox: %w", err)
+		return 0, fmt.Errorf("claiming a batch from the outbox: %w", err)
 	}
 
 	for _, msg := range messages {
@@ -166,7 +171,7 @@ func (d *Dispatcher) DrainOnce(ctx context.Context) (int, error) {
 	return len(messages), nil
 }
 
-// deliver publie un message et enregistre son sort.
+// deliver publishes a message and records its fate.
 func (d *Dispatcher) deliver(ctx context.Context, msg domain.Message) {
 	started := d.ports.Now()
 	err := d.publish(ctx, msg)
@@ -178,9 +183,9 @@ func (d *Dispatcher) deliver(ctx context.Context, msg domain.Message) {
 	}
 
 	if markErr := d.ports.MarkDone(ctx, msg.ID); markErr != nil {
-		// Publié, mais non marqué : le message reste « en attente » et sera
-		// republié. Le consommateur recevra un doublon — d'où l'obligation
-		// d'idempotence côté consommateur (ports.Handler).
+		// Published, but not marked: the message stays « pending » and will be
+		// republished. The consumer will receive a duplicate — hence the
+		// obligation of idempotency on the consumer side (ports.Handler).
 		d.report(ctx, msg, domain.Outcome{
 			Event: domain.EventResolveFailed, Attempts: msg.Attempts, Duration: elapsed, Err: markErr,
 		})
@@ -192,15 +197,15 @@ func (d *Dispatcher) deliver(ctx context.Context, msg domain.Message) {
 	})
 }
 
-// publish appelle le publieur en le protégeant d'une panique.
+// publish calls the publisher while shielding it from a panic.
 //
-// # Pourquoi un recover ici, alors que le cœur ne panique jamais
+// # Why a recover here, when the core never panics
 //
-// La règle interdit de LEVER une panique dans le cœur. Le publieur, lui, est du
-// code d'appelant : un accès à une carte nil dans un consommateur suffit. Sans ce
-// filet, un seul message empoisonné tuerait le worker — et, avec le pilote memory,
-// le laisserait réservé pour toujours. Traité comme un échec ordinaire, il suit la
-// politique de recul puis finit en `failed`, ce qui est exactement le bon sort.
+// The rule forbids RAISING a panic in the core. The publisher, however, is
+// caller code: a nil map access in a consumer is enough. Without this net, a
+// single poisoned message would kill the worker — and, with the memory driver,
+// would leave it claimed forever. Treated as an ordinary failure, it follows the
+// backoff policy and then ends up in `failed`, which is exactly the right fate.
 func (d *Dispatcher) publish(ctx context.Context, msg domain.Message) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -209,15 +214,15 @@ func (d *Dispatcher) publish(ctx context.Context, msg domain.Message) (err error
 	}()
 
 	if handleErr := d.ports.Handle(ctx, msg); handleErr != nil {
-		return fmt.Errorf("publication de %s (%s): %w", msg.ID, msg.Type, handleErr)
+		return fmt.Errorf("publishing %s (%s): %w", msg.ID, msg.Type, handleErr)
 	}
 	return nil
 }
 
-// reschedule applique la politique de réessai après un échec.
+// reschedule applies the retry policy after a failure.
 //
-// Ne décide rien lui-même : le calcul du recul et la décision d'abandon viennent
-// de domain.NextAttempt, qui est pur et testé séparément.
+// Decides nothing by itself: the backoff computation and the decision to give
+// up come from domain.NextAttempt, which is pure and tested separately.
 func (d *Dispatcher) reschedule(ctx context.Context, msg domain.Message, elapsed time.Duration, cause error) {
 	attempt := domain.NextAttempt(msg, d.policy.Retry, d.ports.Now(), cause.Error())
 
@@ -242,7 +247,7 @@ func (d *Dispatcher) reschedule(ctx context.Context, msg domain.Message, elapsed
 	})
 }
 
-// report complète un compte rendu avec l'identité du message.
+// report completes a report with the message's identity.
 func (d *Dispatcher) report(ctx context.Context, msg domain.Message, outcome domain.Outcome) {
 	outcome.ID = msg.ID
 	outcome.Type = msg.Type

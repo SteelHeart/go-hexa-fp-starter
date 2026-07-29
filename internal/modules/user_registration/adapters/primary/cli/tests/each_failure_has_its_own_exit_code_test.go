@@ -8,127 +8,128 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/exit"
 )
 
-// TestEachFailureHasItsOwnExitCode : le code de retour sert à décider du RÉESSAI.
+// TestEachFailureHasItsOwnExitCode: the exit code serves to decide about a
+// RETRY.
 //
-// # Pourquoi ce n'est pas cosmétique
+// # Why this is not cosmetic
 //
-// Un binaire de ligne de commande est appelé par des scripts bien plus souvent
-// que par des humains. Ces appelants ne lisent pas les messages ; ils lisent le
-// code de retour.
+// A command line binary is called by scripts far more often than by humans.
+// Those callers do not read the messages; they read the exit code.
 //
-// Avec `1` pour tout, un mot de passe trop court et une base injoignable sont
-// indiscernables : le script réessaie l'un — inutilement, à l'infini — ou
-// abandonne sur l'autre, alors qu'une seconde tentative aurait suffi.
+// With `1` for everything, a password that is too short and an unreachable
+// database are indistinguishable: the script retries one — pointlessly, for
+// ever — or gives up on the other, when a second attempt would have been enough.
 //
-// La table est celle de `sysexits.h`, vieille de 1980, pour qu'un opérateur qui
-// voit `78` sache déjà qu'il s'agit d'une configuration sans lire notre
-// documentation.
+// The table is the one from `sysexits.h`, dating back to 1980, so that an
+// operator who sees `78` already knows it is about configuration without reading
+// our documentation.
 func TestEachFailureHasItsOwnExitCode(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		args   []string
-		entree string
-		code   int
+		args  []string
+		input string
+		code  int
 	}{
-		"adresse invalide":  {[]string{"--email", "pas-une-adresse"}, secret + "\n", exit.DataErr},
-		"secret trop court": {[]string{"--email", email}, "court\n", exit.DataErr},
-		"adresse absente":   {[]string{}, secret + "\n", exit.Usage},
-		"drapeau inconnu":   {[]string{"--courriel", email}, secret + "\n", exit.Usage},
-		"secret vide":       {[]string{"--email", email}, "\n", exit.Usage},
-		"entrée vide":       {[]string{"--email", email}, "", exit.Usage},
+		"invalid address":  {[]string{"--email", "not-an-address"}, secret + "\n", exit.DataErr},
+		"secret too short": {[]string{"--email", email}, "short\n", exit.DataErr},
+		"missing address":  {[]string{}, secret + "\n", exit.Usage},
+		"unknown flag":     {[]string{"--e-mail", email}, secret + "\n", exit.Usage},
+		"empty secret":     {[]string{"--email", email}, "\n", exit.Usage},
+		"empty input":      {[]string{"--email", email}, "", exit.Usage},
 	}
 
-	for nom, tc := range cases {
-		commande, flux := nouvelleCommande(t, tc.entree)
-		code := commande.Register(context.Background(), tc.args)
+	for name, tc := range cases {
+		cmd, captured := newCommand(t, tc.input)
+		code := cmd.Register(context.Background(), tc.args)
 		if code != tc.code {
-			t.Errorf("%s : attendu %d, obtenu %d — %s", nom, tc.code, code, flux.err.String())
+			t.Errorf("%s: want %d, got %d — %s", name, tc.code, code, captured.err.String())
 		}
 	}
 }
 
-// TestATakenAddressIsNotRetryable distingue l'état du serveur d'une panne.
+// TestATakenAddressIsNotRetryable tells the state of the server apart from a
+// breakdown.
 //
-// Une adresse déjà prise rend `DataErr` et non `Unavailable` : la requête est
-// bien formée, mais réessayer ne changera rien tant que le compte existe. C'est
-// exactement la distinction que la surface HTTP fait entre 409 et 503, rendue
-// ici par un code de retour.
+// An already taken address returns `DataErr` and not `Unavailable`: the request
+// is well formed, but retrying will change nothing as long as the account
+// exists. It is exactly the distinction the HTTP surface makes between 409 and
+// 503, expressed here through an exit code.
 func TestATakenAddressIsNotRetryable(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	commande, flux := nouvelleCommande(t, secret+"\n"+secret+"\n")
+	cmd, captured := newCommand(t, secret+"\n"+secret+"\n")
 
-	if code := commande.Register(ctx, []string{"--email", email}); code != exit.OK {
-		t.Fatalf("première inscription: code %d — %s", code, flux.err.String())
+	if code := cmd.Register(ctx, []string{"--email", email}); code != exit.OK {
+		t.Fatalf("first registration: code %d — %s", code, captured.err.String())
 	}
-	if code := commande.Register(ctx, []string{"--email", email}); code != exit.DataErr {
-		t.Fatalf("adresse déjà prise : attendu %d, obtenu %d", exit.DataErr, code)
+	if code := cmd.Register(ctx, []string{"--email", email}); code != exit.DataErr {
+		t.Fatalf("address already taken: want %d, got %d", exit.DataErr, code)
 	}
-	if strings.Contains(flux.err.String(), "condensé") {
-		t.Fatalf("le condensé fuite dans le message de conflit : %q", flux.err.String())
+	if strings.Contains(captured.err.String(), "digest:") {
+		t.Fatalf("the digest leaks into the conflict message: %q", captured.err.String())
 	}
 }
 
-// TestSeedRefusesAnUnknownProfile : deny par défaut jusque dans un drapeau.
+// TestSeedRefusesAnUnknownProfile: deny by default, right down to a flag.
 //
-// Se rabattre sur le plus petit profil créerait trois comptes là où l'on en
-// attendait vingt-cinq — et le défaut ne se verrait qu'au moment où une liste
-// paginée cesserait de paginer, c'est-à-dire pendant une démonstration.
+// Falling back on the smallest profile would create three accounts where
+// twenty-five were expected — and the defect would only be seen the moment a
+// paginated list stopped paginating, that is to say during a demonstration.
 func TestSeedRefusesAnUnknownProfile(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	for _, profil := range []string{"perf", "prod", "DEV", ""} {
-		commande, flux := nouvelleCommande(t, "")
-		code := commande.Seed(ctx, []string{"--profile", profil})
+	for _, profile := range []string{"perf", "prod", "DEV", ""} {
+		cmd, captured := newCommand(t, "")
+		code := cmd.Seed(ctx, []string{"--profile", profile})
 		if code != exit.Usage {
-			t.Errorf("profil %q : attendu %d, obtenu %d", profil, exit.Usage, code)
+			t.Errorf("profile %q: want %d, got %d", profile, exit.Usage, code)
 		}
-		if flux.out.Len() != 0 {
-			t.Errorf("profil %q : aucun compte ne doit être créé, obtenu %q", profil, flux.out.String())
+		if captured.out.Len() != 0 {
+			t.Errorf("profile %q: no account must be created, got %q", profile, captured.out.String())
 		}
 	}
 }
 
-// TestSeedGoesThroughTheUseCaseNotThroughSQL garde le chemin du peuplement.
+// TestSeedGoesThroughTheUseCaseNotThroughSQL guards the seeding path.
 //
-// # La propriété qui compte
+// # The property that matters
 //
-// Les comptes engendrés sont en tout point ceux qu'aurait créés la surface HTTP :
-// adresse normalisée par le domaine, statut `pending`, mot de passe haché. Un
-// jeu de données fabriqué en SQL produirait des comptes que le code n'aurait
-// jamais laissé naître — et un test qui s'appuierait dessus validerait un état
-// que la production ne peut pas atteindre.
+// The generated accounts are in every respect the ones the HTTP surface would
+// have created: address normalised by the domain, `pending` status, hashed
+// password. A data set fabricated in SQL would produce accounts the code would
+// never have let come into existence — and a test relying on them would validate
+// a state production cannot reach.
 //
-// Le test le constate par le seul chemin observable depuis l'extérieur : la
-// sortie du peuplement porte les mêmes trois champs que `register`, et le
-// deuxième passage rend un CONFLIT — donc les comptes existent vraiment dans le
-// magasin, ils n'ont pas été inventés.
+// The test establishes it through the only path observable from the outside: the
+// output of the seeding carries the same three fields as `register`, and the
+// second pass returns a CONFLICT — so the accounts really do exist in the store,
+// they were not invented.
 func TestSeedGoesThroughTheUseCaseNotThroughSQL(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	commande, flux := nouvelleCommande(t, "")
+	cmd, captured := newCommand(t, "")
 
-	if code := commande.Seed(ctx, []string{"--profile", "dev"}); code != exit.OK {
-		t.Fatalf("peuplement: code %d — %s", code, flux.err.String())
+	if code := cmd.Seed(ctx, []string{"--profile", "dev"}); code != exit.OK {
+		t.Fatalf("seeding: code %d — %s", code, captured.err.String())
 	}
 
-	lignes := strings.Split(strings.TrimSpace(flux.out.String()), "\n")
-	if len(lignes) != 3 {
-		t.Fatalf("le profil dev crée 3 comptes, obtenu %d ligne(s) : %q", len(lignes), flux.out.String())
+	lines := strings.Split(strings.TrimSpace(captured.out.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("the dev profile creates 3 accounts, got %d line(s): %q", len(lines), captured.out.String())
 	}
-	for _, ligne := range lignes {
-		if champs := strings.Split(ligne, "\t"); len(champs) != 3 || champs[2] != "pending" {
-			t.Fatalf("un compte peuplé doit être identique à un compte inscrit : %q", ligne)
+	for _, line := range lines {
+		if fields := strings.Split(line, "\t"); len(fields) != 3 || fields[2] != "pending" {
+			t.Fatalf("a seeded account must be identical to a registered one: %q", line)
 		}
 	}
 
-	// Rejouer le même profil doit CONFLIGER : la preuve que le premier passage a
-	// bien écrit dans le magasin, par le cas d'usage.
-	if code := commande.Seed(ctx, []string{"--profile", "dev"}); code != exit.DataErr {
-		t.Fatalf("un second peuplement doit conflitger, obtenu %d", code)
+	// Replaying the same profile must CONFLICT: the proof that the first pass
+	// really did write into the store, through the use case.
+	if code := cmd.Seed(ctx, []string{"--profile", "dev"}); code != exit.DataErr {
+		t.Fatalf("a second seeding must conflict, got %d", code)
 	}
 }

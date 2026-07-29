@@ -8,22 +8,22 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestRevokedPermissionIsRefusedOnTheNextCall est LE témoin de l'ADR 017.
+// TestRevokedPermissionIsRefusedOnTheNextCall is THE witness of ADR 017.
 //
-// # Ce qu'il constate
+// # What it records
 //
-// Une permission retirée cesse d'accorder à l'appel SUIVANT, sans qu'aucun jeton
-// n'expire et sans que personne ne se reconnecte. Le jeton reste valide tout du
-// long — le test le vérifie explicitement entre les deux autorisations, sinon un
-// refus pourrait venir d'une session invalidée et la démonstration serait vide.
+// A withdrawn permission stops granting on the NEXT call, without any token
+// expiring and without anyone signing in again. The token stays valid
+// throughout — the test checks that explicitly between the two authorisations,
+// otherwise a refusal could come from an invalidated session and the
+// demonstration would be empty.
 //
-// # Pourquoi ce test existe (ADR 013)
+// # Why this test exists (ADR 013)
 //
-// Il échouerait le jour où quelqu'un déplacerait les permissions dans le jeton,
-// ou ajouterait un cache non borné devant `Grants`. Les deux sont des
-// optimisations tentantes, et les deux rouvrent la même fenêtre : un accès
-// révoqué qui fonctionne encore. Or le jour où l'on révoque, c'est qu'on est
-// pressé.
+// It would fail the day someone moved the permissions into the token, or added
+// an unbounded cache in front of `Grants`. Both are tempting optimisations, and
+// both reopen the same window: a revoked access that still works. And the day
+// you revoke is the day you are in a hurry.
 func TestRevokedPermissionIsRefusedOnTheNextCall(t *testing.T) {
 	t.Parallel()
 
@@ -32,37 +32,40 @@ func TestRevokedPermissionIsRefusedOnTheNextCall(t *testing.T) {
 
 	id := register(t, mod, subject)
 	cancel := permission(t, "billing.invoice.cancel")
-	grant(t, mod, id, "comptable", "billing.invoice.cancel")
+	grant(t, mod, id, "accountant", "billing.invoice.cancel")
 
 	session, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 	if err := mod.Authorize(ctx, id, cancel); err != nil {
-		t.Fatalf("la permission vient d'être accordée, elle doit valoir : %v", err)
+		t.Fatalf("the permission has just been granted, it must hold: %v", err)
 	}
 
-	// Révocation : le rôle est REDÉFINI sans la permission. Aucun jeton n'est
-	// touché, aucune session n'est supprimée.
-	if err := mod.DefineRole(ctx, "comptable", nil); err != nil {
-		t.Fatalf("révocation de la permission: %v", err)
+	// Revocation: the role is REDEFINED without the permission. No token is
+	// touched, no session is deleted.
+	if err := mod.DefineRole(ctx, "accountant", nil); err != nil {
+		t.Fatalf("revoking the permission: %v", err)
 	}
 
-	// Le jeton vaut TOUJOURS : c'est ce qui rend le refus qui suit concluant.
+	// The token is STILL worth something: that is what makes the refusal that
+	// follows conclusive.
 	if _, err := mod.Verify(ctx, session.Token); err != nil {
-		t.Fatalf("le jeton ne devait pas être affecté par la révocation : %v", err)
+		t.Fatalf("the token should not have been affected by the revocation: %v", err)
 	}
 
 	if err := mod.Authorize(ctx, id, cancel); !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("permission révoquée : attendu ErrForbidden, obtenu %v", err)
+		t.Fatalf("revoked permission: want ErrForbidden, got %v", err)
 	}
 }
 
-// TestRevokedRoleIsRefusedOnTheNextCall constate la même chose par l'autre bout.
+// TestRevokedRoleIsRefusedOnTheNextCall records the same thing from the other
+// end.
 //
-// Retirer le RÔLE plutôt que la permission doit produire le même refus immédiat.
-// Les deux chemins existent — on retire un droit à tout le monde, ou on retire
-// quelqu'un d'un groupe — et un seul des deux couvert laisserait l'autre dériver.
+// Withdrawing the ROLE rather than the permission must produce the same
+// immediate refusal. Both paths exist — you withdraw a right from everybody, or
+// you withdraw somebody from a group — and covering only one of the two would
+// let the other drift.
 func TestRevokedRoleIsRefusedOnTheNextCall(t *testing.T) {
 	t.Parallel()
 
@@ -71,17 +74,17 @@ func TestRevokedRoleIsRefusedOnTheNextCall(t *testing.T) {
 
 	id := register(t, mod, subject)
 	cancel := permission(t, "billing.invoice.cancel")
-	grant(t, mod, id, "comptable", "billing.invoice.cancel")
+	grant(t, mod, id, "accountant", "billing.invoice.cancel")
 
 	if err := mod.Authorize(ctx, id, cancel); err != nil {
-		t.Fatalf("la permission vient d'être accordée, elle doit valoir : %v", err)
+		t.Fatalf("the permission has just been granted, it must hold: %v", err)
 	}
 
 	if err := mod.AssignRoles(ctx, id, nil); err != nil {
-		t.Fatalf("retrait des rôles: %v", err)
+		t.Fatalf("withdrawing the roles: %v", err)
 	}
 
 	if err := mod.Authorize(ctx, id, cancel); !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("rôle retiré : attendu ErrForbidden, obtenu %v", err)
+		t.Fatalf("withdrawn role: want ErrForbidden, got %v", err)
 	}
 }

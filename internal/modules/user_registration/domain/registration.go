@@ -2,32 +2,32 @@ package domain
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 
-// RegistrationCommand est une intention d'inscription telle qu'elle arrive d'une
-// surface : des types primitifs, non encore validés.
+// RegistrationCommand is a registration intent as it arrives from a surface:
+// primitive types, not yet validated.
 //
-// C'est le SEUL endroit du domaine où l'on trouve des `string` nues, et c'est
-// justement le rôle de ce type : marquer la frontière.
+// This is the ONLY place in the domain where bare `string`s are found, and that
+// is exactly this type's role: to mark the boundary.
 type RegistrationCommand struct {
 	Email    string
 	Password string
 }
 
-// ValidRegistration est une intention d'inscription validée.
+// ValidRegistration is a validated registration intent.
 //
-// Une fois ce type obtenu, plus aucune validation n'est nécessaire en aval : le
-// franchissement de la frontière a eu lieu, une fois, ici.
+// Once this type is obtained, no further validation is needed downstream: the
+// boundary crossing happened, once, here.
 type ValidRegistration struct {
 	Email    Email
 	Password RawPassword
 }
 
-// ParseRegistration valide une commande d'inscription.
+// ParseRegistration validates a registration command.
 //
-// Fonction pure : aucune I/O, aucune horloge. L'unicité de l'adresse n'est PAS
-// vérifiée ici — c'est un effet, donc un port, appelé par le cas d'usage.
+// Pure function: no I/O, no clock. Address uniqueness is NOT checked here — that
+// is an effect, therefore a port, called by the use case.
 func ParseRegistration(cmd RegistrationCommand) result.Result[ValidRegistration, Error] {
-	// L'ordre compte : on signale l'adresse avant le mot de passe, parce que
-	// c'est le champ que l'utilisateur remplit en premier.
+	// Order matters: the email address is reported before the password,
+	// because it is the field the user fills in first.
 	return result.FlatMap(
 		NewEmail(cmd.Email),
 		func(email Email) result.Result[ValidRegistration, Error] {

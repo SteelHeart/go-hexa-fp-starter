@@ -1,6 +1,6 @@
-// Package ports déclare les contrats des tâches périodiques.
+// Package ports declares the contracts of periodic tasks.
 //
-// Ce paquet ne contient QUE des déclarations de types.
+// This package contains ONLY type declarations.
 package ports
 
 import (
@@ -10,48 +10,48 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// Acquire tente de devenir l'exécutant d'une tâche.
+// Acquire attempts to become the runner of a task.
 //
-// # Contrat de conformité
+// # Conformance contract
 //
-//   - `true` signifie « personne d'autre ne l'exécute, vas-y ». L'appelant DOIT
-//     appeler Release ensuite, même en cas d'échec du travail.
-//   - `false` n'est PAS une erreur : c'est le cas nominal sur toute réplique non
-//     élue, et il se produit à chaque tick sur N-1 répliques.
-//   - Une erreur signale une panne du mécanisme d'élection. Dans le doute, un
-//     pilote rend `false` : ne pas exécuter est bénin, exécuter deux fois ne l'est
-//     pas — un rappel envoyé deux fois se voit chez le client.
+//   - `true` means "nobody else is running it, go ahead". The caller MUST call
+//     Release afterwards, even if the work fails.
+//   - `false` is NOT an error: it is the nominal case on every non-elected
+//     replica, and it happens on every tick on N-1 replicas.
+//   - An error signals an outage of the election mechanism. When in doubt, a
+//     driver returns `false`: not running is benign, running twice is not — a
+//     reminder sent twice is visible to the customer.
 type Acquire = func(ctx context.Context, task domain.TaskName) (bool, error)
 
-// Release rend l'exécution à la suivante.
+// Release hands the execution back to the next one.
 //
-// Doit être appelée avec un contexte NON annulé : libérer avec un contexte déjà
-// mort laisserait le verrou en place jusqu'à sa péremption, et la tâche ne
-// tournerait plus pendant ce temps.
+// Must be called with a NON-cancelled context: releasing with an already dead
+// context would leave the lock in place until it expires, and the task would
+// not run during that time.
 type Release = func(ctx context.Context, task domain.TaskName) error
 
-// Report rend compte d'une tentative d'exécution.
+// Report reports on an execution attempt.
 //
-// L'orchestration ne journalise pas : elle rend compte. C'est ce qui la garde
-// pure — `rules/README.md` interdit tout logger dans `application/` — et c'est ce
-// qui permet à un test de vérifier une politique d'exécution en lisant des valeurs.
+// The orchestration does not log: it reports. That is what keeps it pure —
+// `rules/README.md` forbids any logger in `application/` — and that is what
+// allows a test to verify an execution policy by reading values.
 //
-// Ne retourne rien : un compte rendu qui échouerait ne doit jamais faire échouer
-// la tâche dont il rend compte.
+// Returns nothing: a report that failed must never make the task it reports on
+// fail.
 type Report = func(ctx context.Context, outcome domain.Outcome)
 
-// Now rend l'instant courant.
+// Now returns the current instant.
 //
-// L'orchestration ne lit pas l'horloge du système : elle reçoit ce port. Sans
-// cela, aucune mesure de durée ne serait vérifiable dans un test.
+// The orchestration does not read the system clock: it receives this port.
+// Without that, no measurement of duration would be verifiable in a test.
 type Now = func() time.Time
 
-// Job est le travail à exécuter.
+// Job is the work to be run.
 //
-// Fourni par l'appelant, jamais par le module : le socle sait quand exécuter, il
-// n'a aucune idée de quoi exécuter.
+// Supplied by the caller, never by the module: the starter knows when to run,
+// it has no idea what to run.
 //
-// Un Job DOIT être idempotent. Même avec une élection correcte, une réplique tuée
-// entre son travail et sa libération laisse une exécution partielle qu'une autre
-// réplique reprendra.
+// A Job MUST be idempotent. Even with a correct election, a replica killed
+// between its work and its release leaves a partial execution that another
+// replica will pick up.
 type Job = func(ctx context.Context) error

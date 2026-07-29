@@ -7,34 +7,35 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/domain"
 )
 
-// TestSettingsAreReadAsText : le pilote postgres lit une colonne `text`.
+// TestSettingsAreReadAsText: the postgres driver reads a `text` column.
 //
-// Pour qu'il soit substituable au pilote `file`, toute valeur doit se présenter en
-// texte quelle que soit son écriture en YAML. Sans cette normalisation, `20` lu
-// depuis un fichier et `"20"` lu depuis la base donneraient deux types différents
-// à l'appelant, et changer de pilote casserait le code appelant.
+// For it to be substitutable for the `file` driver, every value must present
+// itself as text whatever its spelling in YAML. Without that normalisation,
+// `20` read from a file and `"20"` read from the database would give two
+// different types to the caller, and changing driver would break the calling
+// code.
 func TestSettingsAreReadAsText(t *testing.T) {
 	t.Parallel()
 
 	mod := newFileModule(t, map[string]any{
 		"settings": map[string]any{
-			"entier":  20,
+			"integer": 20,
 			"decimal": 1.5,
-			"booleen": true,
-			"texte":   "bonjour",
+			"boolean": true,
+			"text":    "hello",
 		},
 	})
 	ctx := context.Background()
 
 	expected := map[domain.SettingKey]string{
-		"entier":  "20",
+		"integer": "20",
 		"decimal": "1.5",
-		"booleen": "true",
-		"texte":   "bonjour",
+		"boolean": "true",
+		"text":    "hello",
 	}
 	for key, want := range expected {
 		if got := mod.GetSetting(ctx, key); got.Value != want {
-			t.Errorf("%s = %q, attendu %q", key, got.Value, want)
+			t.Errorf("%s = %q, want %q", key, got.Value, want)
 		}
 	}
 }

@@ -11,77 +11,78 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
 )
 
-// Câblage de l'observabilité du dépileur — #13.
+// Observability wiring of the dispatcher — #13.
 //
-// Le pendant de `cmd/server/observabilite.go`, et il est nécessaire pour une
-// raison propre au dépileur : c'est le seul processus dont PERSONNE ne constate
-// l'inactivité. Un serveur muet se voit à la première requête ; un dépileur qui
-// ne dépile plus ne se voit qu'au moment où l'on cherche un événement qui n'est
-// jamais parti.
+// The counterpart of `cmd/server/observabilite.go`, and it is necessary for a
+// reason of the dispatcher's own: it is the only process whose inactivity
+// NOBODY notices. A mute server shows at the first request; a dispatcher that
+// no longer dispatches only shows at the moment one looks for an event that
+// never left.
 //
-// Deux composition roots, deux fichiers : c'est la contrepartie assumée de
-// l'ADR 004. Le seul endroit qui connaît tout est celui-ci, et le partager
-// reviendrait à fabriquer un mini-conteneur d'injection.
+// Two composition roots, two files: that is the accepted counterpart of
+// ADR 004. The only place that knows everything is this one, and sharing it
+// would amount to building a miniature injection container.
 
-const graceTelemetrie = 5 * time.Second
+const telemetryGrace = 5 * time.Second
 
-// demarrerObservabilite installe les fournisseurs et rend la fonction d'arrêt.
+// startObservability installs the providers and returns the shutdown function.
 //
-// Désactivée — le défaut livré —, `Setup` rend un arrêt inerte : le dépileur
-// démarre donc toujours sans collecteur.
-func demarrerObservabilite(ctx context.Context, cfg config.Config) (telemetry.Shutdown, error) {
-	arret, err := telemetry.Setup(ctx, cfg)
+// Disabled — the shipped default —, `Setup` returns an inert shutdown: the
+// dispatcher therefore always starts with no collector.
+func startObservability(ctx context.Context, cfg config.Config) (telemetry.Shutdown, error) {
+	shutdown, err := telemetry.Setup(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("télémétrie: %w", err)
+		return nil, fmt.Errorf("telemetry: %w", err)
 	}
-	return arret, nil
+	return shutdown, nil
 }
 
-// arreterObservabilite vide les exportateurs avant de rendre la main.
+// stopObservability flushes the exporters before handing back control.
 //
-// Contexte DÉTACHÉ de l'annulation : à l'arrêt, `ctx` est déjà annulé, et le
-// passer tel quel jetterait les spans en tampon — ceux de la dernière minute.
-func arreterObservabilite(ctx context.Context, arret telemetry.Shutdown, logger *slog.Logger) {
-	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), graceTelemetrie)
+// A context DETACHED from the cancellation: at shutdown time `ctx` is already
+// cancelled, and passing it as is would drop the buffered spans — those of the
+// last minute.
+func stopObservability(ctx context.Context, shutdown telemetry.Shutdown, logger *slog.Logger) {
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryGrace)
 	defer cancel()
 
-	if err := arret(stopCtx); err != nil {
-		logger.ErrorContext(stopCtx, "arrêt de la télémétrie", slog.String("erreur", err.Error()))
+	if err := shutdown(stopCtx); err != nil {
+		logger.ErrorContext(stopCtx, "telemetry shutdown", slog.String("erreur", err.Error()))
 	}
 }
 
-// servirMetriques expose /metrics, fatal hors développement.
+// serveMetrics exposes /metrics, fatal outside development.
 //
-// ⚠️ `telemetry.metrics_port` est UNE valeur, partagée par les deux binaires.
-// Sur un même hôte, avec la télémétrie activée — ce que fait
-// `config/env/development.yaml` —, le second à démarrer ne peut pas se lier. En
-// développement il continue donc, en le disant ; ailleurs il refuse.
+// ⚠️ `telemetry.metrics_port` is ONE value, shared by both binaries. On the
+// same host, with telemetry enabled — which is what
+// `config/env/development.yaml` does —, the second one to start cannot bind.
+// In development it therefore carries on, saying so; elsewhere it refuses.
 //
-// C'est le même arbitrage que dans `cmd/server`, et il est justifié en détail
-// là-bas. Le dépileur y ajoute une raison propre : c'est le seul processus dont
-// personne ne constate l'inactivité, donc celui dont les métriques comptent le
-// plus — et celui pour lequel un refus de démarrer en local coûterait le plus
-// cher en friction.
-func servirMetriques(ctx context.Context, cfg config.Config, logger *slog.Logger, couper context.CancelFunc) {
+// This is the same trade-off as in `cmd/server`, and it is justified in detail
+// over there. The dispatcher adds a reason of its own: it is the only process
+// whose inactivity nobody notices, hence the one whose metrics matter most —
+// and the one for which refusing to start locally would cost the most in
+// friction.
+func serveMetrics(ctx context.Context, cfg config.Config, logger *slog.Logger, cancel context.CancelFunc) {
 	if !cfg.Telemetry.Enabled {
 		return
 	}
-	serveur := httpserver.NewMetricsServer(cfg.Telemetry.MetricsPort, logger)
+	server := httpserver.NewMetricsServer(cfg.Telemetry.MetricsPort, logger)
 
 	go func() {
-		err := serveur.Run(ctx)
+		err := server.Run(ctx)
 		if err == nil {
 			return
 		}
-		champs := []any{
+		fields := []any{
 			slog.Int("port", cfg.Telemetry.MetricsPort),
 			slog.String("erreur", err.Error()),
 		}
 		if cfg.App.Env.IsLocal() {
-			logger.WarnContext(ctx, "métriques indisponibles — le dépileur continue (développement)", champs...)
+			logger.WarnContext(ctx, "metrics unavailable — the dispatcher continues (development)", fields...)
 			return
 		}
-		logger.ErrorContext(ctx, "serveur de métriques — arrêt du dépileur", champs...)
-		couper()
+		logger.ErrorContext(ctx, "metrics server — stopping the dispatcher", fields...)
+		cancel()
 	}()
 }

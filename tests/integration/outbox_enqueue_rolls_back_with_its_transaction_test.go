@@ -12,26 +12,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestOutboxEnqueueRollsBackWithItsTransaction vérifie la raison d'être de
-// l'outbox transactionnelle (ADR 006).
+// TestOutboxEnqueueRollsBackWithItsTransaction verifies the very reason the
+// transactional outbox exists (ADR 006).
 //
-// La promesse s'énonce en une phrase et ne se vérifie pas sans base :
-// l'événement et la donnée métier vivent ou meurent ENSEMBLE. Si l'un des deux
-// pouvait survivre seul, l'outbox n'apporterait rien qu'une table de plus.
+// The promise states itself in one sentence and cannot be verified without a
+// database: the event and the business data live or die TOGETHER. If either of
+// the two could survive alone, the outbox would bring nothing but one more
+// table.
 //
-// Les deux modes de défaillance évités sont opposés, et coûtent tous les deux :
+// The two failure modes avoided are opposites, and both of them cost:
 //
-//   - l'écriture métier échoue, l'événement part → un consommateur agit sur un
-//     fait qui n'a jamais eu lieu ;
-//   - l'écriture métier réussit, l'événement se perd → personne n'agit, et rien
-//     ne le signale.
+//   - the business write fails, the event goes out → a consumer acts on a fact
+//     that never happened;
+//   - the business write succeeds, the event is lost → nobody acts, and
+//     nothing reports it.
 //
-// Le second est le pire : il ne produit aucune erreur.
+// The second one is the worse: it produces no error at all.
 //
-// Le test passe par `RunInTx`, le SEUL chemin qui ouvre une transaction dans ce
-// socle — il n'existe volontairement aucun moyen exporté d'en poser une dans un
-// contexte. Un `Result` en `Err` déclenche l'annulation : l'erreur métier est
-// transactionnellement significative, et c'est précisément ce qu'on éprouve.
+// The test goes through `RunInTx`, the ONLY path that opens a transaction in
+// this starter — there is deliberately no exported way to place one in a
+// context. A `Result` in `Err` triggers the rollback: the business error is
+// transactionally significant, and that is precisely what is exercised.
 func TestOutboxEnqueueRollsBackWithItsTransaction(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
@@ -40,47 +41,47 @@ func TestOutboxEnqueueRollsBackWithItsTransaction(t *testing.T) {
 	eventType := unique(t, "integration.rollback")
 	unitOfWork := database.RunInTx[int, string](p)
 
-	// Une unité de travail qui écrit puis ÉCHOUE.
+	// A unit of work that writes and then FAILS.
 	res := unitOfWork(ctx, func(txCtx context.Context) result.Result[int, string] {
 		if _, err := store.Enqueue(txCtx, domain.NewMessage{
 			Type:        eventType,
-			AggregateID: "agg-annule",
+			AggregateID: "agg-cancelled",
 			Payload:     []byte(`{}`),
 		}); err != nil {
-			t.Errorf("Enqueue dans la transaction: %v", err)
+			t.Errorf("Enqueue inside the transaction: %v", err)
 			return result.Err[int, string]("enqueue")
 		}
 
-		// Le message DOIT être visible ici, sinon un Enqueue qui n'écrirait rien
-		// du tout passerait ce test sans qu'on s'en aperçoive.
-		var dedans int
+		// The message MUST be visible here, otherwise an Enqueue that wrote
+		// nothing at all would pass this test without anyone noticing.
+		var inside int
 		if err := database.QuerierFrom(txCtx, p).QueryRow(txCtx,
 			"SELECT count(*) FROM platform.outbox_messages WHERE event_type = $1", eventType,
-		).Scan(&dedans); err != nil {
-			t.Errorf("comptage dans la transaction: %v", err)
-			return result.Err[int, string]("comptage")
+		).Scan(&inside); err != nil {
+			t.Errorf("counting inside the transaction: %v", err)
+			return result.Err[int, string]("count")
 		}
-		if dedans != 1 {
-			t.Errorf("%d message(s) visible(s) DANS la transaction, attendu 1", dedans)
+		if inside != 1 {
+			t.Errorf("%d message(s) visible INSIDE the transaction, want 1", inside)
 		}
 
-		// L'échec métier qui doit tout annuler.
-		return result.Err[int, string]("l'écriture métier a échoué")
+		// The business failure that must roll everything back.
+		return result.Err[int, string]("the business write failed")
 	})
 
 	if res.IsOk() {
-		t.Fatal("l'unité de travail devait rendre une erreur")
+		t.Fatal("the unit of work was supposed to return an error")
 	}
 
-	// Vu depuis le POOL, hors de toute transaction : plus rien.
-	var dehors int
+	// Seen from the POOL, outside any transaction: nothing left.
+	var outside int
 	if err := p.QueryRow(ctx,
 		"SELECT count(*) FROM platform.outbox_messages WHERE event_type = $1", eventType,
-	).Scan(&dehors); err != nil {
-		t.Fatalf("comptage hors transaction: %v", err)
+	).Scan(&outside); err != nil {
+		t.Fatalf("counting outside the transaction: %v", err)
 	}
-	if dehors != 0 {
-		t.Fatalf("%d message(s) survivent à l'annulation : un événement partirait pour "+
-			"une écriture métier qui n'a jamais eu lieu (ADR 006)", dehors)
+	if outside != 0 {
+		t.Fatalf("%d message(s) survive the rollback: an event would go out for "+
+			"a business write that never happened (ADR 006)", outside)
 	}
 }

@@ -1,14 +1,14 @@
-// Package tests éprouve la SURFACE LIGNE DE COMMANDE du module d'inscription.
+// Package tests exercises the COMMAND LINE SURFACE of the registration module.
 //
-// # Ce qu'ils vérifient
+// # What they verify
 //
-// La TRADUCTION, et rien d'autre : des arguments vers une commande de domaine,
-// puis d'un résultat vers une sortie et un CODE DE RETOUR. Le domaine et le
-// pipeline ont leurs propres tests.
+// The TRANSLATION, and nothing else: from arguments to a domain command, then
+// from an outcome to output and an EXIT CODE. The domain and the pipeline have
+// their own tests.
 //
-// Le code de retour compte autant que le texte : un binaire de ligne de commande
-// est appelé par des scripts plus souvent que par des humains, et un script lit
-// le code pour décider s'il faut réessayer.
+// The exit code matters as much as the text: a command line binary is called by
+// scripts more often than by humans, and a script reads the code to decide
+// whether to retry.
 package tests
 
 import (
@@ -25,59 +25,59 @@ import (
 )
 
 const (
-	// email et secret satisfont les bornes du domaine.
+	// email and secret satisfy the bounds of the domain.
 	email  = "alice@example.com"
-	secret = "correct cheval batterie agrafe"
+	secret = "correct horse battery staple"
 )
 
-// sortie retient ce que la commande a écrit, séparément.
+// streams retains what the command wrote, separately.
 //
-// Les deux flux sont distincts DÉLIBÉRÉMENT : un binaire qui écrit ses erreurs
-// sur la sortie standard casse tout script qui redirige l'une sans l'autre, et
-// c'est le genre de défaut qu'aucun test ne voit s'il fusionne les deux tampons.
-type sortie struct {
+// The two streams are distinct DELIBERATELY: a binary that writes its errors on
+// standard output breaks every script that redirects one without the other, and
+// it is the kind of defect no test sees if it merges the two buffers.
+type streams struct {
 	out *bytes.Buffer
 	err *bytes.Buffer
 }
 
-// nouvelleCommande monte la surface sur le pilote par défaut du module.
+// newCommand mounts the surface on the module's default driver.
 //
-// Chaque test a donc son propre magasin, vierge, et peut s'exécuter en parallèle
-// sans interférer.
-func nouvelleCommande(t *testing.T, entree string) (usercli.Command, *sortie) {
+// Every test therefore has its own store, pristine, and can run in parallel
+// without interfering.
+func newCommand(t *testing.T, input string) (usercli.Command, *streams) {
 	t.Helper()
 
 	mod, err := userregistration.New("", userregistration.Deps{
-		HashPassword: fauxHachage,
-		PublishEvent: publicationInerte,
+		HashPassword: fakeHash,
+		PublishEvent: noopPublish,
 		GenerateID:   func() domain.UserID { return "019f9b46-3aec-735a-977d-129192ef130f" },
 		Now:          func() time.Time { return time.Date(2026, time.July, 28, 9, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
-		t.Fatalf("montage du module: %v", err)
+		t.Fatalf("mounting the module: %v", err)
 	}
 
-	flux := &sortie{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
+	captured := &streams{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 	return usercli.Command{
 		Module: mod,
-		In:     strings.NewReader(entree),
-		Out:    flux.out,
-		Err:    flux.err,
-	}, flux
+		In:     strings.NewReader(input),
+		Out:    captured.out,
+		Err:    captured.err,
+	}, captured
 }
 
-// fauxHachage est un hachage FACTICE, instantané.
+// fakeHash is a DUMMY hash, instantaneous.
 //
-// Argon2id est délibérément lent : le payer ici ferait durer chaque test des
-// dizaines de millisecondes sans rien éprouver de plus. Ce qui est testé, c'est
-// la traduction, pas la solidité du condensé.
-func fauxHachage(password domain.RawPassword) result.Result[domain.PasswordHash, domain.Error] {
+// Argon2id is deliberately slow: paying for it here would make every test last
+// tens of milliseconds without exercising anything more. What is tested is the
+// translation, not the soundness of the digest.
+func fakeHash(password domain.RawPassword) result.Result[domain.PasswordHash, domain.Error] {
 	return result.Ok[domain.PasswordHash, domain.Error](
-		domain.NewPasswordHash("condensé:" + password.String()))
+		domain.NewPasswordHash("digest:" + password.String()))
 }
 
-// publicationInerte accepte l'événement sans rien en faire.
-func publicationInerte(
+// noopPublish accepts the event without doing anything with it.
+func noopPublish(
 	_ context.Context, _, _ string, _ any,
 ) result.Result[domain.Ack, domain.Error] {
 	return result.Ok[domain.Ack, domain.Error](domain.Ack{})

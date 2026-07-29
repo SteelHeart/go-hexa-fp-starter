@@ -2,40 +2,41 @@ package idempotency
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// # Pourquoi ici, et pas dans internal/config
+// # Why here, and not in internal/config
 //
-// Cette table vivait dans `internal/config/modules.go`, à deux paquets de la
-// fabrique qui construit réellement les pilotes. Le commentaire qui
-// l'accompagnait avouait déjà craindre la divergence : « une faute de frappe
-// dans l'une des deux rendrait un module inactivable, avec un message qui
-// accuse la configuration de l'utilisateur ».
+// This table used to live in `internal/config/modules.go`, two packages away
+// from the factory that actually builds the drivers. The comment that came with
+// it already admitted to fearing divergence: "a typo in either of the two would
+// make a module impossible to enable, with a message that blames the user's
+// configuration".
 //
-// Elle est désormais dans le MÊME paquet que le `switch` de `New`, souvent sur
-// le même écran. La divergence ne devient pas impossible — rien ne la vérifie
-// mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
-// devient improbable.
+// It now lives in the SAME package as the `switch` in `New`, often on the same
+// screen. Divergence does not become impossible — nothing checks it
+// mechanically, and ADR 014 notes this as its weakness [human] — but it becomes
+// improbable.
 //
-// Écritures rejouables sans effet de bord.
+// Replayable writes without side effects.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vrai « `go run` démarre »
-			// sans base, sans cache, sans conteneur (ADR 012).
+			// The default requires NOTHING: that is what makes "`go run` starts"
+			// true without a database, without a cache, without a container
+			// (ADR 012).
 			Default: driverMemory,
 			Drivers: map[string]config.Resources{
-				// `ttl` est lue AVANT le `switch` de `New`, donc par les trois
-				// pilotes. `namespace` ne l'est que par redis, où elle préfixe les
-				// clés : l'écrire ailleurs n'aurait aucun effet, et c'est
-				// précisément le genre de réglage sans effet qu'on ne découvre
-				// jamais (#93).
+				// `ttl` is read BEFORE the `switch` in `New`, hence by all three
+				// drivers. `namespace` is read by redis only, where it prefixes
+				// the keys: writing it elsewhere would have no effect at all, and
+				// that is precisely the kind of ineffective setting one never
+				// discovers (#93).
 				//
-				// Par instance : AUCUNE exclusivité derrière plusieurs répliques.
+				// Per instance: NO exclusivity behind several replicas.
 				driverMemory: {Options: []string{OptionTTL}},
-				// Exclusivité entre répliques.
+				// Exclusivity across replicas.
 				driverPostgres: {SQL: true, Options: []string{OptionTTL}},
-				// Exclusivité entre répliques, expiration passive.
+				// Exclusivity across replicas, passive expiry.
 				driverRedis: {Cache: true, Options: []string{OptionTTL, OptionNamespace}},
 			},
 		},

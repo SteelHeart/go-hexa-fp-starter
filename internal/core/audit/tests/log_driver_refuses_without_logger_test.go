@@ -8,14 +8,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit"
 )
 
-// TestLogDriverRefusesWithoutLogger : le pilote par défaut n'exige aucun SERVICE
-// externe, mais il exige un journal explicite. Se rabattre sur slog.Default()
-// enverrait l'audit vers une sortie que personne n'a choisi de collecter.
+// TestLogDriverRefusesWithoutLogger: the default driver requires no external
+// SERVICE, but it does require an explicit logger. Falling back on
+// slog.Default() would send the audit towards an output nobody has chosen to
+// collect.
 func TestLogDriverRefusesWithoutLogger(t *testing.T) {
 	t.Parallel()
 
 	_, err := audit.New(config.Module{Enabled: true, Driver: "log"}, audit.Deps{})
 	if !errors.Is(err, audit.ErrLoggerRequired) {
-		t.Errorf("erreur = %v, attendu ErrLoggerRequired", err)
+		t.Errorf("error = %v, want ErrLoggerRequired", err)
 	}
 }

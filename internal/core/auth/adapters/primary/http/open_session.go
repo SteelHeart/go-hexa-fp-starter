@@ -10,44 +10,44 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// openSessionInput est la demande de connexion.
+// openSessionInput is the sign-in request.
 //
-// # Aucune contrainte de validation dans le schéma, et c'est délibéré
+// # No validation constraint in the schema, and that is deliberate
 //
-// Une borne de longueur ici ferait refuser la requête AVANT le domaine, avec le
-// message de la bibliothèque plutôt que celui du module — et surtout, elle
-// distinguerait « secret trop court » de « identifiants invalides ». Ce serait
-// rouvrir l'oracle d'existence de comptes par la validation de schéma, après
-// l'avoir fermé dans le cas d'usage.
+// A length bound here would make the request be refused BEFORE the domain, with
+// the library's message rather than the module's — and above all, it would
+// distinguish "secret too short" from "invalid credentials". That would reopen
+// the account existence oracle through schema validation, after having closed
+// it in the use case.
 //
-// Le schéma DOCUMENTE, il ne valide pas.
+// The schema DOCUMENTS, it does not validate.
 type openSessionInput struct {
 	Body struct {
-		Subject string `json:"subject" doc:"Ce qui désigne le compte — adresse, identifiant" example:"alice@example.com"`
-		Secret  string `json:"secret"  doc:"Secret en clair. Jamais journalisé, jamais renvoyé."`
+		Subject string `json:"subject" doc:"What designates the account — address, identifier" example:"alice@example.com"`
+		Secret  string `json:"secret"  doc:"Plain secret. Never logged, never returned."`
 	}
 }
 
-// openSessionOutput porte la session ouverte.
+// openSessionOutput carries the opened session.
 //
-// Le corps est le type du LANGAGE PUBLIÉ, pas celui du domaine. Sérialiser une
-// `domain.Session` exposerait ce que le domaine y ajouterait demain ; ici, ce qui
-// sort est énuméré.
+// The body is the type of the PUBLISHED LANGUAGE, not the domain's. Serialising
+// a `domain.Session` would expose whatever the domain added to it tomorrow;
+// here, what goes out is enumerated.
 type openSessionOutput struct {
 	Status int
 	Body   contract.SessionResponse
 }
 
-// mountOpenSession expose l'échange d'un secret contre un jeton.
+// mountOpenSession exposes the exchange of a secret for a token.
 func mountOpenSession(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
 		OperationID: "open-session",
 		Method:      contract.OpenSessionRoute.Method,
 		Path:        contract.OpenSessionRoute.Path,
-		Summary:     "Ouvrir une session",
-		Description: "Échange un secret contre un jeton opaque. " +
-			"Le jeton AUTHENTIFIE : il ne porte aucune permission, et les droits " +
-			"sont relus à chaque décision (ADR 017).",
+		Summary:     "Open a session",
+		Description: "Exchanges a secret for an opaque token. " +
+			"The token AUTHENTICATES: it carries no permission, and the rights " +
+			"are re-read on every decision (ADR 017).",
 		Tags:          []string{apiTag},
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *openSessionInput) (*openSessionOutput, error) {

@@ -10,17 +10,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// TestPlainSecretNeverReachesTheStore constate l'ORDRE des étapes.
+// TestPlainSecretNeverReachesTheStore records the ORDER of the steps.
 //
-// # Ce que le test observe réellement
+// # What the test really observes
 //
-// `VerifySecret` reçoit le clair saisi ET ce que le magasin a retenu. Le second
-// est donc le seul point d'observation qu'un appelant a sur le contenu du
-// magasin — et il suffit : si le clair y était, il apparaîtrait là.
+// `VerifySecret` receives the plain text that was typed AND what the store
+// kept. The latter is therefore the only observation point a caller has on the
+// store's contents — and it is enough: if the plain text were in there, it
+// would show up right here.
 //
-// Hacher AVANT d'écrire n'est pas un détail de style. C'est ce qui garantit qu'un
-// pilote ne peut pas journaliser un mot de passe même par accident : il n'en voit
-// jamais.
+// Hashing BEFORE writing is not a matter of style. It is what guarantees a
+// driver cannot log a password even by accident: it never sees one.
 func TestPlainSecretNeverReachesTheStore(t *testing.T) {
 	t.Parallel()
 
@@ -44,55 +44,56 @@ func TestPlainSecretNeverReachesTheStore(t *testing.T) {
 
 	mod, err := auth.New(config.Module{Enabled: true, Driver: "memory"}, spy)
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	register(t, mod, subject)
 
 	if _, err := mod.Authenticate(ctx, subject, secret); err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	switch {
 	case stored == "":
-		t.Fatal("le condensé n'a jamais été comparé : le test n'observe rien")
+		t.Fatal("the digest was never compared: the test observes nothing")
 	case stored == secret:
-		t.Fatal("le magasin retient le secret EN CLAIR")
+		t.Fatal("the store keeps the PLAIN secret")
 	case strings.Contains(stored, secret) && !strings.HasPrefix(stored, hashPrefix):
-		t.Fatalf("le clair transparaît dans ce que retient le magasin : %q", stored)
+		t.Fatalf("the plain text shows through what the store keeps: %q", stored)
 	}
 }
 
-// TestSessionCarriesNoPermission constate ce que la session NE porte PAS.
+// TestSessionCarriesNoPermission records what the session does NOT carry.
 //
-// C'est la décision 1 de l'ADR 017 vue depuis le type : une `Session` n'a que son
-// jeton, son identité et ses dates. Le jour où quelqu'un y ajouterait un champ
-// `Permissions`, ce test ne compilerait plus — et c'est le bon moment pour rouvrir
-// l'ADR, pas six mois plus tard devant une révocation qui ne prend pas effet.
+// This is decision 1 of ADR 017 seen from the type: a `Session` only has its
+// token, its identity and its dates. The day someone added a `Permissions`
+// field to it, this test would stop compiling — and that is the right moment to
+// reopen the ADR, not six months later in front of a revocation that does not
+// take effect.
 func TestSessionCarriesNoPermission(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 	id := register(t, mod, subject)
-	grant(t, mod, id, "comptable", "billing.invoice.cancel")
+	grant(t, mod, id, "accountant", "billing.invoice.cancel")
 
 	session, err := mod.Authenticate(ctx, subject, secret)
 	if err != nil {
-		t.Fatalf("authentification: %v", err)
+		t.Fatalf("authentication: %v", err)
 	}
 
 	if session.Token.IsZero() {
-		t.Fatal("la session doit porter un jeton")
+		t.Fatal("the session must carry a token")
 	}
 	if session.Identity != id {
-		t.Fatalf("la session doit porter l'identité %q, elle porte %q", id, session.Identity)
+		t.Fatalf("the session must carry identity %q, it carries %q", id, session.Identity)
 	}
 	if !session.ExpiresAt.After(session.IssuedAt) {
-		t.Fatal("une session doit être bornée dans le temps")
+		t.Fatal("a session must be bounded in time")
 	}
 	if strings.Contains(session.Token.String(), "billing") {
-		t.Fatal("le jeton porte une permission : il authentifie, il n'autorise pas")
+		t.Fatal("the token carries a permission: it authenticates, it does not authorise")
 	}
 }

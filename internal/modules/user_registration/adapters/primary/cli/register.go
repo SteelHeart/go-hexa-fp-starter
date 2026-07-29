@@ -9,28 +9,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/exit"
 )
 
-// Register inscrit un compte et rend un code de sortie `sysexits`.
+// Register registers an account and returns a `sysexits` exit code.
 //
-// # Le MÊME port que la surface HTTP
+// # The SAME port as the HTTP surface
 //
-// `POST /v1/users` et cette commande appellent tous deux `mod.Register`. Le
-// module ne sait pas laquelle l'appelle, et il n'a rien fallu lui ajouter pour
-// qu'il serve les deux. C'est la propriété n°2 du socle, mesurée plutôt
-// qu'énoncée.
+// `POST /v1/users` and this command both call `mod.Register`. The module does
+// not know which one is calling it, and nothing had to be added to it for it to
+// serve both. That is the starter's property no. 2, measured rather than stated.
 //
-// # Le mot de passe n'est PAS un drapeau
+// # The password is NOT a flag
 //
-// Il est lu sur l'entrée standard. Un `--password` figure dans `ps`, dans
-// l'historique du shell, et dans les journaux d'audit de commandes — trois
-// endroits que personne ne pense à purger. C'est la faute la plus banale d'un
-// outil d'administration, et elle ne coûte rien à éviter.
+// It is read from standard input. A `--password` shows up in `ps`, in the shell
+// history, and in command audit logs — three places nobody thinks to purge. It
+// is the most commonplace mistake of an administration tool, and it costs
+// nothing to avoid.
 func (c Command) Register(ctx context.Context, args []string) int {
 	fs := flag.NewFlagSet("register", flag.ContinueOnError)
 	fs.SetOutput(c.Err)
-	email := fs.String("email", "", "adresse du compte à créer")
+	email := fs.String("email", "", "email address of the account to create")
 	fs.Usage = func() {
-		fmt.Fprintln(c.Err, "usage: hexa-cli register --email <adresse>")
-		fmt.Fprintln(c.Err, "  le mot de passe est lu sur l'entrée standard")
+		fmt.Fprintln(c.Err, "usage: hexa-cli register --email <address>")
+		fmt.Fprintln(c.Err, "  the password is read from standard input")
 		fs.PrintDefaults()
 	}
 
@@ -38,43 +37,43 @@ func (c Command) Register(ctx context.Context, args []string) int {
 		return exit.Usage
 	}
 	if *email == "" {
-		fmt.Fprintln(c.Err, "erreur: --email est obligatoire")
+		fmt.Fprintln(c.Err, "error: --email is mandatory")
 		fs.Usage()
 		return exit.Usage
 	}
 
-	secret, err := c.lireSecret()
+	secret, err := c.readSecret()
 	if err != nil {
-		fmt.Fprintf(c.Err, "erreur: %v\n", err)
+		fmt.Fprintf(c.Err, "error: %v\n", err)
 		return exit.Usage
 	}
 
-	return c.inscrire(ctx, *email, secret)
+	return c.registerAccount(ctx, *email, secret)
 }
 
-// inscrire appelle le cas d'usage et traduit son issue.
+// registerAccount calls the use case and translates its outcome.
 //
-// Isolée pour que `Register` reste sous le seuil de lignes d'`arch-go`, et parce
-// qu'elle nomme la frontière : au-dessus on lit des arguments, en dessous on ne
-// parle plus que domaine.
-func (c Command) inscrire(ctx context.Context, email, secret string) int {
+// Split out so that `Register` stays under `arch-go`'s line threshold, and
+// because it names the boundary: above it arguments are read, below it nothing
+// but domain is spoken.
+func (c Command) registerAccount(ctx context.Context, email, secret string) int {
 	value, failure, ok := c.Module.Register(ctx, domain.RegistrationCommand{
 		Email:    email,
 		Password: secret,
 	}).Get()
 	if !ok {
-		// Le message vient du DOMAINE, pas d'ici. C'est la même exigence que
-		// côté HTTP : deux formulations d'une même règle divergent, et c'est la
-		// mauvaise qui parle à l'utilisateur.
-		fmt.Fprintf(c.Err, "erreur: %s\n", failure.Message)
+		// The message comes from the DOMAIN, not from here. It is the same
+		// requirement as on the HTTP side: two phrasings of one and the same
+		// rule diverge, and it is the wrong one that speaks to the user.
+		fmt.Fprintf(c.Err, "error: %s\n", failure.Message)
 		if failure.Field != "" {
-			fmt.Fprintf(c.Err, "champ: %s\n", failure.Field)
+			fmt.Fprintf(c.Err, "field: %s\n", failure.Field)
 		}
 		return codeFor(failure)
 	}
 
-	// Sur la sortie STANDARD, et rien d'autre que le fait : un script en aval
-	// lit cette ligne. Y ajouter du décor la casserait.
+	// On STANDARD output, and nothing other than the fact: a downstream script
+	// reads this line. Adding any decoration to it would break it.
 	fmt.Fprintf(c.Out, "%s\t%s\t%s\n", value.ID, value.Email, value.Status)
 	return exit.OK
 }

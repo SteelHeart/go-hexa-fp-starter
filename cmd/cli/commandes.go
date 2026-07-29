@@ -11,93 +11,91 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/exit"
 )
 
-// errSeedEnProduction refuse de peupler une production.
+// errSeedInProduction refuses to seed a production environment.
 //
-// # Pourquoi un refus explicite, et pourquoi il compte
+// # Why an explicit refusal, and why it matters
 //
-// `seed` crée des comptes de démonstration. En production, cela veut dire des
-// identifiants connus de tous ceux qui ont lu le dépôt — donc une porte
-// d'entrée, ouverte par une commande qu'on croyait inoffensive parce qu'elle
-// l'est partout ailleurs.
+// `seed` creates demonstration accounts. In production that means credentials
+// known to everyone who has read the repository — hence a way in, opened by a
+// command believed to be harmless because it is harmless everywhere else.
 //
-// Le refus est un `sysexits.NoPerm` : ce n'est ni une panne, ni une erreur de
-// saisie, c'est un « non » assumé. La distinction compte pour un script, qui ne
-// doit ni réessayer ni alerter comme sur un incident.
-var errSeedEnProduction = errors.New(
-	"seed refusé hors développement et test : des comptes de démonstration en production sont une porte d'entrée")
+// The refusal is a `sysexits.NoPerm`: it is neither a failure nor an input
+// error, it is a deliberate "no". The distinction matters to a script, which
+// must neither retry nor raise an alert as it would on an incident.
+var errSeedInProduction = errors.New(
+	"seed refused outside development and test: demonstration accounts in production are a way in")
 
-// commandRegister branche la surface d'inscription.
+// commandRegister wires the registration surface.
 func commandRegister(ctx context.Context, args []string) int {
-	assemblage, err := composer(ctx)
+	assembly, err := compose(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "erreur: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exit.Config
 	}
-	defer assemblage.conn.Close()
+	defer assembly.conn.Close()
 
-	commande := usercli.Command{Module: assemblage.users, In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
-	return commande.Register(ctx, args)
+	command := usercli.Command{Module: assembly.users, In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
+	return command.Register(ctx, args)
 }
 
-// commandSeed peuple le socle PAR LES CAS D'USAGE.
+// commandSeed seeds the starter THROUGH THE USE CASES.
 //
-// Jamais d'`INSERT` direct : un jeu de données fabriqué en SQL contourne les
-// règles du domaine, et produit des comptes que le code n'aurait jamais laissé
-// naître — mots de passe non hachés, adresses non normalisées, statuts
-// impossibles. Le jour où un test s'appuie dessus, il valide un état que la
-// production ne peut pas atteindre.
+// Never a direct `INSERT`: a dataset forged in SQL bypasses the domain rules,
+// and produces accounts the code would never have let be born — unhashed
+// passwords, unnormalised addresses, impossible statuses. The day a test
+// relies on that, it validates a state production cannot reach.
 func commandSeed(ctx context.Context, args []string) int {
-	assemblage, err := composer(ctx)
+	assembly, err := compose(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "erreur: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exit.Config
 	}
-	defer assemblage.conn.Close()
+	defer assembly.conn.Close()
 
-	if err := autoriserSeed(assemblage.cfg.App.Env); err != nil {
-		fmt.Fprintf(os.Stderr, "refus: %v\n", err)
+	if err := allowSeed(assembly.cfg.App.Env); err != nil {
+		fmt.Fprintf(os.Stderr, "refused: %v\n", err)
 		return exit.NoPerm
 	}
 
-	commande := usercli.Command{Module: assemblage.users, In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
-	return commande.Seed(ctx, args)
+	command := usercli.Command{Module: assembly.users, In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
+	return command.Seed(ctx, args)
 }
 
-// autoriserSeed refuse le peuplement hors des environnements locaux.
+// allowSeed refuses seeding outside the local environments.
 //
-// La décision est prise sur `app.env` RÉSOLU, pas sur une variable lue à part :
-// c'est la même valeur que celle qui gouverne le durcissement réseau et
-// l'amorçage de l'authentification. Deux sources pour une même question finissent
-// par se contredire, et c'est celle qui autorise qui l'emporte.
-func autoriserSeed(env config.Environment) error {
+// The decision is taken on the RESOLVED `app.env`, not on a variable read
+// separately: it is the same value as the one governing network hardening and
+// the authentication bootstrap. Two sources for one question end up
+// contradicting each other, and it is the permissive one that wins.
+func allowSeed(env config.Environment) error {
 	if !env.IsLocal() {
-		return fmt.Errorf("%w (env=%s)", errSeedEnProduction, env)
+		return fmt.Errorf("%w (env=%s)", errSeedInProduction, env)
 	}
 	return nil
 }
 
-// commandHealth vérifie que ce binaire POURRAIT démarrer.
+// commandHealth checks that this binary COULD start.
 //
-// # Ce qu'elle vérifie réellement
+// # What it really checks
 //
-// Que le catalogue s'assemble, que la configuration se charge et se valide, que
-// les connexions réclamées s'ouvrent, et que les modules se montent. C'est
-// exactement ce qu'un démarrage fait avant d'écouter — donc un `health` vert
-// signifie « ce déploiement démarrerait ».
+// That the catalogue assembles, that the configuration loads and validates,
+// that the requested connections open, and that the modules mount. That is
+// exactly what a start-up does before listening — so a green `health` means
+// "this deployment would start".
 //
-// Elle ne remplace PAS `/readyz` : celle-ci interroge un service en marche,
-// celle-là interroge une configuration. Les deux répondent à des questions
-// différentes, et confondre les deux ferait croire qu'un `health` vert prouve
-// qu'un serveur répond.
+// It does NOT replace `/readyz`: the latter queries a running service, the
+// former queries a configuration. The two answer different questions, and
+// conflating them would make people believe a green `health` proves a server
+// answers.
 func commandHealth(ctx context.Context) int {
-	assemblage, err := composer(ctx)
+	assembly, err := compose(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "erreur: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exit.Config
 	}
-	defer assemblage.conn.Close()
+	defer assembly.conn.Close()
 
 	fmt.Fprintf(os.Stdout, "ok\tenv=%s\tbase=%t\tcache=%t\n",
-		assemblage.cfg.App.Env, assemblage.conn.Pool != nil, assemblage.conn.Cache != nil)
+		assembly.cfg.App.Env, assembly.conn.Pool != nil, assembly.conn.Cache != nil)
 	return exit.OK
 }

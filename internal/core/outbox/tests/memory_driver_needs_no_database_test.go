@@ -9,16 +9,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestMemoryDriverNeedsNoDatabase verrouille la promesse centrale du socle :
-// le pilote par défaut démarre sans aucune connexion.
+// TestMemoryDriverNeedsNoDatabase locks down the central promise of the
+// starter: the default driver starts without any connection.
 func TestMemoryDriverNeedsNoDatabase(t *testing.T) {
 	t.Parallel()
 
 	mod, err := outbox.New(config.Module{Enabled: true, Driver: "memory"}, outbox.Deps{})
 	if err != nil {
-		t.Fatalf("le pilote memory ne doit exiger aucune dépendance: %v", err)
+		t.Fatalf("the memory driver must require no dependency: %v", err)
 	}
 	if _, err := mod.Enqueue(context.Background(), domain.NewMessage{Type: "t"}); err != nil {
-		t.Errorf("Enqueue sans base doit réussir: %v", err)
+		t.Errorf("Enqueue without a database must succeed: %v", err)
 	}
 }

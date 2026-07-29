@@ -7,15 +7,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestDispatcherStopsCleanlyOnCancellation : l'annulation est la fin NORMALE d'un
+// TestDispatcherStopsCleanlyOnCancellation: cancellation is the NORMAL end of a
 // worker.
 //
-// Un arrêt propre ne doit ressembler à une panne ni dans le code de retour, ni dans
-// les alertes. Sinon chaque redéploiement en produit une, et l'équipe apprend à
-// ignorer les erreurs du dépileur — y compris les vraies, celles qui signalent un
-// événement définitivement perdu.
+// A clean shutdown must not look like an outage, neither in the exit code nor
+// in the alerts. Otherwise every redeployment produces one, and the team learns
+// to ignore the dispatcher's errors — including the real ones, those that
+// signal a definitively lost event.
 //
-// Le test n'attend pas : il annule dès la première publication observée.
+// The test does not wait: it cancels as soon as the first publication is
+// observed.
 func TestDispatcherStopsCleanlyOnCancellation(t *testing.T) {
 	t.Parallel()
 
@@ -40,10 +41,10 @@ func TestDispatcherStopsCleanlyOnCancellation(t *testing.T) {
 	stopped := make(chan error, 1)
 	go func() { stopped <- dispatcher.Run(ctx) }()
 
-	<-published // la boucle tourne réellement
+	<-published // the loop really is running
 	cancel()
 
 	if err := <-stopped; err != nil {
-		t.Errorf("Run = %v, un arrêt demandé doit rendre nil", err)
+		t.Errorf("Run = %v, a requested shutdown must return nil", err)
 	}
 }

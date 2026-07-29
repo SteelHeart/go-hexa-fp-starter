@@ -6,59 +6,59 @@ import (
 	"time"
 )
 
-// tokenMinLen borne la longueur d'un jeton opaque.
+// tokenMinLen bounds the length of an opaque token.
 //
-// 43 caractères, soit 32 octets en base64 sans remplissage. En dessous, l'entropie
-// devient devinable ; la borne est ici pour que le domaine REFUSE un jeton
-// fabriqué court, quel que soit le port qui l'a produit.
+// 43 characters, that is 32 bytes in base64 without padding. Below that, the
+// entropy becomes guessable; the bound is here so that the domain REFUSES a
+// token built short, whatever port produced it.
 const tokenMinLen = 43
 
-// Token est un jeton OPAQUE — une chaîne aléatoire, pas un JWT.
+// Token is an OPAQUE token — a random string, not a JWT.
 //
-// # Pourquoi opaque, et pas signé (ADR 017 § 2 bis)
+// # Why opaque, and not signed (ADR 017 § 2 bis)
 //
-// Le seul avantage réel d'un jeton signé est de valider SANS toucher au magasin.
-// Or `Authorize` y va de toute façon, à chaque appel : c'est la décision 1, et
-// elle est ce qui rend la révocation immédiate. On paierait donc la gestion de
-// clés, leur rotation, et toute la famille de failles propre aux jetons signés —
-// algorithme `none` accepté, confusion HMAC/RSA, expiration non vérifiée — pour
-// un gain déjà abandonné.
+// The only real advantage of a signed token is validating WITHOUT touching the
+// store. But `Authorize` goes there anyway, on every call: that is decision 1,
+// and it is what makes revocation immediate. We would therefore pay for key
+// management, key rotation, and the whole family of flaws specific to signed
+// tokens — `none` algorithm accepted, HMAC/RSA confusion, expiry not checked —
+// for a gain already given up.
 //
-// Une chaîne aléatoire comparée à un enregistrement n'a aucune de ces failles.
+// A random string compared against a record has none of those flaws.
 type Token struct{ value string }
 
-// NewToken valide un jeton produit par un port d'aléa.
+// NewToken validates a token produced by a randomness port.
 func NewToken(raw string) (Token, error) {
 	if len(raw) < tokenMinLen {
 		return Token{}, fmt.Errorf(
-			"%w: un jeton doit faire au moins %d caractères", ErrIncomplete, tokenMinLen)
+			"%w: a token must be at least %d characters long", ErrIncomplete, tokenMinLen)
 	}
 	return Token{value: raw}, nil
 }
 
-// String rend le jeton brut. À n'appeler que pour le transmettre au client ou au
-// pilote — jamais pour le journaliser.
+// String returns the raw token. To be called only to hand it to the client or
+// to the driver — never to log it.
 func (t Token) String() string { return t.value }
 
-// IsZero indique un jeton non construit.
+// IsZero reports a token that was never built.
 func (t Token) IsZero() bool { return t.value == "" }
 
-// Equals compare deux jetons en TEMPS CONSTANT.
+// Equals compares two tokens in CONSTANT TIME.
 //
-// `==` s'arrête au premier octet différent, donc la durée de la comparaison
-// révèle combien de caractères de tête sont corrects. C'est l'attaque par mesure
-// de temps, et elle est praticable sur un réseau local. `subtle.ConstantTimeCompare`
-// coûte la même chose et supprime le canal.
+// `==` stops at the first differing byte, so the duration of the comparison
+// reveals how many leading characters are correct. That is the timing attack,
+// and it is practicable on a local network. `subtle.ConstantTimeCompare` costs
+// the same and removes the channel.
 func (t Token) Equals(other Token) bool {
 	return subtle.ConstantTimeCompare([]byte(t.value), []byte(other.value)) == 1
 }
 
-// Session est un jeton émis, rattaché à une identité et daté.
+// Session is an issued token, attached to an identity and dated.
 //
-// Les permissions n'y figurent PAS, et c'est tout le sujet de l'ADR 017 : le
-// jeton authentifie, il n'autorise pas. Les y mettre créerait une fenêtre pendant
-// laquelle un accès révoqué fonctionne encore — et le jour où l'on révoque, c'est
-// qu'on est pressé.
+// Permissions do NOT appear in it, and that is the whole point of ADR 017: the
+// token authenticates, it does not authorise. Putting them in would create a
+// window during which a revoked access still works — and the day you revoke is
+// the day you are in a hurry.
 type Session struct {
 	Token     Token
 	Identity  IdentityID
@@ -66,18 +66,18 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-// NewSession construit une session bornée dans le temps.
+// NewSession builds a session bounded in time.
 //
-// Une durée nulle ou négative est REFUSÉE : une session sans expiration est une
-// session éternelle, et personne ne décide cela par erreur.
+// A zero or negative duration is REFUSED: a session without expiry is an
+// eternal session, and nobody decides that by accident.
 func NewSession(token Token, identity IdentityID, now time.Time, ttl time.Duration) (Session, error) {
 	switch {
 	case token.IsZero():
-		return Session{}, fmt.Errorf("%w: le jeton est obligatoire", ErrIncomplete)
+		return Session{}, fmt.Errorf("%w: the token is mandatory", ErrIncomplete)
 	case identity == "":
-		return Session{}, fmt.Errorf("%w: l'identité est obligatoire", ErrIncomplete)
+		return Session{}, fmt.Errorf("%w: the identity is mandatory", ErrIncomplete)
 	case ttl <= 0:
-		return Session{}, fmt.Errorf("%w: la durée de session doit être strictement positive", ErrIncomplete)
+		return Session{}, fmt.Errorf("%w: the session lifetime must be strictly positive", ErrIncomplete)
 	}
 
 	issued := now.UTC()
@@ -89,14 +89,14 @@ func NewSession(token Token, identity IdentityID, now time.Time, ttl time.Durati
 	}, nil
 }
 
-// Expired indique si la session a expiré à l'instant donné.
+// Expired reports whether the session has expired at the given instant.
 //
-// L'instant est un PARAMÈTRE : le domaine ne lit pas l'horloge. C'est ce qui
-// permet de tester l'expiration sans attendre.
+// The instant is a PARAMETER: the domain does not read the clock. That is what
+// makes it possible to test expiry without waiting.
 //
-// La borne est stricte — une session expire À sa date, pas après. Un `>` laisserait
-// passer la dernière milliseconde, ce qui n'a aucune importance pratique et rend
-// le test dépendant d'une comparaison qu'on relit deux fois.
+// The bound is strict — a session expires AT its date, not after. A `>` would
+// let the last millisecond through, which has no practical importance and makes
+// the test depend on a comparison you have to read twice.
 func (s Session) Expired(now time.Time) bool {
 	return !now.UTC().Before(s.ExpiresAt)
 }

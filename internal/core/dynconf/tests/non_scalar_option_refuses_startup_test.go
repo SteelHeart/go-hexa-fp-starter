@@ -7,17 +7,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 )
 
-// TestNonScalarOptionRefusesStartup : `flags: {a: {b: 1}}` est une faute de frappe,
-// pas une intention. La laisser passer donnerait un drapeau silencieusement
-// inactif — le défaut le plus difficile à voir sur ce module, puisqu'un drapeau
-// inactif ressemble en tout point à un drapeau qu'on n'a pas encore allumé.
+// TestNonScalarOptionRefusesStartup: `flags: {a: {b: 1}}` is a typo, not an
+// intention. Letting it through would give a silently inactive flag — the
+// hardest defect to see on this module, since an inactive flag looks in every
+// respect like a flag one has not switched on yet.
 func TestNonScalarOptionRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]map[string]any{
-		"table imbriquée":  {"flags": map[string]any{"a": map[string]any{"b": 1}}},
-		"liste":            {"settings": map[string]any{"a": []any{1, 2}}},
-		"groupe non table": {"flags": "nouveau_paiement"},
+		"nested table":      {"flags": map[string]any{"a": map[string]any{"b": 1}}},
+		"list":              {"settings": map[string]any{"a": []any{1, 2}}},
+		"group not a table": {"flags": "new_payment"},
 	}
 
 	for name, options := range cases {
@@ -28,7 +28,7 @@ func TestNonScalarOptionRefusesStartup(t *testing.T) {
 				dynconf.Deps{},
 			)
 			if err == nil {
-				t.Error("une option mal formée doit refuser le démarrage")
+				t.Error("a malformed option must refuse to start")
 			}
 		})
 	}

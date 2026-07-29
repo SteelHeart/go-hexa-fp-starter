@@ -1,11 +1,11 @@
-// Package hashing branche le port HashPassword sur l'infrastructure de sécurité.
+// Package hashing wires the HashPassword port onto the security infrastructure.
 //
-// Le hachage n'est PAS du domaine : c'est un effet coûteux, paramétré, et dont
-// les paramètres changent avec le matériel. Le domaine ne connaît donc qu'un
-// `PasswordHash` opaque, et ignore jusqu'au nom de l'algorithme.
+// Hashing is NOT domain: it is a costly, parameterised effect, whose parameters
+// change with the hardware. The domain therefore only knows an opaque
+// `PasswordHash`, and does not even know the name of the algorithm.
 //
-// Conséquence pratique : passer d'Argon2id à ce qui lui succédera ne touche pas
-// une ligne de `domain/` ni de `application/`.
+// Practical consequence: moving from Argon2id to whatever succeeds it does not
+// touch a line of `domain/` or `application/`.
 package hashing
 
 import (
@@ -15,26 +15,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// New construit le port de hachage.
+// New builds the hashing port.
 //
-// Contrat d'erreur : CodeInternal UNIQUEMENT. Un échec de hachage est un défaut
-// technique — entropie indisponible, paramètres absurdes — jamais une erreur
-// imputable à l'utilisateur. Le traduire en erreur de saisie ferait accuser un
-// mot de passe pourtant valide.
+// Error contract: CodeInternal ONLY. A hashing failure is a technical defect —
+// entropy unavailable, absurd parameters — never an error attributable to the
+// user. Translating it into an input error would blame a password that is
+// nonetheless valid.
 func New(hasher security.Hasher) ports.HashPassword {
 	return func(password domain.RawPassword) result.Result[domain.PasswordHash, domain.Error] {
-		// Expose() et NON String() : String() rend « [redacted] », par
-		// conception, pour qu'aucune journalisation accidentelle ne fasse fuir le
-		// mot de passe. L'utiliser ici hacherait la MÊME chaîne pour tous les
-		// comptes — tous partageraient un condensé, et n'importe quel mot de
-		// passe ouvrirait n'importe quel compte.
+		// Expose() and NOT String(): String() returns "[redacted]", by design,
+		// so that no accidental logging leaks the password. Using it here would
+		// hash the SAME string for every account — they would all share one
+		// digest, and any password would open any account.
 		//
-		// C'est le seul endroit du dépôt autorisé à appeler Expose(), et le nom
-		// est explicite pour que cet appel se voie en relecture.
+		// This is the only place in the repository allowed to call Expose(),
+		// and the name is explicit so that this call is seen in review.
 		encoded, err := hasher.Hash(password.Expose())
 		if err != nil {
-			// Le message rendu ne nomme ni l'algorithme, ni la cause : les deux
-			// renseignent un attaquant sur ce qui tourne derrière.
+			// The returned message names neither the algorithm nor the cause:
+			// both tell an attacker something about what runs behind.
 			return result.Err[domain.PasswordHash, domain.Error](
 				domain.NewError(
 					domain.CodeInternal,

@@ -9,44 +9,44 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestCheckAvailabilityValidatesBeforeQuerying : l'adresse est validée AVANT
-// d'interroger le stockage.
+// TestCheckAvailabilityValidatesBeforeQuerying: the address is validated BEFORE
+// the storage is queried.
 //
-// Ce cas d'usage est le point d'entrée d'un champ de formulaire : il est appelé à
-// chaque frappe, sans authentification, depuis n'importe quel client. Sans
-// validation préalable, chaque caractère saisi deviendrait une requête — un moyen
-// gratuit de faire travailler la base.
+// This use case is the entry point of a form field: it is called on every
+// keystroke, without authentication, from any client. Without prior validation,
+// every character typed would become a query — a free way of making the database
+// work.
 //
-// Il rend `true` pour DISPONIBLE : la double négation « pas pris » est une source
-// d'erreur classique, et l'inverser rendrait toutes les adresses libres.
+// It returns `true` for AVAILABLE: the double negative "not taken" is a classic
+// source of mistakes, and inverting it would make every address free.
 func TestCheckAvailabilityValidatesBeforeQuerying(t *testing.T) {
 	t.Parallel()
 
-	interroge := false
-	verifie := application.NewCheckEmailAvailability(
+	queried := false
+	check := application.NewCheckEmailAvailability(
 		func(context.Context, domain.Email) result.Result[bool, domain.Error] {
-			interroge = true
+			queried = true
 			return result.Ok[bool, domain.Error](false)
 		},
 	)
 	ctx := context.Background()
 
-	_, err, ok := verifie(ctx, "pas une adresse").Get()
+	_, err, ok := check(ctx, "not an address").Get()
 	if ok {
-		t.Fatal("une adresse invalide doit être refusée")
+		t.Fatal("an invalid address must be refused")
 	}
 	if err.Code != domain.CodeInvalidEmail {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeInvalidEmail)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeInvalidEmail)
 	}
-	if interroge {
-		t.Error("le stockage ne doit PAS être interrogé pour une adresse invalide")
+	if queried {
+		t.Error("the storage must NOT be queried for an invalid address")
 	}
 
-	disponible, _, ok := verifie(ctx, adresseValide).Get()
+	available, _, ok := check(ctx, validAddress).Get()
 	if !ok {
-		t.Fatal("une adresse valide et libre doit rendre un succès")
+		t.Fatal("a valid and free address must return a success")
 	}
-	if !disponible {
-		t.Error("une adresse NON prise doit être rendue DISPONIBLE")
+	if !available {
+		t.Error("an address that is NOT taken must be returned as AVAILABLE")
 	}
 }

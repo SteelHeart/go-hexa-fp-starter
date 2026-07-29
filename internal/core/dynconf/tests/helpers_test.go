@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du module dynconf : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the dynconf module: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -13,8 +13,8 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 )
 
-// newFileModule construit le module sur son pilote par défaut, avec les valeurs
-// données en options — exactement comme le fera config/modules.yaml.
+// newFileModule builds the module on its default driver, with the values given
+// as options — exactly as config/modules.yaml will do.
 func newFileModule(t *testing.T, options map[string]any) dynconf.Module {
 	t.Helper()
 	mod, err := dynconf.New(
@@ -22,7 +22,7 @@ func newFileModule(t *testing.T, options map[string]any) dynconf.Module {
 		dynconf.Deps{},
 	)
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	return mod
 }

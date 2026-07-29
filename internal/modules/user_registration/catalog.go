@@ -2,37 +2,37 @@ package userregistration
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares this module's drivers — ADR 014.
 //
-// # C'est CE fichier qui répond à la friction
+// # THIS file is what answers the friction
 //
-// Avant l'ADR 014, un module métier ne pouvait pas figurer dans
-// `config/modules.yaml` : la configuration refusait son nom avec
-// `modules.user_registration: unknown module`, parce que la seule table de
-// modules vivait dans `internal/config/modules.go` — un fichier du framework.
+// Before ADR 014, a business module could not appear in `config/modules.yaml`:
+// the configuration refused its name with
+// `modules.user_registration: unknown module`, because the only module table
+// lived in `internal/config/modules.go` — a framework file.
 //
-// Conséquence mesurée : `cmd/server` lisait `cfg.Modules[Name].Driver`, un
-// champ qui restait TOUJOURS vide. La tranche de référence contournait donc
-// silencieusement le mécanisme qu'elle est censée démontrer — et c'est sa forme
-// qui sera copiée pour écrire `billing`.
+// Measured consequence: `cmd/server` read `cfg.Modules[Name].Driver`, a field
+// that ALWAYS stayed empty. The reference slice was therefore silently
+// bypassing the very mechanism it is supposed to demonstrate — and its shape is
+// the one that will be copied to write `billing`.
 //
-// Ce fichier est la démonstration : un module métier déclare ses pilotes chez
-// lui, le composition root les fusionne, et AUCUN fichier du framework ne nomme
-// `user_registration`. Écrire `billing` demande le même fichier, au même
-// endroit, sans toucher au socle.
+// This file is the demonstration: a business module declares its drivers at
+// home, the composition root merges them, and NO framework file names
+// `user_registration`. Writing `billing` calls for the same file, in the same
+// place, without touching the starter.
 //
-// Le module reste supprimable d'un seul `rm -rf` : ce fichier part avec lui, et
-// la seule ligne à retirer est celle du composition root qui le monte.
+// The module stays removable with a single `rm -rf`: this file leaves with it,
+// and the only line left to remove is the composition root line that mounts it.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// `memory` est le défaut, et c'est une décision : il n'exige aucune
-			// infrastructure, donc `go run` démarre. Voir les NON-garanties du
-			// paquet drivers/memory avant de l'envisager ailleurs qu'en
-			// développement.
+			// `memory` is the default, and that is a decision: it requires no
+			// infrastructure, so `go run` starts. See the NON-GUARANTEES of the
+			// drivers/memory package before considering it anywhere other than
+			// development.
 			Default: DriverMemory,
 			Drivers: map[string]config.Resources{
-				// Perdu au redémarrage, et local au processus.
+				// Lost on restart, and local to the process.
 				DriverMemory: {},
 			},
 		},

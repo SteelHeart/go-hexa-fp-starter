@@ -1,27 +1,29 @@
-// Package postgres implémente l'idempotence sur PostgreSQL.
+// Package postgres implements idempotency on PostgreSQL.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Exclusivité entre répliques** : la contrainte d'unicité sur `key` tranche.
-//     Deux requêtes concurrentes portant la même clé ne peuvent pas insérer
-//     toutes les deux ; la perdante lit la ligne gagnante et refuse.
-//   - **Durabilité** : au niveau de la base.
+//   - **Exclusivity across replicas**: the uniqueness constraint on `key`
+//     settles it. Two concurrent requests carrying the same key cannot both
+//     insert; the loser reads the winning row and refuses.
+//   - **Durability**: at the database level.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **La réservation n'est PAS dans la transaction métier**, par conception :
-//     elle passe par le pool, jamais par le querier du contexte. Une réservation
-//     invisible aux autres connexions ne protégerait de rien — c'est l'inverse du
-//     choix fait dans l'outbox, où l'atomicité avec le métier est justement le but.
-//     Conséquence : après un échec métier, `Release` est obligatoire.
-//   - **La fenêtre de rejeu court depuis la réservation**, pas depuis la fin de
-//     l'opération : une opération longue raccourcit d'autant la mémorisation.
-//   - **Aucune purge automatique.** `Purge` doit être appelée par l'ordonnanceur.
+//   - **The reservation is NOT in the business transaction**, by design: it goes
+//     through the pool, never through the querier of the context. A reservation
+//     invisible to the other connections would protect nothing — this is the
+//     opposite of the choice made in the outbox, where atomicity with the
+//     business work is precisely the point.
+//     Consequence: after a business failure, `Release` is mandatory.
+//   - **The replay window runs from the reservation**, not from the end of the
+//     operation: a long operation shortens the memorisation by as much.
+//   - **No automatic purge.** `Purge` must be called by the scheduler.
 //
-// # État
+// # Status
 //
-// Écrit, JAMAIS exécuté contre une base : la migration de `platform.idempotency_keys`
-// n'existe pas encore (issue #2). Ne pas le présenter comme éprouvé.
+// Written, NEVER run against a database: the migration of
+// `platform.idempotency_keys` does not exist yet (issue #2). Do not present it
+// as exercised.
 package postgres
 
 import (
@@ -36,28 +38,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// Store implémente l'idempotence sur PostgreSQL.
+// Store implements idempotency on PostgreSQL.
 type Store struct {
 	pool *pgxpool.Pool
 	ttl  time.Duration
 }
 
-// New construit le magasin.
+// New builds the store.
 func New(pool *pgxpool.Pool, ttl time.Duration) *Store {
 	return &Store{pool: pool, ttl: ttl}
 }
 
-// reserveQuery réserve la clé, ou reprend une réservation expirée.
+// reserveQuery reserves the key, or takes over an expired reservation.
 //
-// `ON CONFLICT … DO UPDATE … WHERE expires_at < now()` est le cœur du mécanisme :
-//   - clé libre → insertion, une ligne revient : nous tenons la réservation ;
-//   - clé tenue par une réservation vivante → le WHERE bloque la mise à jour,
-//     AUCUNE ligne ne revient : quelqu'un d'autre la tient ;
-//   - clé tenue par une réservation expirée → reprise, une ligne revient.
+// `ON CONFLICT … DO UPDATE … WHERE expires_at < now()` is the heart of the
+// mechanism:
+//   - free key → insertion, one row comes back: we hold the reservation;
+//   - key held by a live reservation → the WHERE blocks the update, NO row comes
+//     back: someone else holds it;
+//   - key held by an expired reservation → take-over, one row comes back.
 //
-// Un `DO UPDATE SET key = key` sans WHERE, lui, rendrait toujours une ligne : on
-// ne saurait jamais si on vient de gagner la clé ou si on l'a volée à un appel en
-// cours. C'est cette confusion qui laisse passer les doublons.
+// A `DO UPDATE SET key = key` without a WHERE, on the other hand, would always
+// return a row: one would never know whether the key has just been won or stolen
+// from a call in flight. It is that confusion which lets duplicates through.
 const reserveQuery = `
 	INSERT INTO platform.idempotency_keys (key, fingerprint, status, expires_at)
 	VALUES ($1, $2, $3, now() + make_interval(secs => $4))
@@ -74,10 +77,10 @@ const inspectQuery = `
 	FROM platform.idempotency_keys
 	WHERE key = $1`
 
-// Reserve implémente ports.Reserve.
+// Reserve implements ports.Reserve.
 func (s *Store) Reserve(ctx context.Context, req domain.Request) (domain.Reservation, error) {
 	if !req.IsComplete() {
-		return domain.Reservation{}, fmt.Errorf("%w: clé=%q", domain.ErrIncomplete, req.Key)
+		return domain.Reservation{}, fmt.Errorf("%w: key=%q", domain.ErrIncomplete, req.Key)
 	}
 
 	var granted string
@@ -91,11 +94,11 @@ func (s *Store) Reserve(ctx context.Context, req domain.Request) (domain.Reserva
 	case errors.Is(err, pgx.ErrNoRows):
 		return s.inspect(ctx, req)
 	default:
-		return domain.Reservation{}, fmt.Errorf("réservation de la clé d'idempotence: %w", err)
+		return domain.Reservation{}, fmt.Errorf("reserving the idempotency key: %w", err)
 	}
 }
 
-// inspect lit la réservation qui nous a devancés et tranche.
+// inspect reads the reservation that got ahead of us and settles the outcome.
 func (s *Store) inspect(ctx context.Context, req domain.Request) (domain.Reservation, error) {
 	var (
 		fingerprint string
@@ -106,27 +109,27 @@ func (s *Store) inspect(ctx context.Context, req domain.Request) (domain.Reserva
 		Scan(&fingerprint, &status, &response)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		// La ligne a disparu entre l'insertion refusée et cette lecture : un
-		// Release concurrent. On refuse plutôt que de rejouer la réservation —
-		// faire réessayer un client est bénin, exécuter deux fois ne l'est pas.
-		return domain.Reservation{}, fmt.Errorf("%w: clé=%q", domain.ErrInFlight, req.Key)
+		// The row disappeared between the refused insertion and this read: a
+		// concurrent Release. We refuse rather than replay the reservation —
+		// making a client retry is benign, executing twice is not.
+		return domain.Reservation{}, fmt.Errorf("%w: key=%q", domain.ErrInFlight, req.Key)
 	}
 	if err != nil {
-		return domain.Reservation{}, fmt.Errorf("lecture de la clé d'idempotence: %w", err)
+		return domain.Reservation{}, fmt.Errorf("reading the idempotency key: %w", err)
 	}
 	if fingerprint != req.Fingerprint {
-		return domain.Reservation{}, fmt.Errorf("%w: clé=%q", domain.ErrConflict, req.Key)
+		return domain.Reservation{}, fmt.Errorf("%w: key=%q", domain.ErrConflict, req.Key)
 	}
 	if domain.Status(status) == domain.StatusDone {
 		return domain.Reservation{Replayed: true, Response: response}, nil
 	}
-	return domain.Reservation{}, fmt.Errorf("%w: clé=%q", domain.ErrInFlight, req.Key)
+	return domain.Reservation{}, fmt.Errorf("%w: key=%q", domain.ErrInFlight, req.Key)
 }
 
-// Complete implémente ports.Complete.
+// Complete implements ports.Complete.
 //
-// Le WHERE porte sur le statut ET l'expiration : mémoriser une réponse sur une
-// réservation morte ferait croire à une garantie qui n'a pas tenu.
+// The WHERE covers the status AND the expiry: memorising a response on a dead
+// reservation would suggest a guarantee that did not hold.
 func (s *Store) Complete(ctx context.Context, key domain.Key, response []byte) error {
 	const query = `
 		UPDATE platform.idempotency_keys
@@ -136,29 +139,29 @@ func (s *Store) Complete(ctx context.Context, key domain.Key, response []byte) e
 	tag, err := s.pool.Exec(ctx, query, key.String(), response,
 		string(domain.StatusDone), string(domain.StatusInFlight))
 	if err != nil {
-		return fmt.Errorf("mémorisation de la réponse idempotente: %w", err)
+		return fmt.Errorf("memorising the idempotent response: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%w: clé=%q", domain.ErrNotReserved, key)
+		return fmt.Errorf("%w: key=%q", domain.ErrNotReserved, key)
 	}
 	return nil
 }
 
-// Release implémente ports.Release.
+// Release implements ports.Release.
 func (s *Store) Release(ctx context.Context, key domain.Key) error {
 	const query = `DELETE FROM platform.idempotency_keys WHERE key = $1 AND status = $2`
 	if _, err := s.pool.Exec(ctx, query, key.String(), string(domain.StatusInFlight)); err != nil {
-		return fmt.Errorf("libération de la clé d'idempotence: %w", err)
+		return fmt.Errorf("releasing the idempotency key: %w", err)
 	}
 	return nil
 }
 
-// Purge implémente ports.Purge.
+// Purge implements ports.Purge.
 func (s *Store) Purge(ctx context.Context) (int64, error) {
 	const query = `DELETE FROM platform.idempotency_keys WHERE expires_at < now()`
 	tag, err := s.pool.Exec(ctx, query)
 	if err != nil {
-		return 0, fmt.Errorf("purge des clés d'idempotence: %w", err)
+		return 0, fmt.Errorf("purging the idempotency keys: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }

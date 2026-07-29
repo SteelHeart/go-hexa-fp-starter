@@ -10,33 +10,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// bearerInput porte le jeton présenté.
+// bearerInput carries the presented token.
 //
-// Le jeton passe par l'en-tête `Authorization` et non par le corps ou l'URL :
-// une URL se retrouve dans les journaux d'accès, l'historique du navigateur et
-// l'en-tête `Referer` envoyé au premier site tiers visité ensuite. Un jeton dans
-// une URL est un jeton publié.
+// The token goes through the `Authorization` header and not through the body or
+// the URL: a URL ends up in access logs, in the browser history and in the
+// `Referer` header sent to the first third-party site visited afterwards. A
+// token in a URL is a published token.
 type bearerInput struct {
-	Authorization string `header:"Authorization" doc:"Jeton porteur, sous la forme: Bearer <jeton>"`
+	Authorization string `header:"Authorization" doc:"Bearer token, in the form: Bearer <token>"`
 }
 
-// closeSessionOutput ne porte rien.
+// closeSessionOutput carries nothing.
 //
-// 204 et non 200 avec un corps « déconnecté » : il n'y a rien à dire, et un corps
-// inventé donnerait à un client l'idée de le lire.
+// 204 and not 200 with a "signed out" body: there is nothing to say, and an
+// invented body would give a client the idea of reading it.
 type closeSessionOutput struct {
 	Status int
 }
 
-// mountCloseSession expose la révocation du jeton présenté.
+// mountCloseSession exposes the revocation of the presented token.
 func mountCloseSession(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
 		OperationID: "close-session",
 		Method:      contract.CloseSessionRoute.Method,
 		Path:        contract.CloseSessionRoute.Path,
-		Summary:     "Fermer la session courante",
-		Description: "Révoque le jeton présenté, IMMÉDIATEMENT. " +
-			"Idempotent : fermer une session déjà fermée rend 204.",
+		Summary:     "Close the current session",
+		Description: "Revokes the presented token, IMMEDIATELY. " +
+			"Idempotent: closing an already closed session returns 204.",
 		Tags:          []string{apiTag},
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *bearerInput) (*closeSessionOutput, error) {

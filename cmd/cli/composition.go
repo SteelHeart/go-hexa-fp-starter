@@ -11,7 +11,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/ressources"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/resources"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
@@ -20,91 +20,92 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// monte porte ce que la CLI a assemblé, et de quoi le relâcher.
+// mounted carries what the CLI has assembled, and what is needed to release it.
 //
-// Type plutôt que trois retours : la règle d'architecture en autorise deux, et
-// c'est la SEPTIÈME fois que ce dépôt paie la même leçon.
-type monte struct {
+// A type rather than three return values: the architecture rule allows two,
+// and this is the SEVENTH time this repository pays the same lesson.
+type mounted struct {
 	cfg   config.Config
 	users userregistration.Module
-	conn  ressources.Connexions
+	conn  resources.Connections
 }
 
-// composer charge la configuration et monte ce dont la CLI a besoin.
+// compose loads the configuration and mounts what the CLI needs.
 //
-// # La MÊME configuration que les autres binaires
+// # The SAME configuration as the other binaries
 //
-// Le catalogue avant la configuration, exactement comme `cmd/server` et
-// `cmd/worker` (ADR 014). Un binaire d'administration qui lirait sa propre
-// configuration finirait par agir sur un autre magasin que celui qu'il prétend
-// administrer — et le défaut ne se verrait qu'en constatant l'absence d'un
-// compte pourtant créé.
+// The catalogue before the configuration, exactly as in `cmd/server` and
+// `cmd/worker` (ADR 014). An administration binary reading its own
+// configuration would end up acting on a store other than the one it claims to
+// administer — and the defect would only show when noticing the absence of an
+// account that was nevertheless created.
 //
-// # Le journal part sur la sortie d'ERREUR
+// # The log goes to the ERROR output
 //
-// La sortie standard d'une CLI est une donnée : un script la lit. Y mélanger des
-// lignes de journal casserait tout appelant qui en fait un `awk` ou un `cut`.
-func composer(ctx context.Context) (monte, error) {
+// A CLI's standard output is data: a script reads it. Mixing log lines into it
+// would break any caller that runs an `awk` or a `cut` over it.
+func compose(ctx context.Context) (mounted, error) {
 	catalog, err := moduleCatalog()
 	if err != nil {
-		return monte{}, err
+		return mounted{}, err
 	}
 
 	cfg, err := config.Load(catalog)
 	if err != nil {
-		return monte{}, fmt.Errorf("configuration: %w", err)
+		return mounted{}, fmt.Errorf("configuration: %w", err)
 	}
 
-	conn, err := ressources.Open(ctx, cfg, catalog)
+	conn, err := resources.Open(ctx, cfg, catalog)
 	if err != nil {
-		return monte{}, fmt.Errorf("ouverture des connexions: %w", err)
+		return mounted{}, fmt.Errorf("opening the connections: %w", err)
 	}
 
-	users, err := monterInscription(cfg, conn)
+	users, err := mountRegistration(cfg, conn)
 	if err != nil {
 		conn.Close()
-		return monte{}, err
+		return mounted{}, err
 	}
 
-	avertirMagasinVolatile(cfg)
-	return monte{cfg: cfg, users: users, conn: conn}, nil
+	warnVolatileStore(cfg)
+	return mounted{cfg: cfg, users: users, conn: conn}, nil
 }
 
-// avertirMagasinVolatile dit ce qu'un compte créé ici vaut réellement.
+// warnVolatileStore says what an account created here is really worth.
 //
-// # Pourquoi un avertissement et non un refus
+// # Why a warning and not a refusal
 //
-// Le dépileur, lui, REFUSE un pilote non partagé : il dépilerait un magasin vide
-// et tournerait sans rien faire. Le raisonnement est le même ici — un compte
-// écrit dans un magasin qui meurt avec le processus n'existe pas — mais la
-// conclusion diffère, et pour une raison précise : `user_registration` n'a
-// AUCUN autre pilote. Refuser rendrait cette commande définitivement
-// inutilisable, ce qui n'est pas un garde, c'est une suppression.
+// The dispatcher, for its part, REFUSES a non-shared driver: it would dispatch
+// an empty store and run doing nothing. The reasoning is the same here — an
+// account written into a store that dies with the process does not exist — but
+// the conclusion differs, and for a precise reason: `user_registration` has NO
+// other driver. Refusing would make this command permanently unusable, which
+// is not a guard, it is a removal.
 //
-// L'avertissement va sur la sortie d'ERREUR : la sortie standard est une donnée
-// qu'un script découpe, et y glisser une phrase casserait le découpage.
+// The warning goes to the ERROR output: standard output is data a script cuts
+// up, and slipping a sentence in there would break the cutting.
 //
-// Le jour où un pilote partagé existera, ce cas devra devenir un refus — comme
-// pour le dépileur.
-func avertirMagasinVolatile(cfg config.Config) {
+// The day a shared driver exists, this case will have to become a refusal —
+// as for the dispatcher.
+func warnVolatileStore(cfg config.Config) {
 	if cfg.Modules.DriverOf(userregistration.Name) != userregistration.DriverMemory {
 		return
 	}
 	fmt.Fprintln(os.Stderr,
-		"avertissement: pilote `memory` — le compte créé MEURT avec ce processus "+
-			"et ne sera visible d'aucun autre binaire. Aucun pilote partagé n'existe "+
-			"encore pour user_registration.")
+		"warning: `memory` driver — the account created DIES with this process "+
+			"and will be visible to no other binary. No shared driver exists "+
+			"yet for user_registration.")
 }
 
-// monterInscription branche le module d'inscription.
+// mountRegistration wires the registration module.
 //
-// Le pilote et les paramètres de hachage viennent de la configuration, comme
-// dans `cmd/server` : un compte créé par la CLI doit être en tout point celui
-// qu'aurait créé la surface HTTP, sans quoi la démonstration ne vaut rien.
-func monterInscription(cfg config.Config, conn ressources.Connexions) (userregistration.Module, error) {
+// The driver and the hashing parameters come from the configuration, as in
+// `cmd/server`: an account created by the CLI must be in every respect the one
+// the HTTP surface would have created, otherwise the demonstration is worth
+// nothing.
+func mountRegistration(cfg config.Config, conn resources.Connections) (userregistration.Module, error) {
 	outboxMod, err := outbox.New(cfg.Modules[outbox.Name], outbox.Deps{Pool: conn.Pool, Now: time.Now})
 	if err != nil {
-		return userregistration.Module{}, fmt.Errorf("module outbox: %w", err)
+		return userregistration.Module{}, fmt.Errorf("outbox module: %w", err)
 	}
 
 	hasher := security.NewHasher(security.Argon2Params{
@@ -117,20 +118,20 @@ func monterInscription(cfg config.Config, conn ressources.Connexions) (userregis
 		cfg.Modules.DriverOf(userregistration.Name), userregistration.Deps{
 			HashPassword: hashing.New(hasher),
 			PublishEvent: outboxpub.New(outboxMod.Enqueue),
-			GenerateID:   nouvelIdentifiant,
+			GenerateID:   newIdentifier,
 			Now:          userregistration.SystemClock(),
 		})
 	if err != nil {
-		return userregistration.Module{}, fmt.Errorf("module user_registration: %w", err)
+		return userregistration.Module{}, fmt.Errorf("user_registration module: %w", err)
 	}
 	return users, nil
 }
 
-// nouvelIdentifiant produit un identifiant ordonné dans le temps.
+// newIdentifier produces a time-ordered identifier.
 //
-// UUID v7 et non v4 : l'identifiant devient une clé primaire, et une clé
-// aléatoire disperse les insertions sur tout l'index.
-func nouvelIdentifiant() domain.UserID {
+// UUID v7 and not v4: the identifier becomes a primary key, and a random key
+// scatters the inserts across the whole index.
+func newIdentifier() domain.UserID {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return domain.UserID(uuid.NewString())
@@ -138,19 +139,19 @@ func nouvelIdentifiant() domain.UserID {
 	return domain.UserID(id.String())
 }
 
-// moduleCatalog assemble ce que la configuration a le droit de nommer.
+// moduleCatalog assembles what the configuration is allowed to name.
 func moduleCatalog() (config.ModuleCatalog, error) {
 	coreCatalog, err := core.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue du noyau: %w", err)
+		return nil, fmt.Errorf("core catalogue: %w", err)
 	}
 	businessCatalog, err := modules.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue des modules métier: %w", err)
+		return nil, fmt.Errorf("business module catalogue: %w", err)
 	}
 	merged, err := config.MergeCatalogs(coreCatalog, businessCatalog)
 	if err != nil {
-		return nil, fmt.Errorf("fusion des catalogues: %w", err)
+		return nil, fmt.Errorf("merging the catalogues: %w", err)
 	}
 	return merged, nil
 }

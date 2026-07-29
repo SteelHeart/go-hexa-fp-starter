@@ -1,6 +1,6 @@
-// Package audit est le module noyau de journalisation d'audit.
+// Package audit is the core module of audit logging.
 //
-// Composition root du module : le seul endroit qui connaît les pilotes.
+// Composition root of the module: the only place that knows the drivers.
 package audit
 
 import (
@@ -19,47 +19,48 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the name of the module in config/modules.yaml.
 const Name = "audit"
 
-// Noms des pilotes de ce module.
+// Names of the drivers of this module.
 //
-// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
-// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
-// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
-// une constante qui n'existe pas, un littéral mal orthographié passe.
+// They exist so that `Catalog` and the `switch` of `New` share the SAME
+// identifier. This is what makes divergence between the two IMPOSSIBLE, where
+// ADR 014 only promised to make it improbable — the compiler refuses a
+// constant that does not exist, a misspelt literal goes through.
 //
-// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
-// Il avait raison, et pour une raison plus forte que la sienne.
+// The `goconst` linter reported the repetition as soon as the catalogue
+// arrived. It was right, and for a stronger reason than its own.
 const (
 	driverLog      = "log"
 	driverPostgres = "postgres"
 )
 
-// Module expose le port d'audit.
+// Module exposes the audit port.
 type Module struct{ Record ports.Record }
 
-// Deps porte les dépendances des pilotes.
+// Deps carries the dependencies of the drivers.
 //
-// Pool peut être nil : le pilote `log` n'en a pas besoin.
+// Pool may be nil: the `log` driver does not need one.
 type Deps struct {
 	Pool   *pgxpool.Pool
 	Logger *slog.Logger
 	Now    func() time.Time
 }
 
-// Erreurs du module.
+// Errors of the module.
 var (
-	ErrDisabled       = errors.New("module audit désactivé dans config/modules.yaml")
-	ErrPoolRequired   = errors.New("le pilote postgres exige une connexion à la base")
-	ErrLoggerRequired = errors.New("le pilote log exige un journal")
-	errUnknownDriver  = errors.New("pilote audit inconnu")
+	ErrDisabled       = errors.New("audit module disabled in config/modules.yaml")
+	ErrPoolRequired   = errors.New("the postgres driver requires a database connection")
+	ErrLoggerRequired = errors.New("the log driver requires a logger")
+	errUnknownDriver  = errors.New("unknown audit driver")
 )
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 //
-// Un pilote inconnu refuse le démarrage : la validation de configuration l'a déjà
-// rejeté, et ce second refus garantit qu'aucun chemin ne contourne le premier.
+// An unknown driver refuses to start: configuration validation has already
+// rejected it, and this second refusal guarantees that no path bypasses the
+// first.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if deps.Now == nil {
 		deps.Now = time.Now
@@ -78,10 +79,10 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 }
 
-// disabled rend un module qui refuse à l'appel.
+// disabled returns a module that refuses when called.
 //
-// Un audit désactivé ne doit pas rendre `nil` en silence : une trace d'audit qu'on
-// croit écrite et qui ne l'est pas est pire que pas d'audit du tout.
+// A disabled audit must not return `nil` silently: an audit trace one believes
+// written and which is not is worse than no audit at all.
 func disabled() Module {
 	return Module{Record: func(context.Context, domain.Entry) error { return ErrDisabled }}
 }

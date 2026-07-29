@@ -23,9 +23,9 @@ func TestEnqueueThenClaimReturnsTheMessage(t *testing.T) {
 		t.Fatalf("Claim: %v", err)
 	}
 	if len(claimed) != 1 || claimed[0].ID != id {
-		t.Fatalf("Claim a retourné %d message(s), attendu 1 portant %s", len(claimed), id)
+		t.Fatalf("Claim returned %d message(s), want 1 carrying %s", len(claimed), id)
 	}
 	if claimed[0].Status != domain.StatusPending {
-		t.Errorf("statut initial = %q, attendu pending", claimed[0].Status)
+		t.Errorf("initial status = %q, want pending", claimed[0].Status)
 	}
 }

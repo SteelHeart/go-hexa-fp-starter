@@ -9,41 +9,40 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// amorcerAuthentification crée le compte d'amorçage et l'ANNONCE, une fois.
+// bootstrapAuthentication creates the bootstrap account and ANNOUNCES it, once.
 //
-// # Pourquoi le secret est écrit dans le journal
+// # Why the secret is written to the log
 //
-// Parce que l'alternative est pire. Un mot de passe par défaut dans un fichier
-// versionné est un mot de passe déployé : personne ne le change avant
-// l'incident. Un secret engendré, affiché une seule fois, et qui disparaît au
-// redémarrage ne peut pas suivre le projet en production.
+// Because the alternative is worse. A default password in a versioned file is
+// a deployed password: nobody changes it before the incident. A generated
+// secret, shown a single time, and gone on restart cannot follow the project
+// into production.
 //
-// Le compromis est BORNÉ : `auth.Bootstrap` ne crée rien hors `development` et
-// `test`, et le refus a son test. Ici, le journal ne peut donc contenir un
-// secret que sur une machine de développement.
+// The trade-off is BOUNDED: `auth.Bootstrap` creates nothing outside
+// `development` and `test`, and the refusal has its test. Here, the log can
+// therefore only contain a secret on a development machine.
 //
-// # Pourquoi ce n'est pas au module de le journaliser
+// # Why it is not the module's job to log it
 //
-// Un module noyau ne journalise pas — il rend compte. C'est cette frontière qui
-// garantit qu'un secret ne part pas dans un collecteur d'observabilité parce
-// qu'un module a cru bien faire. La décision d'écrire est prise ici, une seule
-// fois, à un endroit qu'on relit.
-func amorcerAuthentification(
+// A core module does not log — it reports. That boundary is what guarantees a
+// secret does not leave for an observability collector because a module meant
+// well. The decision to write is taken here, once, in a place people re-read.
+func bootstrapAuthentication(
 	ctx context.Context, mod auth.Module, env config.Environment, logger *slog.Logger,
 ) error {
 	report, err := auth.Bootstrap(ctx, mod, env)
 	if err != nil {
-		return fmt.Errorf("amorçage de l'authentification: %w", err)
+		return fmt.Errorf("authentication bootstrap: %w", err)
 	}
 	if !report.Created {
 		return nil
 	}
 
 	logger.WarnContext(ctx,
-		"COMPTE D'AMORÇAGE CRÉÉ — développement uniquement, affiché une seule fois",
+		"BOOTSTRAP ACCOUNT CREATED — development only, shown a single time",
 		slog.String("sujet", report.Subject),
 		slog.String("secret", report.Secret),
-		slog.String("note", "perdu au redémarrage : le pilote memory ne conserve rien"),
+		slog.String("note", "lost on restart: the memory driver keeps nothing"),
 	)
 	return nil
 }

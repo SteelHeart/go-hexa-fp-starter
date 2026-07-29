@@ -6,30 +6,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestValidRegistrationNeedsNoFurtherValidation : une commande valide produit un
-// type qui PORTE sa validité.
+// TestValidRegistrationNeedsNoFurtherValidation: a valid command produces a type
+// that CARRIES its validity.
 //
-// C'est le franchissement de frontière, et il n'a lieu qu'une fois. En aval,
-// aucune étape ne revalide : elle ne pourrait pas, puisqu'elle ne reçoit plus de
-// `string` mais des types du domaine. C'est ce qui élimine la validation défensive
-// répétée — celle qu'on ajoute « au cas où » et qui finit par diverger d'un endroit
-// à l'autre.
+// This is the boundary crossing, and it happens only once. Downstream, no step
+// revalidates: it could not, since it no longer receives a `string` but domain
+// types. That is what eliminates repeated defensive validation — the kind added
+// "just in case" that ends up diverging from one place to another.
 func TestValidRegistrationNeedsNoFurtherValidation(t *testing.T) {
 	t.Parallel()
 
 	cmd := domain.RegistrationCommand{
 		Email:    "  Alice@Example.COM ",
-		Password: "correct cheval batterie agrafe",
+		Password: "correct horse battery staple",
 	}
 
-	valide, err, ok := domain.ParseRegistration(cmd).Get()
+	valid, err, ok := domain.ParseRegistration(cmd).Get()
 	if !ok {
-		t.Fatalf("commande valide refusée: %v", err)
+		t.Fatalf("valid command refused: %v", err)
 	}
-	if got := valide.Email.String(); got != "alice@example.com" {
-		t.Errorf("adresse = %q, attendu la forme normalisée", got)
+	if got := valid.Email.String(); got != "alice@example.com" {
+		t.Errorf("address = %q, want the normalised form", got)
 	}
-	if valide.Password.Expose() != cmd.Password {
-		t.Error("le mot de passe doit traverser la validation sans être altéré")
+	if valid.Password.Expose() != cmd.Password {
+		t.Error("the password must cross the validation without being altered")
 	}
 }

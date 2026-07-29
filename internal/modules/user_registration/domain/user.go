@@ -2,28 +2,28 @@ package domain
 
 import "time"
 
-// UserID identifie un utilisateur. Type dédié, jamais une string nue dans une
-// signature (rules/ports-et-contrats.md §3).
+// UserID identifies a user. A dedicated type, never a bare string in a signature
+// (rules/ports-et-contrats.md §3).
 type UserID string
 
-// String retourne l'identifiant.
+// String returns the identifier.
 func (id UserID) String() string { return string(id) }
 
-// IsZero indique un identifiant non renseigné.
+// IsZero reports an identifier that was never set.
 func (id UserID) IsZero() bool { return id == "" }
 
-// Status énumère les états d'un compte. Ensemble fermé, switch exhaustif.
+// Status enumerates the states of an account. Closed set, exhaustive switch.
 type Status string
 
-// Les états d'un compte.
+// The states of an account.
 const (
 	StatusPending Status = "pending"
 	StatusActive  Status = "active"
 	StatusBlocked Status = "blocked"
 )
 
-// User est un utilisateur enregistré. Tous ses champs sont des types du domaine :
-// il est structurellement impossible d'y placer une valeur invalide.
+// User is a registered user. All its fields are domain types: it is structurally
+// impossible to place an invalid value in it.
 type User struct {
 	ID           UserID
 	Email        Email
@@ -32,10 +32,10 @@ type User struct {
 	CreatedAt    time.Time
 }
 
-// NewUser construit un utilisateur nouvellement inscrit.
+// NewUser builds a newly registered user.
 //
-// Le compte naît PENDING : un courriel de confirmation devra l'activer. Naître
-// actif serait un « fail-open » — l'adresse n'est pas encore prouvée.
+// The account is born PENDING: a confirmation email will have to activate it.
+// Being born active would be a "fail-open" — the address is not proven yet.
 func NewUser(id UserID, email Email, hash PasswordHash, at time.Time) User {
 	return User{
 		ID:           id,
@@ -46,17 +46,17 @@ func NewUser(id UserID, email Email, hash PasswordHash, at time.Time) User {
 	}
 }
 
-// WithStatus retourne une copie portant le nouvel état. L'original n'est jamais
-// modifié : le récepteur est une valeur, et `revive` refuserait un pointeur.
+// WithStatus returns a copy carrying the new state. The original is never
+// modified: the receiver is a value, and `revive` would refuse a pointer.
 func (u User) WithStatus(status Status) User {
 	u.Status = status
 	return u
 }
 
-// CanAuthenticate indique si le compte peut ouvrir une session.
+// CanAuthenticate reports whether the account may open a session.
 //
-// Deny par défaut : tout état inconnu refuse. Ajouter un Status sans compléter
-// ce switch fait échouer la CI (`exhaustive`).
+// Deny by default: every unknown state refuses. Adding a Status without
+// completing this switch fails the CI (`exhaustive`).
 func (u User) CanAuthenticate() bool {
 	switch u.Status {
 	case StatusActive:

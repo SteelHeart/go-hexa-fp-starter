@@ -1,52 +1,53 @@
-// Package domain porte le vocabulaire de la notification, sans dépendance.
+// Package domain carries the notification vocabulary, with no dependency.
 //
-// # Pourquoi ce module existe
+// # Why this module exists
 //
-// `user.registered.v1` est publié depuis la première tranche verticale, et
-// **personne ne s'y abonne**. La chaîne s'arrête au relais : l'événement est
-// durable, transporté, et sans effet. Un module qui produit un événement que
-// rien ne consomme est un module dont la moitié asynchrone n'a jamais tourné —
-// et ce dépôt a déjà mesuré ce que coûte du code jamais exécuté.
+// `user.registered.v1` has been published since the first vertical slice, and
+// **nobody subscribes to it**. The chain stops at the relay: the event is
+// durable, transported, and without effect. A module that produces an event
+// nothing consumes is a module whose asynchronous half has never run — and this
+// repository has already measured what never-executed code costs.
 //
-// # Ce que ce module NE sait pas
+// # What this module does NOT know
 //
-// Il ignore `user_registration`, l'inscription, et le mot « bienvenue ». Il
-// envoie un message à un destinataire sur un canal. C'est le composition root
-// qui relie un événement métier à un message — et cette ignorance est ce qui
-// rend le module réutilisable par `billing` demain sans le toucher.
+// It knows nothing of `user_registration`, of registration, or of the word
+// "welcome". It sends a message to a recipient over a channel. It is the
+// composition root that links a business event to a message — and that
+// ignorance is what makes the module reusable by `billing` tomorrow without
+// touching it.
 //
-// # Ce paquet est PUR
+// # This package is PURE
 //
-// Ni horloge, ni I/O, ni gabarit. Le rendu d'un contenu appartient à l'appelant :
-// un module noyau qui embarquerait un moteur de gabarits imposerait sa syntaxe à
-// toutes les applications du socle.
+// No clock, no I/O, no template. Rendering content belongs to the caller: a core
+// module that embedded a template engine would impose its syntax on every
+// application of the starter.
 package domain
 
 import "errors"
 
-// Erreurs sentinelles du module.
+// Sentinel errors of the module.
 //
-// `internal/core/**` retourne `error` et non `Result[T, domain.Error]` : la
-// frontière est nette et vérifiable, et un module noyau est technique.
+// `internal/core/**` returns `error` and not `Result[T, domain.Error]`: the
+// boundary is clean and verifiable, and a core module is technical.
 var (
-	// ErrIncomplete refuse un message mal formé AVANT tout envoi.
+	// ErrIncomplete refuses a malformed message BEFORE any send.
 	//
-	// Le refus est en amont pour deux raisons : il ne coûte aucun appel réseau,
-	// et il ne laisse pas une adresse vide atteindre un fournisseur, où elle
-	// deviendrait un rejet facturé et journalisé chez un tiers.
-	ErrIncomplete = errors.New("message incomplet")
+	// The refusal is upstream for two reasons: it costs no network call, and it
+	// does not let an empty address reach a provider, where it would become a
+	// billed rejection logged at a third party.
+	ErrIncomplete = errors.New("incomplete message")
 
-	// ErrUnknownChannel refuse un canal que ce module ne sait pas servir.
+	// ErrUnknownChannel refuses a channel this module cannot serve.
 	//
-	// Deny par défaut : un canal inconnu ne se résout jamais en « le plus
-	// proche ». Se rabattre sur le courriel parce que le SMS n'est pas livré
-	// enverrait un code de vérification à la mauvaise adresse.
-	ErrUnknownChannel = errors.New("canal de notification inconnu")
+	// Deny by default: an unknown channel never resolves to "the closest one".
+	// Falling back to email because SMS is not shipped would send a verification
+	// code to the wrong address.
+	ErrUnknownChannel = errors.New("unknown notification channel")
 
-	// ErrUndeliverable signale un échec du fournisseur.
+	// ErrUndeliverable signals a provider failure.
 	//
-	// Distinct d'`ErrIncomplete` : le message était valide, c'est l'envoi qui a
-	// échoué. La différence décide du réessai — on rejoue une panne, jamais une
-	// adresse invalide.
-	ErrUndeliverable = errors.New("notification non délivrée")
+	// Distinct from `ErrIncomplete`: the message was valid, it is the send that
+	// failed. The difference decides the retry — one replays an outage, never an
+	// invalid address.
+	ErrUndeliverable = errors.New("notification not delivered")
 )

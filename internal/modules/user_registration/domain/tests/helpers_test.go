@@ -1,16 +1,16 @@
-// Package tests contient les tests en BOÎTE NOIRE du domaine de l'inscription :
-// ils n'utilisent que l'API publique, exactement comme le ferait un cas d'usage.
+// Package tests holds the BLACK BOX tests of the registration domain: they only
+// use the public API, exactly like a use case would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 //
-// # Pourquoi ces tests sont les plus rentables du dépôt
+// # Why these tests are the most profitable in the repository
 //
-// Le domaine est PUR : ni I/O, ni horloge, ni aléa. Il se teste donc en
-// microsecondes, sans conteneur, sans double, sans montage. C'est là que chaque
-// règle métier et chaque cas limite doivent être couverts — pas plus haut, où
-// chaque test coûte cent fois plus cher pour prouver la même chose.
+// The domain is PURE: no I/O, no clock, no randomness. It therefore tests in
+// microseconds, without a container, without a double, without any assembly.
+// That is where every business rule and every edge case must be covered — not
+// higher up, where each test costs a hundred times more to prove the same thing.
 package tests
 
 import (
@@ -20,33 +20,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// emailValide construit une adresse dont on sait qu'elle passe, ou fait échouer
-// le test. Évite de répéter la discrimination du Result dans chaque fichier.
-func emailValide(t *testing.T, raw string) domain.Email {
+// validEmail builds an address known to pass, or fails the test. Avoids
+// repeating the discrimination of the Result in every file.
+func validEmail(t *testing.T, raw string) domain.Email {
 	t.Helper()
 	value, err, ok := domain.NewEmail(raw).Get()
 	if !ok {
-		t.Fatalf("NewEmail(%q) devait réussir, refusée: %v", raw, err)
+		t.Fatalf("NewEmail(%q) should have succeeded, refused: %v", raw, err)
 	}
 	return value
 }
 
-// codeDe extrait le code d'erreur d'un Result en échec.
-func codeDe[T any](t *testing.T, r result.Result[T, domain.Error]) domain.ErrorCode {
+// codeOf extracts the error code of a failed Result.
+func codeOf[T any](t *testing.T, r result.Result[T, domain.Error]) domain.ErrorCode {
 	t.Helper()
 	_, err, ok := r.Get()
 	if ok {
-		t.Fatal("un échec était attendu, reçu un succès")
+		t.Fatal("a failure was expected, got a success")
 	}
 	return err.Code
 }
 
-// erreurDe extrait l'erreur complète d'un Result en échec.
-func erreurDe[T any](t *testing.T, r result.Result[T, domain.Error]) domain.Error {
+// failureOf extracts the complete error of a failed Result.
+func failureOf[T any](t *testing.T, r result.Result[T, domain.Error]) domain.Error {
 	t.Helper()
 	_, err, ok := r.Get()
 	if ok {
-		t.Fatal("un échec était attendu, reçu un succès")
+		t.Fatal("a failure was expected, got a success")
 	}
 	return err
 }

@@ -10,27 +10,26 @@ import (
 	pgoutbox "github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/drivers/postgres"
 )
 
-// TestOutboxClaimNeverHandsTheSameMessageTwice éprouve le cœur du mécanisme :
-// `FOR UPDATE SKIP LOCKED`.
+// TestOutboxClaimNeverHandsTheSameMessageTwice exercises the heart of the
+// mechanism: `FOR UPDATE SKIP LOCKED`.
 //
-// C'est LA propriété qu'aucun test unitaire ne peut atteindre. Le pilote
-// `memory` la simule ; ici, ce sont deux transactions Postgres réelles qui se
-// disputent les mêmes lignes.
+// This is THE property no unit test can reach. The `memory` driver simulates
+// it; here, two real Postgres transactions compete for the same rows.
 //
-// Ce qui casserait sans elle : deux répliques du dépileur publieraient le même
-// événement. Le consommateur verrait un doublon — et un doublon d'événement
-// métier, c'est un courriel envoyé deux fois, ou pire, un paiement rejoué.
+// What would break without it: two replicas of the dispatcher would publish
+// the same event. The consumer would see a duplicate — and a duplicated
+// business event is an email sent twice, or worse, a payment replayed.
 //
-// Le test réserve depuis DEUX transactions concurrentes, gardées ouvertes
-// pendant la réservation de l'autre. Sans `SKIP LOCKED`, la seconde attendrait
-// le verrou puis rendrait les mêmes lignes ; avec, elle les saute.
+// The test claims from TWO concurrent transactions, each held open while the
+// other claims. Without `SKIP LOCKED`, the second would wait for the lock and
+// then return the same rows; with it, it skips them.
 func TestOutboxClaimNeverHandsTheSameMessageTwice(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
 	store := pgoutbox.New(p)
 
-	// Un type d'événement propre à ce test : la table est partagée, et un autre
-	// test qui tourne en parallèle ne doit pas fausser le compte.
+	// An event type specific to this test: the table is shared, and another
+	// test running in parallel must not skew the count.
 	eventType := unique(t, "integration.claim")
 
 	const total = 6
@@ -44,22 +43,22 @@ func TestOutboxClaimNeverHandsTheSameMessageTwice(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		_, _ = p.Exec(ctxTest(t), //nolint:errcheck // nettoyage, l'échec ne dit rien d'utile
+		_, _ = p.Exec(ctxTest(t), //nolint:errcheck // cleanup, its failure says nothing useful
 			"DELETE FROM platform.outbox_messages WHERE event_type = $1", eventType)
 	})
 
-	// Deux transactions, ouvertes en même temps. Chacune réserve, puis attend
-	// que l'autre ait réservé avant de valider : c'est cette simultanéité qui
-	// met `SKIP LOCKED` à l'épreuve.
-	var attente sync.WaitGroup
-	vus := make([][]domain.MessageID, 2)
+	// Two transactions, open at the same time. Each one claims, then waits for
+	// the other to have claimed before committing: it is that simultaneity
+	// which puts `SKIP LOCKED` to the test.
+	var wg sync.WaitGroup
+	seen := make([][]domain.MessageID, 2)
 	var mu sync.Mutex
-	pret := make(chan struct{})
+	ready := make(chan struct{})
 
 	for i := range 2 {
-		attente.Add(1)
+		wg.Add(1)
 		go func() {
-			defer attente.Done()
+			defer wg.Done()
 
 			tx, err := p.Begin(ctx)
 			if err != nil {
@@ -90,45 +89,45 @@ func TestOutboxClaimNeverHandsTheSameMessageTwice(t *testing.T) {
 			rows.Close()
 
 			mu.Lock()
-			vus[i] = ids
+			seen[i] = ids
 			mu.Unlock()
 
-			// Les deux transactions restent ouvertes jusqu'ici : sans cette
-			// barrière, la première pourrait relâcher ses verrous avant que la
-			// seconde ne réserve, et le test passerait sans rien prouver.
-			<-pret
+			// Both transactions stay open until here: without this barrier,
+			// the first could release its locks before the second claims, and
+			// the test would pass without proving anything.
+			<-ready
 		}()
 	}
 
-	// Laisse les deux réserver, puis les libère.
+	// Let both claim, then release them.
 	for {
 		mu.Lock()
-		fait := len(vus[0]) > 0 && len(vus[1]) > 0
+		done := len(seen[0]) > 0 && len(seen[1]) > 0
 		mu.Unlock()
-		if fait {
+		if done {
 			break
 		}
 	}
-	close(pret)
-	attente.Wait()
+	close(ready)
+	wg.Wait()
 
-	if len(vus[0]) == 0 || len(vus[1]) == 0 {
-		t.Fatalf("une transaction n'a rien réservé : %d et %d — le test ne prouverait rien",
-			len(vus[0]), len(vus[1]))
+	if len(seen[0]) == 0 || len(seen[1]) == 0 {
+		t.Fatalf("one transaction claimed nothing: %d and %d — the test would prove nothing",
+			len(seen[0]), len(seen[1]))
 	}
 
-	croises := map[domain.MessageID]bool{}
-	for _, id := range vus[0] {
-		croises[id] = true
+	crossed := map[domain.MessageID]bool{}
+	for _, id := range seen[0] {
+		crossed[id] = true
 	}
-	for _, id := range vus[1] {
-		if croises[id] {
-			t.Fatalf("le message %s a été réservé par les DEUX transactions : "+
-				"FOR UPDATE SKIP LOCKED ne protège plus, un dépileur répliqué publierait des doublons", id)
+	for _, id := range seen[1] {
+		if crossed[id] {
+			t.Fatalf("message %s was claimed by BOTH transactions: "+
+				"FOR UPDATE SKIP LOCKED no longer protects, a replicated dispatcher would publish duplicates", id)
 		}
 	}
-	if got := len(vus[0]) + len(vus[1]); got != total {
-		t.Errorf("%d messages réservés au total, attendu %d — des lignes ont été perdues ou dupliquées",
+	if got := len(seen[0]) + len(seen[1]); got != total {
+		t.Errorf("%d messages claimed in total, want %d — rows were lost or duplicated",
 			got, total)
 	}
 }

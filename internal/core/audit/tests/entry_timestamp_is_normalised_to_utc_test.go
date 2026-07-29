@@ -7,8 +7,8 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/domain"
 )
 
-// TestEntryTimestampIsNormalisedToUTC : un journal d'audit relu six mois plus tard
-// depuis un autre fuseau doit se comparer sans arithmétique. WithTime normalise.
+// TestEntryTimestampIsNormalisedToUTC: an audit log re-read six months later
+// from another time zone must compare without arithmetic. WithTime normalises.
 func TestEntryTimestampIsNormalisedToUTC(t *testing.T) {
 	t.Parallel()
 
@@ -17,9 +17,9 @@ func TestEntryTimestampIsNormalisedToUTC(t *testing.T) {
 
 	stamped := domain.Entry{}.WithTime(at)
 	if stamped.At.Location() != time.UTC {
-		t.Errorf("fuseau = %v, attendu UTC", stamped.At.Location())
+		t.Errorf("time zone = %v, want UTC", stamped.At.Location())
 	}
 	if !stamped.At.Equal(at) {
-		t.Errorf("l'instant a été déplacé: %v ≠ %v", stamped.At, at)
+		t.Errorf("the instant has been moved: %v ≠ %v", stamped.At, at)
 	}
 }

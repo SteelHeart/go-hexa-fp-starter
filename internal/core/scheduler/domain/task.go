@@ -1,11 +1,11 @@
-// Package domain porte le vocabulaire des tâches périodiques, sans dépendance.
+// Package domain carries the vocabulary of periodic tasks, with no dependency.
 //
-// # Le vrai problème n'est pas la périodicité
+// # The real problem is not periodicity
 //
-// Un ticker suffit à répéter. Le problème est que N répliques exécuteraient la
-// tâche N fois : un rappel envoyé trois fois, une facture émise trois fois. Toute
-// la valeur du module est dans l'ÉLECTION, pas dans l'horloge — c'est pourquoi
-// l'élection est un port et la boucle une simple orchestration.
+// A ticker is enough to repeat. The problem is that N replicas would run the
+// task N times: a reminder sent three times, an invoice issued three times. All
+// the value of the module is in the ELECTION, not in the clock — which is why
+// the election is a port and the loop a simple orchestration.
 package domain
 
 import (
@@ -15,46 +15,46 @@ import (
 	"time"
 )
 
-// TaskName identifie une tâche. C'est aussi la clé d'élection : deux tâches de
-// même nom s'excluent mutuellement, y compris entre répliques.
+// TaskName identifies a task. It is also the election key: two tasks with the
+// same name exclude each other, including between replicas.
 type TaskName string
 
-// String rend le nom sous forme brute.
+// String returns the name in raw form.
 func (n TaskName) String() string { return string(n) }
 
-// ErrInvalidTask refuse une tâche inexploitable.
-var ErrInvalidTask = errors.New("tâche planifiée invalide")
+// ErrInvalidTask refuses an unusable task.
+var ErrInvalidTask = errors.New("invalid scheduled task")
 
-// Task décrit une tâche périodique. Volontairement sans comportement : le travail
-// est un port (ports.Job), pas un champ de structure, pour que le domaine reste
-// pur et que la description d'une tâche se compare et se journalise.
+// Task describes a periodic task. Deliberately without behaviour: the work is a
+// port (ports.Job), not a struct field, so that the domain stays pure and the
+// description of a task can be compared and logged.
 type Task struct {
 	Name  TaskName
 	Every time.Duration
-	// Timeout borne une exécution. À zéro, la période sert de borne : une tâche qui
-	// dépasse sa propre période est déjà en retard, la laisser courir davantage ne
-	// fait qu'empiler les exécutions.
+	// Timeout bounds one execution. At zero, the period serves as the bound: a
+	// task that overruns its own period is already late, letting it run any
+	// longer only piles executions up.
 	Timeout time.Duration
 }
 
-// Validate refuse une tâche qui ne peut pas être exécutée sainement.
+// Validate refuses a task that cannot be run soundly.
 //
-// Une période nulle ou négative ferait paniquer time.NewTicker : le refus au
-// démarrage vaut mieux qu'un plantage à la première minute d'exécution.
+// A null or negative period would make time.NewTicker panic: refusing at
+// startup is better than a crash in the first minute of execution.
 func (t Task) Validate() error {
 	if t.Name == "" {
-		return fmt.Errorf("%w: nom manquant", ErrInvalidTask)
+		return fmt.Errorf("%w: name missing", ErrInvalidTask)
 	}
 	if t.Every <= 0 {
-		return fmt.Errorf("%w: %s a une période de %v", ErrInvalidTask, t.Name, t.Every)
+		return fmt.Errorf("%w: %s has a period of %v", ErrInvalidTask, t.Name, t.Every)
 	}
 	if t.Timeout < 0 {
-		return fmt.Errorf("%w: %s a un délai négatif", ErrInvalidTask, t.Name)
+		return fmt.Errorf("%w: %s has a negative timeout", ErrInvalidTask, t.Name)
 	}
 	return nil
 }
 
-// Deadline rend la borne d'une exécution.
+// Deadline returns the bound of one execution.
 func (t Task) Deadline() time.Duration {
 	if t.Timeout > 0 {
 		return t.Timeout
@@ -62,53 +62,54 @@ func (t Task) Deadline() time.Duration {
 	return t.Every
 }
 
-// Event nomme ce qui est arrivé à une tâche.
+// Event names what happened to a task.
 //
-// Déclaré dans le domaine parce que l'orchestration ne journalise PAS : elle rend
-// compte (ports.Report). C'est ce qui la garde pure — aucun logger, aucune I/O —
-// et ce qui permet à un test de vérifier une politique d'exécution en lisant des
-// valeurs plutôt qu'en analysant du JSON.
+// Declared in the domain because the orchestration does NOT log: it reports
+// (ports.Report). That is what keeps it pure — no logger, no I/O — and what
+// allows a test to verify an execution policy by reading values rather than by
+// parsing JSON.
 type Event string
 
 const (
-	// EventSkipped : une autre réplique tient la tâche. Cas NOMINAL, pas un incident.
+	// EventSkipped: another replica holds the task. NOMINAL case, not an incident.
 	EventSkipped Event = "skipped"
-	// EventSucceeded : le travail s'est terminé sans erreur.
+	// EventSucceeded: the work finished without error.
 	EventSucceeded Event = "succeeded"
-	// EventFailed : le travail a retourné une erreur.
+	// EventFailed: the work returned an error.
 	EventFailed Event = "failed"
-	// EventElectionFailed : le mécanisme d'élection est en panne. La tâche n'a PAS
-	// été exécutée — c'est le repli sûr.
+	// EventElectionFailed: the election mechanism is down. The task was NOT run
+	// — that is the safe fallback.
 	EventElectionFailed Event = "election_failed"
-	// EventReleaseFailed : le travail est fait mais le verrou n'a pas été rendu. La
-	// tâche ne tournera plus jusqu'à péremption du verrou : à surveiller.
+	// EventReleaseFailed: the work is done but the lock was not given back. The
+	// task will not run again until the lock expires: to be watched.
 	EventReleaseFailed Event = "release_failed"
 )
 
-// Outcome est le compte rendu d'une tentative d'exécution.
+// Outcome is the report of an execution attempt.
 type Outcome struct {
 	Task     TaskName
 	Event    Event
 	Duration time.Duration
-	// Err porte la cause pour EventFailed, EventElectionFailed et
-	// EventReleaseFailed. Nil partout ailleurs.
+	// Err carries the cause for EventFailed, EventElectionFailed and
+	// EventReleaseFailed. Nil everywhere else.
 	Err error
 }
 
-// LockKey dérive un entier stable du nom de la tâche.
+// LockKey derives a stable integer from the name of the task.
 //
-// Nécessaire parce qu'un verrou consultatif PostgreSQL s'exprime en `bigint`, pas
-// en texte. Le décalage d'un bit garde le résultat positif : une clé négative est
-// valide côté base mais illisible dans un journal et dans `pg_locks`.
+// Necessary because a PostgreSQL advisory lock is expressed as a `bigint`, not
+// as text. The one-bit shift keeps the result positive: a negative key is valid
+// on the database side but unreadable in a log and in `pg_locks`.
 //
-// # Sur le risque de collision
+// # On the risk of collision
 //
-// Une collision ferait s'exclure mutuellement deux tâches DISTINCTES. C'est
-// improbable sur 63 bits, et surtout le pire cas est une exécution sérialisée —
-// jamais une double exécution. Le repli va donc dans le bon sens.
+// A collision would make two DISTINCT tasks exclude each other. That is
+// improbable over 63 bits, and above all the worst case is a serialised
+// execution — never a double execution. The fallback therefore goes in the
+// right direction.
 func LockKey(name TaskName) int64 {
 	digest := fnv.New64a()
-	// fnv.Write ne retourne jamais d'erreur : la signature vient de io.Writer.
+	// fnv.Write never returns an error: the signature comes from io.Writer.
 	_, _ = digest.Write([]byte("scheduler:" + name.String()))
 	return int64(digest.Sum64() >> 1)
 }

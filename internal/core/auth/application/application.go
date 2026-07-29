@@ -1,17 +1,17 @@
-// Package application compose les cas d'usage de l'authentification.
+// Package application composes the authentication use cases.
 //
-// Il ne journalise pas et ne lit pas l'horloge : il rend compte par ses retours
-// et reçoit son instant. C'est ce qui le garde testable sans analyser de
-// journaux, et déterministe sans attendre.
+// It does not log and does not read the clock: it reports through its return
+// values and receives its instant. That is what keeps it testable without
+// parsing logs, and deterministic without waiting.
 //
-// # Carte des fichiers
+// # File map
 //
-//	register.go       créer une identité et son secret
-//	authenticate.go   échanger un secret contre une session
-//	verify.go         résoudre un jeton en identité, et révoquer
-//	authorize.go      vérifier une permission — contre l'état PERSISTÉ
-//	roles.go          définir un rôle, l'affecter
-//	identities.go     fermer un compte, le rouvrir
+//	register.go       create an identity and its secret
+//	authenticate.go   exchange a secret for a session
+//	verify.go         resolve a token into an identity, and revoke
+//	authorize.go      check a permission — against the PERSISTED state
+//	roles.go          define a role, assign it
+//	identities.go     close an account, reopen it
 package application
 
 import (
@@ -20,11 +20,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// Deps porte les ports dont les cas d'usage ont besoin.
+// Deps carries the ports the use cases need.
 //
-// Tous sont des types fonction : en test, chacun est une closure de trois lignes,
-// et aucune bibliothèque de simulacre n'est nécessaire — donc aucune n'est
-// autorisée (rules/dependances.md).
+// All of them are function types: in a test, each one is a three-line closure,
+// and no mocking library is necessary — hence none is allowed
+// (rules/dependances.md).
 type Deps struct {
 	SaveIdentity   ports.SaveIdentity
 	FindBySubject  ports.FindBySubject
@@ -44,11 +44,10 @@ type Deps struct {
 	NewToken      ports.NewToken
 	NewIdentityID ports.NewIdentityID
 
-	// SessionTTL borne la durée d'une session.
+	// SessionTTL bounds the lifetime of a session.
 	//
-	// Portée par les dépendances et non par le domaine : c'est un réglage
-	// d'exploitation, pas une règle métier. Une valeur nulle ou négative fait
-	// refuser la construction de la session — une session éternelle ne se décide
-	// pas par omission.
+	// Carried by the dependencies and not by the domain: it is an operational
+	// setting, not a business rule. A zero or negative value makes the session
+	// construction refuse — an eternal session is not decided by omission.
 	SessionTTL time.Duration
 }

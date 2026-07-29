@@ -37,7 +37,7 @@ go run ./cmd/server
 ```bash
 curl -s -X POST localhost:8080/v1/users \
   -H 'content-type: application/json' \
-  -d '{"email":"Alice@Example.COM ","password":"correct cheval batterie agrafe"}'
+  -d '{"email":"Alice@Example.COM ","password":"correct horse battery staple"}'
 ```
 
 ```json

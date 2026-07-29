@@ -7,20 +7,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler"
 )
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique.
+// TestUnknownDriverRefusesStartup: deny by default, right down to the factory.
 //
-// `external` figure dans le catalogue d'intentions mais n'est PAS construit : il
-// doit donc refuser franchement, jamais se replier sur `cron-inproc` — qui
-// exécuterait la tâche sur chaque réplique.
+// `external` appears in the catalogue of intentions but is NOT built: it must
+// therefore refuse outright, never fall back on `cron-inproc` — which would run
+// the task on every replica.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
-	for _, driver := range []string{"external", "cron", "n'importe quoi"} {
+	for _, driver := range []string{"external", "cron", "anything at all"} {
 		if _, err := scheduler.New(
 			config.Module{Enabled: true, Driver: driver},
 			scheduler.Deps{Logger: discardLogger()},
 		); err == nil {
-			t.Errorf("le pilote %q n'est pas construit : il doit refuser le démarrage", driver)
+			t.Errorf("the %q driver is not built: it must refuse to start", driver)
 		}
 	}
 }

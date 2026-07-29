@@ -8,43 +8,43 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestNonElectedReplicaDoesNotExecute est le test le plus important du module.
+// TestNonElectedReplicaDoesNotExecute is the most important test of the module.
 //
-// Toute la valeur de l'ordonnanceur est là : N répliques, une seule exécution. Sans
-// ce refus, un rappel part N fois et une facture est émise N fois — des défauts que
-// le client découvre avant nous.
+// All the value of the scheduler is there: N replicas, one single execution.
+// Without this refusal, a reminder goes out N times and an invoice is issued N
+// times — defects the customer discovers before we do.
 //
-// Et « non élue » n'est PAS une erreur : c'est le cas nominal sur N-1 répliques, à
-// chaque tick. Le compte rendu doit le dire ainsi, sinon les journaux ne
-// contiendraient plus que ça.
+// And "not elected" is NOT an error: it is the nominal case on N-1 replicas, on
+// every tick. The report must say so, otherwise the logs would contain nothing
+// but that.
 func TestNonElectedReplicaDoesNotExecute(t *testing.T) {
 	t.Parallel()
 
 	var executed bool
 	acquire := func(context.Context, domain.TaskName) (bool, error) { return false, nil }
 	release := func(context.Context, domain.TaskName) error {
-		t.Error("Release ne doit pas être appelée quand l'élection a échoué")
+		t.Error("Release must not be called when the election failed")
 		return nil
 	}
 
-	log := &journal{}
+	log := &reportLog{}
 	runner := newRunner(t, acquire, release, log)
 	runner.RunOnce(context.Background(), application.Scheduled{
-		Task: task("rappel-quotidien"),
+		Task: task("daily-reminder"),
 		Job:  func(context.Context) error { executed = true; return nil },
 	})
 
 	if executed {
-		t.Error("une réplique non élue ne doit PAS exécuter le travail")
+		t.Error("a non-elected replica must NOT run the work")
 	}
 	outcome, found := log.last()
 	if !found {
-		t.Fatal("aucun compte rendu")
+		t.Fatal("no report")
 	}
 	if outcome.Event != domain.EventSkipped {
-		t.Errorf("événement = %q, attendu %q", outcome.Event, domain.EventSkipped)
+		t.Errorf("event = %q, want %q", outcome.Event, domain.EventSkipped)
 	}
 	if outcome.Err != nil {
-		t.Errorf("« non élue » n'est pas une erreur, reçu %v", outcome.Err)
+		t.Errorf("\"not elected\" is not an error, got %v", outcome.Err)
 	}
 }

@@ -12,8 +12,8 @@ func TestNextAttemptStaysPendingBeforeExhaustion(t *testing.T) {
 
 	got := domain.NextAttempt(domain.Message{Attempts: 1},
 		domain.RetryPolicy{MaxAttempts: 5, BaseBackoff: time.Second},
-		fixedNow(), "raison")
+		fixedNow(), "reason")
 	if got.Status != domain.StatusPending {
-		t.Errorf("statut = %q, attendu pending", got.Status)
+		t.Errorf("status = %q, want pending", got.Status)
 	}
 }

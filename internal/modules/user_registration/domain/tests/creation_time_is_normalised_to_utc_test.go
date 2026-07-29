@@ -7,14 +7,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestCreationTimeIsNormalisedToUTC : la date de création est stockée en UTC.
+// TestCreationTimeIsNormalisedToUTC: the creation date is stored in UTC.
 //
-// Un horodatage porteur d'un fuseau se compare mal, se trie mal, et se relit six
-// mois plus tard depuis un autre pays. Pire : un serveur déplacé d'une région à
-// l'autre produirait des dates qui semblent remonter le temps par rapport aux
-// précédentes.
+// A timestamp carrying a time zone compares badly, sorts badly, and reads badly
+// six months later from another country. Worse: a server moved from one region
+// to another would produce dates that seem to go back in time compared with the
+// previous ones.
 //
-// La normalisation a lieu à la CONSTRUCTION, une fois, plutôt qu'à chaque lecture.
+// The normalisation happens at CONSTRUCTION, once, rather than on every read.
 func TestCreationTimeIsNormalisedToUTC(t *testing.T) {
 	t.Parallel()
 
@@ -23,15 +23,15 @@ func TestCreationTimeIsNormalisedToUTC(t *testing.T) {
 
 	user := domain.NewUser(
 		"user-42",
-		emailValide(t, "alice@example.com"),
+		validEmail(t, "alice@example.com"),
 		domain.NewPasswordHash("$argon2id$..."),
 		at,
 	)
 
 	if user.CreatedAt.Location() != time.UTC {
-		t.Errorf("fuseau = %v, attendu UTC", user.CreatedAt.Location())
+		t.Errorf("time zone = %v, want UTC", user.CreatedAt.Location())
 	}
 	if !user.CreatedAt.Equal(at) {
-		t.Errorf("l'instant a été déplacé: %v ≠ %v", user.CreatedAt, at)
+		t.Errorf("the instant was moved: %v != %v", user.CreatedAt, at)
 	}
 }

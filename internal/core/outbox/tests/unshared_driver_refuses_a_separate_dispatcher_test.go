@@ -7,30 +7,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 )
 
-// TestUnsharedDriverRefusesASeparateDispatcher : un pilote non partagé refuse un
-// dépileur lancé dans un AUTRE processus.
+// TestUnsharedDriverRefusesASeparateDispatcher: an unshared driver refuses a
+// dispatcher launched in ANOTHER process.
 //
-// # Le défaut que ce refus empêche
+// # The defect this refusal prevents
 //
-// Le pilote `memory` vit dans le processus. Un dépileur lancé comme binaire
-// séparé interrogerait donc son propre magasin — vide — pendant que les
-// événements écrits par le serveur resteraient dans la mémoire du serveur.
+// The `memory` driver lives inside the process. A dispatcher launched as a
+// separate binary would therefore query its own store — empty — while the
+// events written by the server would stay in the server's memory.
 //
-// Il tournerait sans rien publier ET sans aucune erreur : journaux propres,
-// sonde verte, processus vivant. Le défaut ne se découvrirait que le jour où
-// quelqu'un demande pourquoi un client n'a jamais reçu son courriel.
+// It would run publishing nothing AND without any error: clean logs, green
+// probe, live process. The defect would only be discovered the day someone asks
+// why a customer never received their email.
 //
-// Deny par défaut jusque dans la valeur inconnue : un pilote qu'on ne connaît
-// pas est réputé NON partagé. Se tromper dans ce sens fait échouer un
-// démarrage ; se tromper dans l'autre fait tourner un dépileur à vide pendant
-// des mois.
+// Deny by default all the way down to the unknown value: a driver we do not
+// know is deemed NOT shared. Erring in that direction fails a startup; erring
+// in the other makes a dispatcher run empty for months.
 func TestUnsharedDriverRefusesASeparateDispatcher(t *testing.T) {
 	t.Parallel()
 
 	refused := map[string]string{
-		"memory, non partagé entre processus": "memory",
-		"pilote absent":                       "",
-		"pilote inconnu":                      "cassandra",
+		"memory, not shared across processes": "memory",
+		"missing driver":                      "",
+		"unknown driver":                      "cassandra",
 	}
 	for name, driver := range refused {
 		t.Run(name, func(t *testing.T) {
@@ -38,18 +37,18 @@ func TestUnsharedDriverRefusesASeparateDispatcher(t *testing.T) {
 
 			err := outbox.RequireSharedDriver(driver)
 			if !errors.Is(err, outbox.ErrNotShared) {
-				t.Fatalf("RequireSharedDriver(%q) = %v, attendu un refus explicite", driver, err)
+				t.Fatalf("RequireSharedDriver(%q) = %v, want an explicit refusal", driver, err)
 			}
 			if outbox.SharedAcrossProcesses(driver) {
-				t.Errorf("SharedAcrossProcesses(%q) = true, attendu false", driver)
+				t.Errorf("SharedAcrossProcesses(%q) = true, want false", driver)
 			}
 		})
 	}
 
 	if err := outbox.RequireSharedDriver("postgres"); err != nil {
-		t.Errorf("le pilote postgres est partagé et doit être accepté, reçu: %v", err)
+		t.Errorf("the postgres driver is shared and must be accepted, got: %v", err)
 	}
 	if !outbox.SharedAcrossProcesses("postgres") {
-		t.Error("SharedAcrossProcesses(\"postgres\") doit être true")
+		t.Error("SharedAcrossProcesses(\"postgres\") must be true")
 	}
 }

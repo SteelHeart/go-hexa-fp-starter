@@ -7,15 +7,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
 )
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique. La
-// validation de configuration a déjà rejeté le pilote ; ce second refus garantit
-// qu'aucun chemin ne contourne le premier.
+// TestUnknownDriverRefusesStartup: deny by default all the way into the factory.
+// Configuration validation has already rejected the driver; this second refusal
+// guarantees that no path bypasses the first one.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	_, err := idempotency.New(
 		config.Module{Enabled: true, Driver: "memcached"}, idempotency.Deps{})
 	if err == nil {
-		t.Fatal("un pilote inconnu doit refuser le démarrage")
+		t.Fatal("an unknown driver must refuse startup")
 	}
 }

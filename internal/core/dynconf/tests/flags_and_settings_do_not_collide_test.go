@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// TestFlagsAndSettingsDoNotCollide : les deux natures partagent des noms de clé
-// sans se mélanger.
+// TestFlagsAndSettingsDoNotCollide: the two natures share key names without
+// getting mixed up.
 //
-// Sans qualification par nature (domain.Qualify), un réglage nommé comme un
-// drapeau serait lu en booléen : `mode: "strict"` deviendrait un drapeau éteint,
-// puisque « strict » n'est pas un booléen lisible. La fonctionnalité serait
-// désactivée par un réglage qui n'a rien à voir.
+// Without qualification by nature (domain.Qualify), a setting named like a flag
+// would be read as a boolean: `mode: "strict"` would become a switched-off
+// flag, since "strict" is not a readable boolean. The feature would be
+// disabled by a setting that has nothing to do with it.
 func TestFlagsAndSettingsDoNotCollide(t *testing.T) {
 	t.Parallel()
 
@@ -22,9 +22,9 @@ func TestFlagsAndSettingsDoNotCollide(t *testing.T) {
 	ctx := context.Background()
 
 	if !mod.IsEnabled(ctx, "mode") {
-		t.Error("le drapeau `mode` doit être actif")
+		t.Error("the `mode` flag must be active")
 	}
 	if got := mod.GetSetting(ctx, "mode"); got.Value != "strict" {
-		t.Errorf("réglage `mode` = %q, attendu \"strict\"", got.Value)
+		t.Errorf("setting `mode` = %q, want \"strict\"", got.Value)
 	}
 }

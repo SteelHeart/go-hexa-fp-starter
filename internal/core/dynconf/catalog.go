@@ -2,40 +2,41 @@ package dynconf
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// # Pourquoi ici, et pas dans internal/config
+// # Why here, and not in internal/config
 //
-// Cette table vivait dans `internal/config/modules.go`, à deux paquets de la
-// fabrique qui construit réellement les pilotes. Le commentaire qui
-// l'accompagnait avouait déjà craindre la divergence : « une faute de frappe
-// dans l'une des deux rendrait un module inactivable, avec un message qui
-// accuse la configuration de l'utilisateur ».
+// This table used to live in `internal/config/modules.go`, two packages away
+// from the factory that actually builds the drivers. The comment that came
+// with it already admitted to fearing divergence: "a typo in either of the two
+// would make a module impossible to activate, with a message that blames the
+// user's configuration".
 //
-// Elle est désormais dans le MÊME paquet que le `switch` de `New`, souvent sur
-// le même écran. La divergence ne devient pas impossible — rien ne la vérifie
-// mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
-// devient improbable.
+// It now lives in the SAME package as the `switch` of `New`, often on the same
+// screen. Divergence does not become impossible — nothing checks it
+// mechanically, and ADR 014 notes this as its weakness [human] — but it
+// becomes improbable.
 //
-// Drapeaux et réglages modifiables à chaud.
+// Flags and settings changeable at run time.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vrai « `go run` démarre »
-			// sans base, sans cache, sans conteneur (ADR 012).
+			// The default requires NOTHING: this is what makes "`go run`
+			// starts" true without a database, without a cache, without a
+			// container (ADR 012).
 			Default: driverFile,
 			Drivers: map[string]config.Resources{
-				// ⚠️ Les deux pilotes n'admettent PAS les mêmes options, et c'est
-				// exactement ce que la déclaration par pilote permet de dire.
+				// ⚠️ The two drivers do NOT admit the same options, and that is
+				// exactly what per-driver declaration makes it possible to say.
 				//
-				// `flags` et `settings` portent les valeurs VERSIONNÉES : elles
-				// n'ont de sens que pour le pilote fichier. Les écrire sous le
-				// pilote postgres serait une erreur de conception silencieuse — les
-				// valeurs y vivent en base, pas dans le dépôt.
+				// `flags` and `settings` carry the VERSIONED values: they only
+				// make sense for the file driver. Writing them under the
+				// postgres driver would be a silent design error — there, the
+				// values live in the database, not in the repository.
 				//
-				// Lecture seule, rechargée depuis le disque.
+				// Read-only, reloaded from disk.
 				driverFile: {Options: []string{OptionFlags, OptionSettings}},
-				// Partagé entre répliques.
+				// Shared between replicas.
 				driverPostgres: {SQL: true, Options: []string{OptionTTL}},
 			},
 		},

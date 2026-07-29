@@ -1,6 +1,6 @@
-// Package ports déclare les contrats de la configuration dynamique.
+// Package ports declares the contracts of dynamic configuration.
 //
-// Ce paquet ne contient QUE des déclarations de types.
+// This package contains ONLY type declarations.
 package ports
 
 import (
@@ -9,37 +9,39 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/domain"
 )
 
-// IsEnabled répond à « ce drapeau est-il actif ? ».
+// IsEnabled answers "is this flag active?".
 //
-// # Pourquoi ce port ne retourne PAS d'erreur
+// # Why this port does NOT return an error
 //
-// C'est la seule exception à la règle « un module noyau retourne error », et elle
-// est assumée. Le contrat du port EST le repli : drapeau inconnu, magasin
-// injoignable, valeur illisible — la réponse est `false` dans les trois cas.
+// This is the only exception to the rule "a core module returns error", and it
+// is a deliberate one. The contract of the port IS the fallback: unknown flag,
+// unreachable store, unreadable value — the answer is `false` in all three
+// cases.
 //
-// Rendre `(bool, error)` obligerait chaque appel — il y en a un par branche de
-// code masquée — à traiter une erreur dont la seule réponse correcte est déjà
-// connue. En pratique, ces sites écriraient `enabled, _ := flag(ctx, key)`, et le
-// repli deviendrait implicite au lieu d'être garanti par le port.
+// Returning `(bool, error)` would force every call — there is one per hidden
+// branch of code — to handle an error whose only correct response is already
+// known. In practice, those sites would write `enabled, _ := flag(ctx, key)`,
+// and the fallback would become implicit instead of being guaranteed by the
+// port.
 //
-// La contrepartie est réelle et doit être connue : une panne du magasin ÉTEINT
-// silencieusement les fonctionnalités masquées. Un pilote qui échoue doit donc le
-// journaliser lui-même — c'est ce que le contrat lui impose en échange.
+// The trade-off is real and must be known: an outage of the store silently
+// SWITCHES OFF the hidden features. A driver that fails must therefore log it
+// itself — that is what the contract requires of it in exchange.
 type IsEnabled = func(ctx context.Context, key domain.FlagKey) bool
 
-// GetSetting lit un réglage métier. Une absence n'est pas une erreur : c'est le
-// cas nominal d'un réglage qui n'a jamais été posé.
+// GetSetting reads a business setting. An absence is not an error: it is the
+// nominal case of a setting that has never been set.
 type GetSetting = func(ctx context.Context, key domain.SettingKey) domain.Setting
 
-// Set écrit une valeur dynamique.
+// Set writes a dynamic value.
 //
-// Retourne `domain.ErrReadOnly` sur un magasin qui n'accepte pas l'écriture. Un
-// pilote qui accepterait l'écriture sans la persister serait pire : l'appelant
-// croirait avoir changé quelque chose.
+// Returns `domain.ErrReadOnly` on a store that does not accept writes. A driver
+// that accepted the write without persisting it would be worse: the caller
+// would believe it had changed something.
 type Set = func(ctx context.Context, change domain.Change) error
 
-// Invalidate purge le cache local.
+// Invalidate purges the local cache.
 //
-// Sans contexte ni erreur : purger un cache mémoire ne peut ni échouer, ni
-// attendre. À appeler après une écriture faite par une AUTRE réplique.
+// With neither context nor error: purging an in-memory cache can neither fail,
+// nor wait. To be called after a write made by ANOTHER replica.
 type Invalidate = func()

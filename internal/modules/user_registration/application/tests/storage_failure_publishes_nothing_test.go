@@ -8,30 +8,28 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestStorageFailurePublishesNothing : une écriture en échec ne publie aucun
-// événement.
+// TestStorageFailurePublishesNothing: a failed write publishes no event at all.
 //
-// C'est la moitié du patron outbox. Publier « utilisateur inscrit » alors que
-// l'écriture a échoué produirait un ÉVÉNEMENT FANTÔME : les consommateurs
-// enverraient un courriel de bienvenue, créeraient un profil, factureraient — pour
-// un utilisateur qui n'existe pas.
+// This is half of the outbox pattern. Publishing "user registered" while the
+// write has failed would produce a GHOST EVENT: consumers would send a welcome
+// email, create a profile, bill — for a user who does not exist.
 //
-// Un événement fantôme est plus grave qu'un événement perdu : le perdu se rejoue,
-// le fantôme se rattrape à la main, dans plusieurs systèmes.
+// A ghost event is more serious than a lost one: the lost one is replayed, the
+// ghost one is cleaned up by hand, across several systems.
 func TestStorageFailurePublishesNothing(t *testing.T) {
 	t.Parallel()
 
-	observe := &journal{}
-	deps := depsNominales(observe)
+	observed := &callLog{}
+	deps := nominalDeps(observed)
 	deps.SaveUser = func(context.Context, domain.User) result.Result[domain.User, domain.Error] {
-		observe.note("SaveUser")
-		return echoue[domain.User](domain.CodeUnavailable, "base injoignable")
+		observed.note("SaveUser")
+		return failing[domain.User](domain.CodeUnavailable, "base injoignable")
 	}
 
-	if got := codeDe(t, inscrit(deps)); got != domain.CodeUnavailable {
-		t.Errorf("code = %q, attendu %q", got, domain.CodeUnavailable)
+	if got := codeOf(t, register(deps)); got != domain.CodeUnavailable {
+		t.Errorf("code = %q, want %q", got, domain.CodeUnavailable)
 	}
-	if observe.aAppele("PublishEvent") {
-		t.Error("aucun événement ne doit être publié quand l'écriture a échoué")
+	if observed.called("PublishEvent") {
+		t.Error("no event must be published when the write has failed")
 	}
 }

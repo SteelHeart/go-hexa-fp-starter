@@ -6,12 +6,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// SaveRole enregistre ou remplace un rôle et ses permissions.
+// SaveRole records or replaces a role and its permissions.
 //
-// Le nom est celui que `domain.NewRole` a normalisé — c'est la même forme que
-// l'affectation d'un rôle produit. Retenir ici un nom brut ferait diverger les
-// deux chemins, et le rôle n'accorderait plus rien sans qu'aucune erreur ne le
-// signale.
+// The name is the one `domain.NewRole` normalised — it is the same form that
+// assigning a role produces. Keeping a raw name here would make the two paths
+// diverge, and the role would stop granting anything without any error
+// reporting it.
 func (s *Store) SaveRole(_ context.Context, role domain.Role) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -20,11 +20,11 @@ func (s *Store) SaveRole(_ context.Context, role domain.Role) error {
 	return nil
 }
 
-// AssignRoles remplace les rôles d'une identité.
+// AssignRoles replaces an identity's roles.
 //
-// REMPLACE plutôt qu'ajoute : « retirer un rôle » doit être aussi simple que
-// « en donner un ». Une API qui n'offrirait que l'ajout ferait écrire le retrait
-// à la main, donc mal.
+// REPLACES rather than adds: "withdraw a role" must be as simple as "grant
+// one". An API that offered only addition would make withdrawal be written by
+// hand, hence badly.
 func (s *Store) AssignRoles(_ context.Context, id domain.IdentityID, roles []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -37,15 +37,14 @@ func (s *Store) AssignRoles(_ context.Context, id domain.IdentityID, roles []str
 	return nil
 }
 
-// Grants indique si une identité détient une permission, À CET INSTANT.
+// Grants reports whether an identity holds a permission, AT THIS INSTANT.
 //
-// Le magasin est interrogé à chaque appel — c'est la décision 1 de l'ADR 017. Une
-// permission retirée cesse d'accorder immédiatement, sans attendre l'expiration
-// d'un quelconque jeton.
+// The store is queried on every call — that is decision 1 of ADR 017. A
+// withdrawn permission stops granting immediately, without waiting for any
+// token to expire.
 //
-// Un compte fermé n'accorde rien, quels que soient ses rôles : la vérification de
-// `Active` est ici et non chez l'appelant, pour qu'aucun chemin ne puisse
-// l'oublier.
+// A closed account grants nothing, whatever its roles: the `Active` check is
+// here and not at the caller, so that no path can forget it.
 func (s *Store) Grants(_ context.Context, id domain.IdentityID, permission domain.Permission) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -62,12 +61,12 @@ func (s *Store) Grants(_ context.Context, id domain.IdentityID, permission domai
 	return false
 }
 
-// rebind reconstruit une créance avec de nouveaux rôles.
+// rebind rebuilds a credential with new roles.
 //
-// `NewCredential` ne peut pas échouer ici : la créance vient du magasin, donc son
-// identité et son condensé sont déjà valides. Le repli rend la créance INCHANGÉE
-// plutôt qu'une créance vide — se tromper dans le sens « le droit n'a pas changé »
-// est le seul repli acceptable pour un contrôle d'accès.
+// `NewCredential` cannot fail here: the credential comes from the store, so its
+// identity and its digest are already valid. The fallback returns the credential
+// UNCHANGED rather than an empty one — being wrong in the "the right has not
+// changed" direction is the only acceptable fallback for an access control.
 func rebind(credential domain.Credential, roles []string) domain.Credential {
 	rebound, err := domain.NewCredential(
 		credential.Identity().WithRoles(roles), credential.SecretHash())

@@ -1,14 +1,15 @@
-// Package auth est la composition root du module d'authentification.
+// Package auth is the composition root of the authentication module.
 //
-// C'est le SEUL fichier du module qui connaît les pilotes (ADR 012). Les cas
-// d'usage ne voient que des types fonction : changer de pilote ne touche pas une
-// ligne d'`application/` ni de `domain/`.
+// This is the ONLY file in the module that knows about drivers (ADR 012). Use
+// cases only ever see function types: switching driver does not touch a single
+// line of `application/` or of `domain/`.
 //
-// # Ce module rend une `error`, pas un `Result`
+// # This module returns an `error`, not a `Result`
 //
-// `internal/core/**` retourne `error`, `internal/modules/**` retourne `Result` :
-// la frontière est nette et vérifiable. La taxonomie d'`auth` passe donc par des
-// sentinelles énumérées de `domain/`, reconnaissables par `errors.Is` (ADR 017).
+// `internal/core/**` returns `error`, `internal/modules/**` returns `Result`:
+// the boundary is sharp and checkable. The taxonomy of `auth` therefore goes
+// through enumerated sentinels in `domain/`, recognisable by `errors.Is`
+// (ADR 017).
 package auth
 
 import (
@@ -26,38 +27,38 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// Name est le nom du module, tel qu'il apparaît dans config/modules.yaml.
+// Name is the module name, as it appears in config/modules.yaml.
 const Name = "auth"
 
-// Pilotes disponibles.
+// Available drivers.
 const (
 	driverMemory = "memory"
 )
 
-// Clés d'options lues par ce module, partagées avec le catalogue (ADR 014, #93).
+// Option keys read by this module, shared with the catalogue (ADR 014, #93).
 const (
-	// OptionSessionTTL borne la durée d'une session.
+	// OptionSessionTTL bounds the lifetime of a session.
 	OptionSessionTTL = "session_ttl"
 )
 
-// defaultSessionTTL est la durée d'une session quand la configuration n'en dit rien.
+// defaultSessionTTL is the session lifetime when the configuration says nothing.
 //
-// Douze heures : assez pour une journée de travail sans reconnexion, assez court
-// pour qu'un poste oublié cesse d'ouvrir la porte le lendemain. Ce n'est pas une
-// borne de sécurité — la révocation, elle, est immédiate (ADR 017 §1).
+// Twelve hours: long enough for a working day without reconnecting, short
+// enough that a forgotten workstation stops opening the door the next day. This
+// is not a security bound — revocation, on the other hand, is immediate
+// (ADR 017 §1).
 const defaultSessionTTL = 12 * time.Hour
 
-// tokenBytes est la taille de l'aléa d'un jeton.
+// tokenBytes is the size of a token's randomness.
 //
-// 32 octets, soit 256 bits. En base64 sans remplissage cela fait 43 caractères,
-// ce que `domain.NewToken` exige.
+// 32 bytes, that is 256 bits. In base64 without padding that makes 43
+// characters, which is what `domain.NewToken` demands.
 const tokenBytes = 32
 
-// Module expose les ports primaires.
+// Module exposes the primary ports.
 //
-// Une surface — HTTP, CLI, consommateur d'événements — ne reçoit QUE cette
-// structure. Elle ne peut donc pas atteindre le magasin, ni contourner un cas
-// d'usage.
+// A surface — HTTP, CLI, event consumer — receives ONLY this structure. It
+// therefore cannot reach the store, nor bypass a use case.
 type Module struct {
 	Register     ports.Register
 	Authenticate ports.Authenticate
@@ -70,33 +71,33 @@ type Module struct {
 	Reactivate   ports.Reactivate
 }
 
-// Deps porte les effets que le module ne fabrique pas lui-même.
+// Deps carries the effects the module does not build itself.
 //
-// Le hachage n'est PAS fourni par ce module : il est coûteux, paramétré, et son
-// réglage appartient à la configuration de sécurité de l'application
-// (`internal/infrastructure/security`). Un module qui choisirait ses propres
-// paramètres Argon2 les figerait pour tout le monde.
+// Hashing is NOT provided by this module: it is costly, parameterised, and its
+// tuning belongs to the application's security configuration
+// (`internal/infrastructure/security`). A module that chose its own Argon2
+// parameters would freeze them for everyone.
 type Deps struct {
 	HashSecret   ports.HashSecret
 	VerifySecret ports.VerifySecret
 	Now          ports.Now
 }
 
-// Erreurs du module.
+// Module errors.
 var (
-	// ErrDisabled signale un appel à un module désactivé.
-	ErrDisabled = errors.New("module auth désactivé")
+	// ErrDisabled reports a call to a disabled module.
+	ErrDisabled = errors.New("auth module disabled")
 
-	// ErrMissingDependency refuse un montage incomplet.
-	ErrMissingDependency = errors.New("dépendance obligatoire absente")
+	// ErrMissingDependency refuses an incomplete wiring.
+	ErrMissingDependency = errors.New("mandatory dependency missing")
 
-	errUnknownDriver = errors.New("pilote auth inconnu")
+	errUnknownDriver = errors.New("unknown auth driver")
 )
 
-// New construit le module selon le pilote demandé.
+// New builds the module according to the requested driver.
 //
-// Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout jamais
-// en « le pilote le plus proche ». Deny par défaut.
+// An unknown driver REFUSES startup: a typo never resolves into "the closest
+// driver". Deny by default.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return Disabled(), nil
@@ -122,11 +123,11 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 }
 
-// validate refuse un montage incomplet AVANT toute construction.
+// validate refuses an incomplete wiring BEFORE any construction.
 //
-// Sans ce refus, une dépendance oubliée produirait un panic de pointeur nil à la
-// première connexion réelle — donc en production, et avec une trace qui ne dit
-// pas laquelle manquait.
+// Without this refusal, a forgotten dependency would produce a nil pointer
+// panic on the first real sign-in — so in production, and with a stack trace
+// that does not say which one was missing.
 func (d Deps) validate() error {
 	missing := map[string]bool{
 		"HashSecret":   d.HashSecret == nil,
@@ -141,11 +142,11 @@ func (d Deps) validate() error {
 	return nil
 }
 
-// store est ce que le module attend d'un pilote.
+// store is what the module expects from a driver.
 //
-// Déclaré ici et non dans `ports/` : c'est une commodité de composition interne,
-// pas un contrat public. Les ports du module restent des types fonction, et c'est
-// `assemble` qui en extrait les méthodes.
+// Declared here and not in `ports/`: it is an internal composition convenience,
+// not a public contract. The module's ports remain function types, and it is
+// `assemble` that extracts the methods from it.
 type store interface {
 	SaveIdentity(context.Context, domain.Credential) error
 	FindBySubject(context.Context, domain.Subject) (domain.Credential, error)
@@ -159,7 +160,7 @@ type store interface {
 	Grants(context.Context, domain.IdentityID, domain.Permission) bool
 }
 
-// assemble branche un pilote sur les cas d'usage.
+// assemble wires a driver onto the use cases.
 func assemble(s store, deps Deps, ttl time.Duration) Module {
 	wired := application.Deps{
 		SaveIdentity:   s.SaveIdentity,
@@ -193,32 +194,32 @@ func assemble(s store, deps Deps, ttl time.Duration) Module {
 	}
 }
 
-// randomToken tire un jeton d'une source cryptographiquement sûre.
+// randomToken draws a token from a cryptographically secure source.
 //
-// `crypto/rand` et non `math/rand` : un jeton prévisible est une
-// authentification contournée, et `math/rand` en produit — sa graine tient sur
-// 63 bits, et son état se reconstitue à partir de quelques sorties.
+// `crypto/rand` and not `math/rand`: a predictable token is a bypassed
+// authentication, and `math/rand` produces those — its seed fits in 63 bits,
+// and its state can be reconstructed from a handful of outputs.
 //
-// L'erreur est PROPAGÉE, jamais avalée : si l'entropie du système est
-// indisponible, la bonne réponse est de refuser d'émettre un jeton, pas d'en
-// fabriquer un moins bon.
+// The error is PROPAGATED, never swallowed: if the system's entropy is
+// unavailable, the right answer is to refuse to issue a token, not to
+// manufacture a weaker one.
 func randomToken() (domain.Token, error) {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
-		return domain.Token{}, fmt.Errorf("entropie indisponible: %w", err)
+		return domain.Token{}, fmt.Errorf("entropy unavailable: %w", err)
 	}
 	token, err := domain.NewToken(base64.RawURLEncoding.EncodeToString(raw))
 	if err != nil {
-		return domain.Token{}, fmt.Errorf("jeton: %w", err)
+		return domain.Token{}, fmt.Errorf("token: %w", err)
 	}
 	return token, nil
 }
 
-// randomIdentityID produit un identifiant opaque.
+// randomIdentityID produces an opaque identifier.
 //
-// Le repli sur une chaîne vide en cas d'échec d'entropie est IMPOSSIBLE ici :
-// `domain.NewIdentity` refuse un identifiant vide, donc l'échec remonte comme
-// une erreur de création plutôt que comme une identité anonyme.
+// Falling back on an empty string when entropy fails is IMPOSSIBLE here:
+// `domain.NewIdentity` refuses an empty identifier, so the failure surfaces as
+// a creation error rather than as an anonymous identity.
 func randomIdentityID() domain.IdentityID {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
@@ -227,15 +228,14 @@ func randomIdentityID() domain.IdentityID {
 	return domain.IdentityID(base64.RawURLEncoding.EncodeToString(raw))
 }
 
-// Disabled rend un module qui refuse à l'appel.
+// Disabled returns a module that refuses on call.
 //
-// Il se monte toujours : c'est ce qui permet à une surface d'exister et de
-// répondre une erreur claire, plutôt que de faire échouer le démarrage entier du
-// serveur pour un module que personne n'a activé.
+// It always mounts: that is what lets a surface exist and answer a clear error,
+// rather than failing the whole server startup for a module nobody enabled.
 //
-// ⚠️ `Authorize` refuse lui aussi. Un module d'authentification désactivé qui
-// AUTORISERAIT tout serait la pire valeur par défaut imaginable — et c'est
-// exactement ce qu'on obtient en oubliant ce cas.
+// ⚠️ `Authorize` refuses too. A disabled authentication module that would
+// AUTHORISE everything would be the worst default value imaginable — and that
+// is exactly what forgetting this case gets you.
 func Disabled() Module {
 	return Module{
 		Register: func(context.Context, string, string) (domain.Identity, error) {

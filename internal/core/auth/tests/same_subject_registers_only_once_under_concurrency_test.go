@@ -9,18 +9,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestSameSubjectRegistersOnlyOnceUnderConcurrency ferme la fenêtre entre la
-// vérification et l'écriture.
+// TestSameSubjectRegistersOnlyOnceUnderConcurrency closes the window between
+// the check and the write.
 //
-// # La fenêtre que ce test vise
+// # The window this test aims at
 //
-// Le cas d'usage ne vérifie PAS l'unicité avant d'écrire, délibérément : entre une
-// vérification et une écriture il existe un intervalle que deux demandes
-// simultanées franchissent toutes les deux. C'est le magasin, qui détient le
-// verrou, qui tranche — exactement comme une contrainte d'unicité SQL le ferait.
+// The use case does NOT check uniqueness before writing, deliberately: between
+// a check and a write there is an interval that two simultaneous requests both
+// cross. It is the store, which holds the lock, that decides — exactly as an
+// SQL uniqueness constraint would.
 //
-// Un test séquentiel passerait même avec la faute. Seize inscriptions
-// concurrentes la font apparaître.
+// A sequential test would pass even with the fault. Sixteen concurrent
+// registrations make it appear.
 func TestSameSubjectRegistersOnlyOnceUnderConcurrency(t *testing.T) {
 	t.Parallel()
 
@@ -49,27 +49,27 @@ func TestSameSubjectRegistersOnlyOnceUnderConcurrency(t *testing.T) {
 				return
 			}
 			if !errors.Is(err, domain.ErrSubjectTaken) {
-				t.Errorf("refus attendu ErrSubjectTaken, obtenu %v", err)
+				t.Errorf("want refusal ErrSubjectTaken, got %v", err)
 			}
 		}()
 	}
 	wg.Wait()
 
 	if succeeded != 1 {
-		t.Fatalf("%d inscriptions ont réussi sur le même sujet, attendu exactement 1", succeeded)
+		t.Fatalf("%d registrations succeeded on the same subject, want exactly 1", succeeded)
 	}
 	if len(ids) != 1 {
-		t.Fatalf("%d identifiants distincts créés, attendu 1", len(ids))
+		t.Fatalf("%d distinct identifiers created, want 1", len(ids))
 	}
 }
 
-// TestEachAccountGetsItsOwnIdentifier exige deux comptes, deux identifiants.
+// TestEachAccountGetsItsOwnIdentifier demands two accounts, two identifiers.
 //
-// Un identifiant réutilisé ferait porter à quelqu'un les permissions d'un autre.
-// Le test vérifie aussi que l'identité naît ACTIVE — contrairement à
-// `user_registration`, dont le compte naît `pending`. La nuance est réelle :
-// `auth` ne crée une identité que sur une demande déjà autorisée par son
-// appelant, alors qu'une inscription publique doit être confirmée.
+// A reused identifier would make someone carry another person's permissions.
+// The test also checks that the identity is born ACTIVE — unlike
+// `user_registration`, whose account is born `pending`. The nuance is real:
+// `auth` only creates an identity on a request already authorised by its
+// caller, whereas a public registration must be confirmed.
 func TestEachAccountGetsItsOwnIdentifier(t *testing.T) {
 	t.Parallel()
 
@@ -80,16 +80,16 @@ func TestEachAccountGetsItsOwnIdentifier(t *testing.T) {
 	for _, subj := range []string{"alice@example.com", "bob@example.com", "carol@example.com"} {
 		identity, err := mod.Register(ctx, subj, secret)
 		if err != nil {
-			t.Fatalf("inscription de %q: %v", subj, err)
+			t.Fatalf("registering %q: %v", subj, err)
 		}
 		if seen[identity.ID] {
-			t.Fatalf("identifiant réutilisé pour %q: %q", subj, identity.ID)
+			t.Fatalf("identifier reused for %q: %q", subj, identity.ID)
 		}
 		if !identity.Active {
-			t.Fatalf("une identité d'authentification naît active ; %q ne l'est pas", subj)
+			t.Fatalf("an authentication identity is born active; %q is not", subj)
 		}
 		if len(identity.Roles) != 0 {
-			t.Fatalf("une identité naît SANS rôle ; %q en porte %v", subj, identity.Roles)
+			t.Fatalf("an identity is born WITHOUT a role; %q carries %v", subj, identity.Roles)
 		}
 		seen[identity.ID] = true
 	}
