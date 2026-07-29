@@ -1,4 +1,4 @@
-// Package config lit la configuration de démarrage depuis les fichiers de conf/.
+// Package config lit la configuration de démarrage depuis les fichiers de config/.
 //
 // Quatre principes, et ils expliquent tout le paquet :
 //
@@ -11,22 +11,28 @@
 //     démarre à moitié configuré échoue plus tard, ailleurs, et pour une raison
 //     qui n'aura plus rien à voir.
 //  4. Ce qui change sans redéploiement n'est PAS ici : les seuils métier et les
-//     drapeaux vivent en base (internal/infrastructure/dynconf).
+//     drapeaux vivent dans le module noyau internal/core/dynconf.
 //
 // # Un fichier par groupe
 //
-// Le découpage physique suit le découpage de conf/ (rules/tests.md §2) : un
+// Le découpage physique suit le découpage de config/ (rules/tests.md §2) : un
 // groupe de configuration, un fichier, et il porte le type ET les méthodes qui
 // en dérivent une valeur.
 //
-//	environment.go  l'environnement d'exécution et ses prédicats
-//	http.go         serveur HTTP et limitation de débit
-//	database.go     base de données et cache
-//	messaging.go    relais d'événements
-//	security.go     clés et coût du hachage
-//	groups.go       les groupes sans comportement
-//	validation.go   ce qui rend une configuration invalide, partout
-//	hardening.go    ce qui rend une configuration invalide HORS local
+//	environment.go   l'environnement d'exécution et ses prédicats
+//	http.go          serveur HTTP et limitation de débit
+//	database.go      base de données et cache
+//	messaging.go     relais d'événements
+//	security.go      clés et coût du hachage
+//	observability.go journalisation, traces et métriques
+//	groups.go        les groupes sans comportement
+//	modules.go       quels modules sont activés, et sur quel pilote
+//	catalog.go       ce qu'un module DÉCLARE — le framework ne nomme aucun module
+//	duration.go      les durées, lues en texte et validées
+//	loader.go        la fusion des couches et la substitution des secrets
+//	helpers.go       les aides communes aux fichiers ci-dessus
+//	validation.go    ce qui rend une configuration invalide, partout
+//	hardening.go     ce qui rend une configuration invalide HORS local
 //
 // La validation reste groupée dans ses deux fichiers plutôt que dispersée dans
 // chaque groupe : c'est la seule vue d'où l'on peut répondre à « qu'est-ce qui
