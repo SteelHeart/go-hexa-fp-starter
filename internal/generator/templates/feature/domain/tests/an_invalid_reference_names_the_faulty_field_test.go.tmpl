@@ -7,36 +7,36 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestAnInvalidReferenceNamesTheFaultyField : chaque refus porte son code ET le
-// champ fautif.
+// TestAnInvalidReferenceNamesTheFaultyField: every refusal carries its code AND
+// the faulty field.
 //
-// Le champ n'est pas un ornement : sans lui, une surface HTTP ne peut rendre
-// qu'un « 422, quelque part ». L'utilisateur devine, et le support aussi.
+// The field is not an ornament: without it, an HTTP surface can only return a
+// "422, somewhere". The user guesses, and so does support.
 //
-// Les trois cas couvrent les trois branches de refus. Une branche non exercée
-// est une branche dont on ignore si elle refuse ou si elle laisse passer.
+// The three cases cover the three refusal branches. An unexercised branch is a
+// branch nobody knows whether it refuses or lets through.
 func TestAnInvalidReferenceNamesTheFaultyField(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"vide":              "   ",
-		"trop longue":       strings.Repeat("X", 65),
-		"contient un espace": "ABC 123",
+		"empty":            "   ",
+		"too long":         strings.Repeat("X", 65),
+		"contains a space": "ABC 123",
 	}
 
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			err := erreurDe(t, domain.NewReference(raw))
+			err := failureOf(t, domain.NewReference(raw))
 
 			if err.Code != domain.CodeInvalidReference {
-				t.Errorf("code = %q, attendu %q", err.Code, domain.CodeInvalidReference)
+				t.Errorf("code = %q, want %q", err.Code, domain.CodeInvalidReference)
 			}
 			if err.Field != "reference" {
-				t.Errorf("field = %q, attendu \"reference\"", err.Field)
+				t.Errorf("field = %q, want \"reference\"", err.Field)
 			}
 			if err.Message == "" {
-				t.Error("un refus sans message ne dit rien à l'utilisateur")
+				t.Error("a refusal with no message says nothing to the user")
 			}
 		})
 	}

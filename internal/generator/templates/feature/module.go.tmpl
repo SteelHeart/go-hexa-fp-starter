@@ -1,12 +1,12 @@
-// Package {{.Package}} est la composition root du module {{.Dir}}.
+// Package {{.Package}} is the composition root of the {{.Dir}} module.
 //
-// C'est le SEUL fichier du module qui connaît les pilotes (ADR 012). Le cas
-// d'usage, lui, ne voit que des types fonction : changer de pilote ne touche pas
-// une ligne de `application/` ni de `domain/`.
+// It is the ONLY file of the module that knows the drivers (ADR 012). The use
+// case itself only ever sees function types: changing driver does not touch a
+// single line of `application/` nor of `domain/`.
 //
-// Le module reste supprimable d'un seul `rm -rf` : aucun code du socle ne le
-// nomme, et les seules lignes à retirer sont celle du catalogue de l'application
-// et son montage dans le composition root.
+// The module stays deletable with a single `rm -rf`: no code of the starter
+// names it, and the only lines to remove are the one in the application
+// catalogue and its mounting in the composition root.
 package {{.Package}}
 
 import (
@@ -22,57 +22,56 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// Name est le nom du module, tel qu'il apparaît dans config/modules.yaml.
+// Name is the name of the module, as it appears in config/modules.yaml.
 const Name = "{{.Dir}}"
 
-// Pilotes de persistance disponibles.
+// Available persistence drivers.
 //
-// `memory` est le défaut, et c'est une décision : il n'exige aucune
-// infrastructure, donc `go run` démarre. Voir les NON-garanties du paquet
-// drivers/memory avant de l'envisager ailleurs qu'en développement.
+// `memory` is the default, and that is a decision: it requires no
+// infrastructure, therefore `go run` starts. See the NON-guarantees of the
+// drivers/memory package before considering it anywhere but in development.
 const (
 	DriverMemory = "memory"
 )
 
-// Module expose les ports primaires.
+// Module exposes the primary ports.
 //
-// Une surface — HTTP, CLI, consommateur d'événements — ne reçoit QUE cette
-// structure. Elle ne peut donc pas atteindre un pilote, ni ouvrir une
-// transaction, ni contourner le cas d'usage.
+// A surface — HTTP, CLI, event consumer — receives ONLY this structure. It
+// therefore cannot reach a driver, nor open a transaction, nor bypass the use
+// case.
 type Module struct {
 	Create ports.CreateRecord
 }
 
-// Deps porte les effets que le module ne fabrique pas lui-même.
+// Deps carries the effects the module does not make itself.
 //
-// Tous sont des types fonction : en test, chacun est une closure de trois
-// lignes, et aucune bibliothèque de simulacre n'est nécessaire — donc aucune
-// n'est autorisée.
+// All of them are function types: in a test, each one is a three-line closure,
+// and no mocking library is needed — therefore none is allowed.
 type Deps struct {
-	// GenerateID et Now sont des ports pour que les tests soient déterministes.
+	// GenerateID and Now are ports so that the tests are deterministic.
 	GenerateID ports.GenerateID
 	Now        ports.Now
 }
 
-// Erreurs du module.
+// Errors of the module.
 var (
-	// ErrDisabled signale un appel à un module désactivé.
+	// ErrDisabled signals a call to a disabled module.
 	//
-	// Un module désactivé échoue explicitement plutôt que de se rabattre sur un
-	// comportement inerte : un effet silencieusement ignoré est le pire défaut
-	// possible, parce qu'il ne se signale jamais.
-	ErrDisabled = errors.New("module {{.Dir}} désactivé")
+	// A disabled module fails explicitly rather than falling back on inert
+	// behaviour: an effect silently ignored is the worst possible defect,
+	// because it never signals itself.
+	ErrDisabled = errors.New("module {{.Dir}} disabled")
 
-	// ErrMissingDependency refuse un montage incomplet.
-	ErrMissingDependency = errors.New("dépendance obligatoire absente")
+	// ErrMissingDependency refuses an incomplete mount.
+	ErrMissingDependency = errors.New("required dependency missing")
 
-	errUnknownDriver = errors.New("pilote {{.Dir}} inconnu")
+	errUnknownDriver = errors.New("unknown {{.Dir}} driver")
 )
 
-// New construit le module selon le pilote demandé.
+// New builds the module according to the requested driver.
 //
-// Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
-// jamais en « le pilote le plus proche ». Deny par défaut.
+// An unknown driver REFUSES to start: a typo is never resolved into "the
+// closest driver". Deny by default.
 func New(driver string, deps Deps) (Module, error) {
 	if err := deps.validate(); err != nil {
 		return Module{}, err
@@ -89,11 +88,11 @@ func New(driver string, deps Deps) (Module, error) {
 	}
 }
 
-// validate refuse un montage incomplet AVANT toute construction.
+// validate refuses an incomplete mount BEFORE any construction.
 //
-// Sans ce refus, une dépendance oubliée produirait un panic de pointeur nil à la
-// première requête réelle — donc en production, et avec une trace qui ne dit pas
-// laquelle manquait.
+// Without that refusal, a forgotten dependency would produce a nil pointer
+// panic on the first real request — therefore in production, and with a stack
+// trace that does not say which one was missing.
 func (d Deps) validate() error {
 	missing := map[string]bool{
 		"GenerateID": d.GenerateID == nil,
@@ -107,17 +106,17 @@ func (d Deps) validate() error {
 	return nil
 }
 
-// store est ce que le module attend d'un pilote de persistance.
+// store is what the module expects from a persistence driver.
 //
-// Déclaré ici et non dans `ports/` : c'est une commodité de composition interne,
-// pas un contrat public. Les ports du module restent des types fonction, et
-// c'est `assemble` qui en extrait les méthodes.
+// Declared here and not in `ports/`: it is a convenience of internal
+// composition, not a public contract. The ports of the module stay function
+// types, and it is `assemble` that extracts the methods from it.
 type store interface {
 	Save(context.Context, domain.Record) result.Result[domain.Record, domain.Error]
 	IsTaken(context.Context, domain.Reference) result.Result[bool, domain.Error]
 }
 
-// assemble branche un pilote sur les cas d'usage.
+// assemble plugs a driver into the use cases.
 func assemble(s store, deps Deps) Module {
 	return Module{
 		Create: application.NewCreateRecord(application.Deps{
@@ -129,11 +128,11 @@ func assemble(s store, deps Deps) Module {
 	}
 }
 
-// Disabled rend un module qui refuse à l'appel.
+// Disabled returns a module that refuses when called.
 //
-// Il se monte toujours : c'est ce qui permet à une surface d'exister et de
-// répondre une erreur claire, plutôt que de faire échouer le démarrage entier du
-// serveur pour un module que personne n'a activé.
+// It always mounts: that is what lets a surface exist and answer a clear error,
+// rather than failing the whole start-up of the server for a module nobody
+// enabled.
 func Disabled() Module {
 	refuse := func(context.Context, string) result.Result[domain.Record, domain.Error] {
 		return result.Err[domain.Record, domain.Error](disabledError())
@@ -148,9 +147,9 @@ func disabledError() domain.Error {
 	).WithCause(ErrDisabled)
 }
 
-// SystemClock est l'horloge réelle, à passer en production.
+// SystemClock is the real clock, to be passed in production.
 //
-// Nommée plutôt qu'écrite `time.Now` au site d'appel : le composition root est
-// le SEUL endroit du dépôt autorisé à lire l'horloge, et lui donner un nom rend
-// la dérogation visible en relecture.
+// Named rather than written `time.Now` at the call site: the composition root
+// is the ONLY place in the repository allowed to read the clock, and giving it
+// a name makes the derogation visible in review.
 func SystemClock() ports.Now { return time.Now }

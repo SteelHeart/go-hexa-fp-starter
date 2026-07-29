@@ -10,34 +10,34 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// TestAStorageFailureIsReportedIntact : un échec de stockage remonte tel quel,
-// sans être avalé ni retraduit.
+// TestAStorageFailureIsReportedIntact: a storage failure comes back up as it
+// is, neither swallowed nor retranslated.
 //
-// C'est la faute la plus coûteuse d'un pipeline : une étape qui rattrape une
-// erreur et rend un succès dégradé. L'appelant reçoit alors 201, l'utilisateur
-// croit son enregistrement créé, et personne ne découvre le contraire avant
-// l'inventaire suivant.
+// This is the costliest fault of a pipeline: a step that catches an error and
+// returns a degraded success. The caller then receives 201, the user believes
+// their record was created, and nobody discovers otherwise before the next
+// stocktake.
 //
-// La cause technique doit survivre au passage — c'est elle qui permettra de
-// diagnostiquer — sans jamais entrer dans le message rendu.
+// The technical cause must survive the passage — it is what will make diagnosis
+// possible — without ever entering the returned message.
 func TestAStorageFailureIsReportedIntact(t *testing.T) {
 	t.Parallel()
 
-	panne := errors.New("connexion au stockage perdue")
-	deps := depsQuiPassent()
+	outage := errors.New("storage connection lost")
+	deps := passingDeps()
 	deps.SaveRecord = func(context.Context, domain.Record) result.Result[domain.Record, domain.Error] {
 		return result.Err[domain.Record, domain.Error](
 			domain.NewError(domain.CodeUnavailable, "le service est momentanément indisponible").
-				WithCause(panne),
+				WithCause(outage),
 		)
 	}
 
-	err := echec(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
+	err := failureOf(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
 
 	if err.Code != domain.CodeUnavailable {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeUnavailable)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeUnavailable)
 	}
-	if !errors.Is(err.Cause(), panne) {
-		t.Error("la cause technique doit survivre au passage dans le cas d'usage")
+	if !errors.Is(err.Cause(), outage) {
+		t.Error("the technical cause must survive the passage through the use case")
 	}
 }

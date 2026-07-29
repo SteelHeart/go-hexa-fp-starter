@@ -1,16 +1,16 @@
-// Package tests contient les tests en BOÎTE NOIRE du domaine de {{.Dir}} : ils
-// n'utilisent que l'API publique, exactement comme le ferait un cas d'usage.
+// Package tests holds the BLACK BOX tests of the {{.Dir}} domain: they only use
+// the public API, exactly like a use case would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 //
-// # Pourquoi ces tests sont les plus rentables du module
+// # Why these tests are the most profitable ones of the module
 //
-// Le domaine est PUR : ni I/O, ni horloge, ni aléa. Il se teste donc en
-// microsecondes, sans conteneur, sans double, sans montage. C'est là que chaque
-// règle métier et chaque cas limite doivent être couverts — pas plus haut, où
-// chaque test coûte cent fois plus cher pour prouver la même chose.
+// The domain is PURE: no I/O, no clock, no randomness. It therefore tests in
+// microseconds, without a container, without a double, without a mount. That is
+// where every business rule and every edge case must be covered — not higher
+// up, where each test costs a hundred times more to prove the same thing.
 package tests
 
 import (
@@ -20,23 +20,23 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// referenceValide construit une référence dont on sait qu'elle passe, ou fait
-// échouer le test. Évite de répéter la discrimination du Result partout.
-func referenceValide(t *testing.T, raw string) domain.Reference {
+// validReference builds a reference known to pass, or fails the test. Avoids
+// repeating the discrimination of the Result everywhere.
+func validReference(t *testing.T, raw string) domain.Reference {
 	t.Helper()
 	value, err, ok := domain.NewReference(raw).Get()
 	if !ok {
-		t.Fatalf("NewReference(%q) devait réussir, refusée: %v", raw, err)
+		t.Fatalf("NewReference(%q) should have succeeded, refused: %v", raw, err)
 	}
 	return value
 }
 
-// erreurDe extrait l'erreur complète d'un Result en échec.
-func erreurDe[T any](t *testing.T, r result.Result[T, domain.Error]) domain.Error {
+// failureOf extracts the whole error of a failed Result.
+func failureOf[T any](t *testing.T, r result.Result[T, domain.Error]) domain.Error {
 	t.Helper()
 	_, err, ok := r.Get()
 	if ok {
-		t.Fatal("un échec était attendu, reçu un succès")
+		t.Fatal("a failure was expected, got a success")
 	}
 	return err
 }

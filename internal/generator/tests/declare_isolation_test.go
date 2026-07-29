@@ -38,8 +38,8 @@ func TestDeclareIsolationKeepsTheRestByteForByte(t *testing.T) {
 		t.Error("the new module's exclusion is missing")
 	}
 	for _, kept := range []string{
-		"# Un commentaire qui doit SURVIVRE à l'insertion.",
-		"# Un second commentaire, après le point d'ancrage.",
+		"# A comment that must SURVIVE the insertion.",
+		"# A second comment, after the anchor point.",
 		`- package: "**.internal.core.**"`,
 	} {
 		if !strings.Contains(after, kept) {

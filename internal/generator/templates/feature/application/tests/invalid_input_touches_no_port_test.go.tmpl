@@ -9,30 +9,30 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// TestInvalidInputTouchesNoPort : une entrée invalide n'atteint AUCUN port.
+// TestInvalidInputTouchesNoPort: an invalid input reaches NO port.
 //
-// C'est la propriété que le court-circuit du pipeline est censé garantir, et
-// elle se constate plutôt qu'elle ne se suppose : les deux ports sont remplacés
-// par des closures qui font échouer le test si on les appelle.
+// This is the property the short circuit of the pipeline is supposed to
+// guarantee, and it gets observed rather than assumed: both ports are replaced
+// by closures that fail the test if they are called.
 //
-// Sans ce test, une inversion d'étapes — vérifier l'unicité avant de valider —
-// passerait inaperçue. Elle enverrait une requête au stockage pour chaque saisie
-// fautive, ce qui est un coût, et surtout une surface d'attaque gratuite.
+// Without this test, an inversion of the steps — checking uniqueness before
+// validating — would go unnoticed. It would send a request to storage for every
+// faulty input, which is a cost, and above all a free attack surface.
 func TestInvalidInputTouchesNoPort(t *testing.T) {
 	t.Parallel()
 
-	deps := depsQuiPassent()
+	deps := passingDeps()
 	deps.ReferenceIsTaken = func(context.Context, domain.Reference) result.Result[bool, domain.Error] {
-		t.Error("l'unicité ne doit pas être interrogée sur une entrée invalide")
+		t.Error("uniqueness must not be queried on an invalid input")
 		return result.Ok[bool, domain.Error](false)
 	}
 	deps.SaveRecord = func(_ context.Context, r domain.Record) result.Result[domain.Record, domain.Error] {
-		t.Error("rien ne doit être écrit sur une entrée invalide")
+		t.Error("nothing must be written on an invalid input")
 		return result.Ok[domain.Record, domain.Error](r)
 	}
 
-	err := echec(t, application.NewCreateRecord(deps)(context.Background(), "  "))
+	err := failureOf(t, application.NewCreateRecord(deps)(context.Background(), "  "))
 	if err.Code != domain.CodeInvalidReference {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeInvalidReference)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeInvalidReference)
 	}
 }

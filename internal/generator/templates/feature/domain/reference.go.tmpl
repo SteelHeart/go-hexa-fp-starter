@@ -6,31 +6,31 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// referenceMaxLen borne la longueur d'une référence.
+// referenceMaxLen bounds the length of a reference.
 //
-// Une borne EXPLICITE plutôt qu'aucune : sans elle, une entrée de plusieurs
-// mégaoctets traverserait le domaine jusqu'au stockage, où elle échouerait avec
-// un message de pilote au lieu d'un message métier.
+// An EXPLICIT bound rather than none: without it, an input of several megabytes
+// would cross the domain all the way to storage, where it would fail with a
+// driver message instead of a business one.
 const referenceMaxLen = 64
 
-// Reference identifie un enregistrement de {{.Dir}}, normalisée et validée.
+// Reference identifies a {{.Dir}} record, normalised and validated.
 //
-// Le champ est non exporté : il est IMPOSSIBLE de fabriquer une Reference
-// invalide hors de ce paquet. Conséquence directe : une fonction qui reçoit une
-// Reference n'a plus à la valider — c'est le type qui le garantit, pas une
+// The field is unexported: it is IMPOSSIBLE to build an invalid Reference
+// outside this package. Direct consequence: a function that receives a
+// Reference no longer has to validate it — the type guarantees it, not a
 // convention.
 //
-// ⚠️ C'est le VALUE OBJECT de démonstration du gabarit. Le remplacer par le
-// concept réel de {{.Dir}} est le premier travail attendu ; en garder la forme
-// — construction unique, champ privé, normalisation avant validation — est ce
-// que le socle demande.
+// ⚠️ This is the demonstration VALUE OBJECT of the template. Replacing it with
+// the real concept of {{.Dir}} is the first piece of work expected; keeping its
+// shape — a single construction path, a private field, normalisation before
+// validation — is what the starter asks for.
 type Reference struct{ value string }
 
-// NewReference normalise puis valide une référence. C'est le SEUL chemin de
-// construction.
+// NewReference normalises then validates a reference. It is the ONLY
+// construction path.
 //
-// Normaliser AVANT de valider, jamais l'inverse : sinon « ABC » et « abc  »
-// seraient deux enregistrements distincts, et l'unicité ne voudrait rien dire.
+// Normalise BEFORE validating, never the other way round: otherwise "ABC" and
+// "abc  " would be two distinct records, and uniqueness would mean nothing.
 func NewReference(raw string) result.Result[Reference, Error] {
 	normalized := strings.ToUpper(strings.TrimSpace(raw))
 
@@ -51,11 +51,11 @@ func NewReference(raw string) result.Result[Reference, Error] {
 	return result.Ok[Reference, Error](Reference{value: normalized})
 }
 
-// String retourne la référence normalisée.
+// String returns the normalised reference.
 func (r Reference) String() string { return r.value }
 
-// IsZero indique une référence non construite.
+// IsZero reports a reference that was never constructed.
 //
-// Utile aux invariants : la valeur zéro d'un type doit être détectable, sinon
-// un oubli de construction se propage sans se signaler.
+// Useful for invariants: the zero value of a type must be detectable, otherwise
+// a forgotten construction propagates without signalling itself.
 func (r Reference) IsZero() bool { return r.value == "" }

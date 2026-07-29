@@ -2,31 +2,31 @@ package domain
 
 import "time"
 
-// RecordID identifie un enregistrement de façon opaque.
+// RecordID identifies a record opaquely.
 //
-// Un type nommé plutôt qu'une chaîne : c'est ce qui empêche de passer une
-// référence là où un identifiant est attendu, une confusion que le compilateur
-// ne verrait jamais entre deux `string`.
+// A named type rather than a string: this is what prevents passing a reference
+// where an identifier is expected, a confusion the compiler would never see
+// between two `string`s.
 type RecordID string
 
-// Status énumère les états d'un enregistrement.
+// Status enumerates the states of a record.
 //
-// Ensemble FERMÉ, comme ErrorCode : ajouter un état force à traiter sa
-// traduction partout où l'on en décide.
+// A CLOSED set, like ErrorCode: adding a state forces its translation to be
+// handled everywhere a decision is made on it.
 type Status string
 
-// Les états d'un enregistrement.
+// The states of a record.
 const (
 	StatusPending  Status = "pending"
 	StatusActive   Status = "active"
 	StatusArchived Status = "archived"
 )
 
-// Record est l'agrégat de démonstration du gabarit.
+// Record is the demonstration aggregate of the template.
 //
-// Tous ses champs sont exportés et il se manipule PAR VALEUR : une méthode ne
-// mute jamais son receveur, elle rend une copie modifiée. C'est ce qui rend
-// impossible qu'un appelant observe un agrégat à moitié transformé.
+// All of its fields are exported and it is handled BY VALUE: a method never
+// mutates its receiver, it returns a modified copy. That is what makes it
+// impossible for a caller to observe a half-transformed aggregate.
 type Record struct {
 	ID        RecordID
 	Reference Reference
@@ -34,15 +34,15 @@ type Record struct {
 	CreatedAt time.Time
 }
 
-// NewRecord construit un enregistrement neuf.
+// NewRecord builds a brand new record.
 //
-// L'instant vient de l'appelant, pas de `time.Now()` : le domaine ne lit jamais
-// l'horloge (règle d'or du socle), et un test qui la lirait échouerait un jour,
-// sans raison.
+// The instant comes from the caller, not from `time.Now()`: the domain never
+// reads the clock (golden rule of the starter), and a test that read it would
+// fail one day, for no reason.
 //
-// L'état initial est TOUJOURS `pending`, jamais `active`. Un agrégat qui naîtrait
-// actif court-circuiterait toute étape de validation ultérieure — et ce genre de
-// défaut ne se voit pas en relecture, seulement en production.
+// The initial state is ALWAYS `pending`, never `active`. An aggregate born
+// active would short circuit every later validation step — and that kind of
+// defect is not seen in review, only in production.
 func NewRecord(id RecordID, reference Reference, now time.Time) Record {
 	return Record{
 		ID:        id,
@@ -52,7 +52,7 @@ func NewRecord(id RecordID, reference Reference, now time.Time) Record {
 	}
 }
 
-// WithStatus retourne une COPIE portant le nouvel état.
+// WithStatus returns a COPY carrying the new state.
 func (r Record) WithStatus(status Status) Record {
 	r.Status = status
 	return r

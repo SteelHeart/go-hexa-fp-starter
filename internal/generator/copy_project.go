@@ -9,23 +9,22 @@ import (
 	"strings"
 )
 
-// TrackedFiles énumère ce qui appartient au socle.
+// TrackedFiles enumerates what belongs to the starter.
 //
-// `git ls-files` plutôt qu'un parcours du disque, et ce n'est pas un raccourci :
-// c'est la seule définition qui ne se périme pas. Elle écarte d'office `.git/`,
-// `bin/`, `.env`, `coverage.out` et tout ce que `.gitignore` désignera demain —
-// alors qu'une liste d'exclusions écrite ici aurait divergé au premier ajout.
+// `git ls-files` rather than a disk walk, and that is not a shortcut: it is the
+// only definition that does not go stale. It rules out `.git/`, `bin/`, `.env`,
+// `coverage.out` and whatever `.gitignore` will name tomorrow — whereas an
+// exclusion list written here would have diverged at the first addition.
 //
-// Corollaire assumé : un fichier non suivi n'est pas recopié. C'est le bon
-// comportement — un fichier que le socle ne versionne pas ne fait pas partie du
-// socle.
+// Assumed corollary: an untracked file is not copied. That is the right
+// behaviour — a file the starter does not version is not part of the starter.
 func TrackedFiles(ctx context.Context, root string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "git", "ls-files", "-z")
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("%s n'est pas un dépôt git — `hexa new` recopie les fichiers "+
-			"SUIVIS, ce qui exige un dépôt: %w", root, err)
+		return nil, fmt.Errorf("%s is not a git repository — `hexa new` copies TRACKED "+
+			"files, which requires a repository: %w", root, err)
 	}
 
 	var files []string
@@ -35,16 +34,16 @@ func TrackedFiles(ctx context.Context, root string) ([]string, error) {
 		}
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("aucun fichier suivi dans %s : il n'y aurait rien à copier", root)
+		return nil, fmt.Errorf("no tracked file in %s: there would be nothing to copy", root)
 	}
 	return files, nil
 }
 
-// CopyProject recopie chaque fichier en réécrivant le chemin de module au passage.
+// CopyProject copies every file, rewriting the module path on the way.
 //
-// La réécriture se fait pendant la copie, jamais après : un passage séparé sur
-// l'arborescence oublierait les fichiers ajoutés entre-temps, et surtout il
-// laisserait un état intermédiaire où le projet ne compile pas.
+// The rewrite happens during the copy, never after: a separate pass over the
+// tree would miss files added in between, and above all it would leave an
+// intermediate state where the project does not build.
 func CopyProject(p ProjectPlan, files []string) error {
 	for _, relative := range files {
 		if err := copyOne(p, relative); err != nil {
@@ -54,63 +53,63 @@ func CopyProject(p ProjectPlan, files []string) error {
 	return nil
 }
 
-// copyOne traite un fichier, en PRÉSERVANT ses permissions.
+// copyOne handles one file, PRESERVING its permissions.
 //
-// Le bit exécutable n'est pas cosmétique ici : `.githooks/commit-msg` et les
-// gardes de `tools/` ne s'exécutent pas sans lui. Ce dépôt a déjà payé cette
-// erreur — ses deux crochets étaient versionnés en 100644, donc git les ignorait
-// partout, sur toutes les machines, sans que rien ne le signale.
+// The executable bit is not cosmetic here: `.githooks/commit-msg` and the guards
+// in `tools/` do not run without it. This repository has already paid for that
+// mistake — its two hooks were versioned as 100644, so git ignored them
+// everywhere, on every machine, without anything reporting it.
 func copyOne(p ProjectPlan, relative string) error {
 	source := filepath.Join(p.Source, relative)
 	target := filepath.Join(p.Destination, relative)
 
-	// `git ls-files` ne rend jamais de chemin hors du dépôt, mais l'affirmer ne
-	// suffit pas : c'est le genre d'invariant qui tient jusqu'au jour où
-	// quelqu'un appelle cette fonction autrement. Le refus est explicite.
+	// `git ls-files` never returns a path outside the repository, but asserting
+	// that is not enough: it is the kind of invariant that holds until the day
+	// somebody calls this function differently. The refusal is explicit.
 	if !strings.HasPrefix(target, p.Destination+string(filepath.Separator)) {
-		return fmt.Errorf("%s sort de la destination : chemin refusé", relative)
+		return fmt.Errorf("%s escapes the destination: path refused", relative)
 	}
 
 	info, err := os.Lstat(source)
 	if err != nil {
-		return fmt.Errorf("lecture de %s: %w", relative, err)
+		return fmt.Errorf("reading %s: %w", relative, err)
 	}
-	// Un lien symbolique recopié en fichier changerait le sens de l'arborescence.
-	// Le socle n'en contient aucun ; le jour où il en contiendra, il faudra en
-	// décider explicitement plutôt que de découvrir le résultat.
+	// A symbolic link copied as a file would change the meaning of the tree. The
+	// starter holds none; the day it does, that will have to be decided
+	// explicitly rather than discovered after the fact.
 	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("%s est un lien symbolique : cas non traité, à trancher avant de le versionner", relative)
+		return fmt.Errorf("%s is a symbolic link: unhandled case, to be decided before versioning it", relative)
 	}
 
-	// Le chemin vient de `git ls-files` sur la racine fournie, jamais d'une
-	// entrée arbitraire : c'est la liste des fichiers du socle lui-même.
-	content, err := os.ReadFile(source) //nolint:gosec // chemin issu de git ls-files sur la racine du socle
+	// The path comes from `git ls-files` on the supplied root, never from
+	// arbitrary input: it is the starter's own file list.
+	content, err := os.ReadFile(source) //nolint:gosec // path coming from git ls-files on the starter root
 	if err != nil {
-		return fmt.Errorf("lecture de %s: %w", relative, err)
+		return fmt.Errorf("reading %s: %w", relative, err)
 	}
 	if !CitesSocleByHistory(relative) {
 		content = []byte(strings.ReplaceAll(string(content), p.SocleModule, p.TargetModule))
 	}
 
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-		return fmt.Errorf("création du répertoire de %s: %w", relative, err)
+		return fmt.Errorf("creating the directory of %s: %w", relative, err)
 	}
-	//nolint:gosec // cible vérifiée plus haut comme interne à la destination
+	//nolint:gosec // target checked above as internal to the destination
 	if err := os.WriteFile(target, content, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("écriture de %s: %w", relative, err)
+		return fmt.Errorf("writing %s: %w", relative, err)
 	}
 	return nil
 }
 
-// CitesSocleByHistory nomme les fichiers dont les occurrences du chemin de
-// module sont des LIENS vers l'historique du socle, pas des imports.
+// CitesSocleByHistory names the files whose occurrences of the module path are
+// LINKS to the starter's history, not imports.
 //
-// Les réécrire ferait pointer l'historique du socle vers un dépôt qui ne l'a
-// jamais porté : des liens vers des PR et des issues qui n'existent pas.
+// Rewriting them would point the starter's history at a repository that never
+// carried it: links to pull requests and issues that do not exist.
 //
-// La liste est identique à celle de `rename:verify` dans le Taskfile, et pour la
-// même raison. Elle est ÉNUMÉRÉE, jamais devinée par motif : une exception qui
-// s'élargit toute seule finit par couvrir un vrai import.
+// The list is identical to the one in `rename:verify` in the Taskfile, and for
+// the same reason. It is ENUMERATED, never guessed from a pattern: an exception
+// that widens on its own ends up covering a real import.
 func CitesSocleByHistory(relative string) bool {
 	const separator = "/"
 	switch {
@@ -119,7 +118,7 @@ func CitesSocleByHistory(relative string) bool {
 	case relative == "documentation/process/REPRISE.md":
 		return true
 	case strings.HasPrefix(relative, "documentation/adr"+separator):
-		// Chaque ADR cite son issue d'origine en en-tête.
+		// Every ADR cites its originating issue in its header.
 		return true
 	default:
 		return false

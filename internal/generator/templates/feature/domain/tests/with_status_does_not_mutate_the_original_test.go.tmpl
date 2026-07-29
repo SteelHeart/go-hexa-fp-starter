@@ -7,25 +7,25 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestWithStatusDoesNotMutateTheOriginal : `WithStatus` rend une COPIE.
+// TestWithStatusDoesNotMutateTheOriginal: `WithStatus` returns a COPY.
 //
-// C'est l'immuabilité par valeur, et elle se vérifie plutôt qu'elle ne se
-// suppose : si `WithStatus` mutait son receveur, un appelant qui garde une
-// référence vers l'agrégat d'origine verrait son état changer sous lui — sans
-// aucune ligne de code chez lui pour l'expliquer.
+// This is immutability by value, and it gets verified rather than assumed: if
+// `WithStatus` mutated its receiver, a caller holding a reference to the
+// original aggregate would see its state change underneath — without a single
+// line of code on their side to explain it.
 func TestWithStatusDoesNotMutateTheOriginal(t *testing.T) {
 	t.Parallel()
 
-	origine := domain.NewRecord("id-1", referenceValide(t, "ABC-123"), time.Unix(0, 0))
-	copie := origine.WithStatus(domain.StatusArchived)
+	original := domain.NewRecord("id-1", validReference(t, "ABC-123"), time.Unix(0, 0))
+	duplicate := original.WithStatus(domain.StatusArchived)
 
-	if origine.Status != domain.StatusPending {
-		t.Errorf("l'original a été muté : status = %q", origine.Status)
+	if original.Status != domain.StatusPending {
+		t.Errorf("the original was mutated: status = %q", original.Status)
 	}
-	if copie.Status != domain.StatusArchived {
-		t.Errorf("la copie porte %q, attendu %q", copie.Status, domain.StatusArchived)
+	if duplicate.Status != domain.StatusArchived {
+		t.Errorf("the copy carries %q, want %q", duplicate.Status, domain.StatusArchived)
 	}
-	if copie.ID != origine.ID || copie.Reference != origine.Reference {
-		t.Error("la copie doit conserver les autres champs à l'identique")
+	if duplicate.ID != original.ID || duplicate.Reference != original.Reference {
+		t.Error("the copy must keep the other fields identical")
 	}
 }

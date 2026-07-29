@@ -1,34 +1,33 @@
-// Package memory implémente la persistance de {{.Dir}} en mémoire.
+// Package memory implements the persistence of {{.Dir}} in memory.
 //
-// # Pourquoi ce pilote existe
+// # Why this driver exists
 //
-// Il n'est pas un bouchon de test : c'est le pilote PAR DÉFAUT du module, et
-// c'est lui qui rend vraie la promesse du socle — `hexa new` puis `go run`
-// démarre sans base, sans Docker, sans rien. Un module dont le seul pilote
-// exigerait PostgreSQL casserait cette promesse au premier module écrit.
+// It is not a test stub: it is the DEFAULT driver of the module, and it is what
+// makes the promise of the starter true — `hexa new` then `go run` starts with
+// no database, no Docker, nothing. A module whose only driver required
+// PostgreSQL would break that promise at the very first module written.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Unicité de la référence** : la carte est indexée par référence
-//     normalisée, et `Save` refuse un doublon avec `CodeReferenceTaken` — le même
-//     code qu'un pilote SQL rendra sur une violation de contrainte. C'est ce qui
-//     rend deux pilotes réellement substituables.
-//   - **Sûr en concurrence** : toutes les lectures et écritures passent par un
-//     RWMutex.
-//   - **Aucune mutation de l'entrée** : `domain.Record` est une valeur.
+//   - **Uniqueness of the reference**: the map is indexed by normalised
+//     reference, and `Save` refuses a duplicate with `CodeReferenceTaken` — the
+//     same code an SQL driver will return on a constraint violation. That is
+//     what makes two drivers genuinely substitutable.
+//   - **Concurrency safe**: every read and every write goes through an RWMutex.
+//   - **No mutation of the input**: `domain.Record` is a value.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **Aucune durabilité.** Tout disparaît à l'arrêt du processus.
-//   - **Aucun partage entre répliques.** Deux instances ont deux magasins, donc
-//     deux vérités. L'unicité n'est garantie QUE dans un processus.
-//   - **Aucune transaction.** Un échec après l'écriture ne l'annule pas. C'est la
-//     NON-garantie la plus coûteuse, et la raison pour laquelle ce pilote ne
-//     convient pas à la production.
-//   - **La mémoire croît sans fin.** Aucune purge, aucune borne.
+//   - **No durability.** Everything disappears when the process stops.
+//   - **No sharing between replicas.** Two instances hold two stores, therefore
+//     two truths. Uniqueness is guaranteed ONLY within one process.
+//   - **No transaction.** A failure after the write does not undo it. This is
+//     the costliest NON-guarantee, and the reason this driver is unfit for
+//     production.
+//   - **Memory grows without end.** No eviction, no bound.
 //
-// Écrire ces NON-garanties fait partie de la livraison d'un pilote : un pilote
-// dont on ignore ce qu'il ne garantit pas sera choisi pour ce qu'il ne fait pas.
+// Writing these NON-guarantees is part of delivering a driver: a driver whose
+// non-guarantees are unknown will be picked for what it does not do.
 package memory
 
 import (
@@ -39,25 +38,24 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// Store retient les enregistrements, indexés par référence normalisée.
+// Store retains the records, indexed by normalised reference.
 type Store struct {
 	mu           sync.RWMutex
 	byReference  map[string]domain.Record
 }
 
-// New construit un magasin vide.
+// New builds an empty store.
 func New() *Store {
 	return &Store{byReference: make(map[string]domain.Record)}
 }
 
-// Save implémente ports.SaveRecord.
+// Save implements ports.SaveRecord.
 //
-// Le refus du doublon est ICI et non dans le cas d'usage, délibérément. Le cas
-// d'usage vérifie déjà l'unicité, mais entre sa vérification et son écriture il
-// existe une fenêtre : deux créations simultanées sur la même référence la
-// franchissent toutes les deux. Seul le magasin, qui détient le verrou, peut
-// trancher — exactement comme une contrainte SQL tranche pour un pilote
-// relationnel.
+// The refusal of the duplicate is HERE and not in the use case, deliberately.
+// The use case already checks uniqueness, but between its check and its write
+// there is a window: two simultaneous creations on the same reference both
+// cross it. Only the store, which holds the lock, can settle it — exactly like
+// an SQL constraint settles it for a relational driver.
 func (s *Store) Save(_ context.Context, record domain.Record) result.Result[domain.Record, domain.Error] {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -74,9 +72,10 @@ func (s *Store) Save(_ context.Context, record domain.Record) result.Result[doma
 	return result.Ok[domain.Record, domain.Error](record)
 }
 
-// IsTaken implémente ports.ReferenceIsTaken.
+// IsTaken implements ports.ReferenceIsTaken.
 //
-// L'absence n'est PAS une erreur : elle vaut `false`. C'est le contrat du port.
+// Absence is NOT an error: it is worth `false`. That is the contract of the
+// port.
 func (s *Store) IsTaken(_ context.Context, reference domain.Reference) result.Result[bool, domain.Error] {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -85,10 +84,10 @@ func (s *Store) IsTaken(_ context.Context, reference domain.Reference) result.Re
 	return result.Ok[bool, domain.Error](exists)
 }
 
-// Count rend le nombre d'enregistrements retenus.
+// Count returns the number of records retained.
 //
-// Exposé pour l'exploitation et les sondes, pas pour les tests : ceux-ci passent
-// par les ports, comme n'importe quel appelant.
+// Exposed for operations and probes, not for the tests: those go through the
+// ports, like any other caller.
 func (s *Store) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

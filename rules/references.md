@@ -100,6 +100,23 @@ et n'est jamais publié avec le code. `tools/covergate`, écrit en Go, reste dan
 une DONNÉE — un nom de document, un message destiné à l'utilisateur — et une donnée peut
 légitimement être en français.
 
+### ⚠️ Chercher les accents ne suffit PAS à trouver le français restant
+
+C'est la méthode qui vient à l'esprit pour mesurer ce qu'il reste à traduire :
+
+```bash
+grep -rlP '[éèêëàâäçôöùûüîïÉÈÀÇ]' internal/
+```
+
+Elle rate tout le français **sans marque diacritique**. Mesuré sur les gabarits du générateur :
+`{{.Dir}} est indisponible` et `une erreur interne est survenue` lui échappent entièrement — deux
+lignes sur huit, soit un quart des chaînes concernées, dans deux fichiers que la commande déclarait
+propres.
+
+**Un chiffre de reste-à-faire obtenu par cette commande est donc un PLANCHER, jamais un total.**
+Recouper par une recherche sur les tournures — `es[t]`, `une `, `le `, `la ` — avant d'annoncer
+qu'une zone est terminée.
+
 Il ne regarde que les lignes ajoutées parce que la traduction se livre en **tranches** : un garde
 rouge jusqu'à la dernière serait ignoré, donc désarmé. Il empêche la dette de croître pendant qu'on
 la résorbe.

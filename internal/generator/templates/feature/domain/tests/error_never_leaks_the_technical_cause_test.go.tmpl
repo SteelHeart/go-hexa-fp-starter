@@ -8,33 +8,33 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestErrorNeverLeaksTheTechnicalCause : la cause technique est journalisable,
-// jamais lisible dans le message rendu.
+// TestErrorNeverLeaksTheTechnicalCause: the technical cause is loggable, never
+// readable in the returned message.
 //
-// Une erreur de pilote renvoyée à l'appelant est une fuite de structure : un nom
-// de table, un nom de contrainte, parfois un fragment de requête. Le message
-// utilisateur et le détail technique sont donc deux chemins distincts, et ce test
-// vérifie qu'ils ne se rejoignent nulle part.
+// A driver error sent back to the caller is a leak of the structure: a table
+// name, a constraint name, sometimes a fragment of a query. The user message
+// and the technical detail are therefore two distinct paths, and this test
+// verifies that they meet nowhere.
 //
-// Il vérifie aussi que `WithCause` et `WithField` rendent des COPIES : sinon,
-// enrichir une erreur en modifierait une autre déjà partie ailleurs.
+// It also verifies that `WithCause` and `WithField` return COPIES: otherwise,
+// enriching one error would modify another one already gone elsewhere.
 func TestErrorNeverLeaksTheTechnicalCause(t *testing.T) {
 	t.Parallel()
 
 	secret := errors.New("pq: duplicate key value violates unique constraint \"records_reference_key\"")
 	base := domain.NewError(domain.CodeInternal, "une erreur interne est survenue")
-	enrichie := base.WithCause(secret).WithField("reference")
+	enriched := base.WithCause(secret).WithField("reference")
 
-	if strings.Contains(enrichie.Error(), "constraint") {
-		t.Errorf("le message rendu contient le détail technique: %q", enrichie.Error())
+	if strings.Contains(enriched.Error(), "constraint") {
+		t.Errorf("the returned message contains the technical detail: %q", enriched.Error())
 	}
-	if !errors.Is(enrichie.Cause(), secret) {
-		t.Error("la cause doit rester accessible pour la journalisation")
+	if !errors.Is(enriched.Cause(), secret) {
+		t.Error("the cause must stay reachable for logging")
 	}
 	if base.Cause() != nil || base.Field != "" {
-		t.Error("l'erreur d'origine a été mutée : WithCause/WithField doivent copier")
+		t.Error("the original error was mutated: WithCause/WithField must copy")
 	}
-	if !strings.Contains(enrichie.Error(), "reference") {
-		t.Errorf("le champ fautif doit apparaître: %q", enrichie.Error())
+	if !strings.Contains(enriched.Error(), "reference") {
+		t.Errorf("the faulty field must appear: %q", enriched.Error())
 	}
 }
