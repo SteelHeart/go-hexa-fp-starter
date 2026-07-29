@@ -9,6 +9,7 @@ import (
 	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
 // createIdentityInput creates an account. The bearer must be authorised.
@@ -76,6 +77,7 @@ func mountCreateIdentity(api huma.API, mod auth.Module, guard Guard) {
 	permission := mustPermission(contract.PermissionIdentityCreate)
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-identity",
+		MaxBodyBytes:  middleware.NoBodyLimit,
 		Method:        contract.CreateIdentityRoute.Method,
 		Path:          contract.CreateIdentityRoute.Path,
 		Summary:       "Create an account",
@@ -104,10 +106,11 @@ func mountCreateIdentity(api huma.API, mod auth.Module, guard Guard) {
 func mountDefineRole(api huma.API, mod auth.Module, guard Guard) {
 	permission := mustPermission(contract.PermissionRoleWrite)
 	huma.Register(api, huma.Operation{
-		OperationID: "define-role",
-		Method:      contract.DefineRoleRoute.Method,
-		Path:        contract.DefineRoleRoute.Path,
-		Summary:     "Define a role",
+		OperationID:  "define-role",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.DefineRoleRoute.Method,
+		Path:         contract.DefineRoleRoute.Path,
+		Summary:      "Define a role",
 		Description: "REPLACES the role and its permissions. Requires `" +
 			contract.PermissionRoleWrite + "` — the most powerful permission of the module: " +
 			"whoever holds it can grant themselves all the others.",
@@ -129,6 +132,7 @@ func mountAssignRoles(api huma.API, mod auth.Module, guard Guard) {
 	permission := mustPermission(contract.PermissionIdentityRoles)
 	huma.Register(api, huma.Operation{
 		OperationID:   "assign-roles",
+		MaxBodyBytes:  middleware.NoBodyLimit,
 		Method:        contract.AssignRolesRoute.Method,
 		Path:          contract.AssignRolesRoute.Path,
 		Summary:       "Assign roles",
@@ -154,10 +158,11 @@ func mountAssignRoles(api huma.API, mod auth.Module, guard Guard) {
 func mountCloseIdentity(api huma.API, mod auth.Module, guard Guard) {
 	permission := mustPermission(contract.PermissionIdentityClose)
 	huma.Register(api, huma.Operation{
-		OperationID: "close-identity",
-		Method:      contract.CloseIdentityRoute.Method,
-		Path:        contract.CloseIdentityRoute.Path,
-		Summary:     "Close an account",
+		OperationID:  "close-identity",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.CloseIdentityRoute.Method,
+		Path:         contract.CloseIdentityRoute.Path,
+		Summary:      "Close an account",
 		Description: "Takes effect IMMEDIATELY: tokens already issued stop being worth anything. " +
 			"Requires `" + contract.PermissionIdentityClose + "`.",
 		Tags:          []string{apiTag},

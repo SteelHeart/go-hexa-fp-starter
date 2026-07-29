@@ -63,6 +63,15 @@ func router(env config.Environment, readiness map[string]httpserver.Probe) *http
 	return httpserver.NewRouter(serverConfig(env), quietLogger(), readiness)
 }
 
+// routerWith mounts the router from a configuration the caller has adjusted.
+//
+// `router` above starts from `serverConfig`, which is deliberately wide so that
+// no test fails for a bound that is not its subject. A test whose subject IS a
+// bound needs to set it, hence this second entry point.
+func routerWith(cfg config.Config) *httpserver.Router {
+	return httpserver.NewRouter(cfg, quietLogger(), nil)
+}
+
 // get queries a path of the router and returns the recorded response.
 func get(t *testing.T, env config.Environment, readiness map[string]httpserver.Probe, path string) *httptest.ResponseRecorder {
 	t.Helper()

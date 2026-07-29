@@ -8,6 +8,7 @@ import (
 
 	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
 // bearerInput carries the presented token.
@@ -31,10 +32,11 @@ type closeSessionOutput struct {
 // mountCloseSession exposes the revocation of the presented token.
 func mountCloseSession(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
-		OperationID: "close-session",
-		Method:      contract.CloseSessionRoute.Method,
-		Path:        contract.CloseSessionRoute.Path,
-		Summary:     "Close the current session",
+		OperationID:  "close-session",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.CloseSessionRoute.Method,
+		Path:         contract.CloseSessionRoute.Path,
+		Summary:      "Close the current session",
 		Description: "Revokes the presented token, IMMEDIATELY. " +
 			"Idempotent: closing an already closed session returns 204.",
 		Tags:          []string{apiTag},

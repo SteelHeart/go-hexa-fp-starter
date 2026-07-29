@@ -1,7 +1,10 @@
 # P2 — Le développeur backend à fort trafic
 
-> **Verdict : 🔴 quatre critères sur cinq rouges.** Un est passé au vert, et un autre s'est révélé
-> **pire que ce que la grille annonçait**.
+> **Verdict au relevé : 🔴 quatre critères sur cinq rouges.** Un est passé au vert, et un autre s'est
+> révélé **pire que ce que la grille annonçait**.
+>
+> ✅ **Depuis, un second critère est vert** : la taille d'ingestion (#141), corrigée le 2026-07-29 —
+> et c'est cette preuve qui l'avait trouvée. Solde actuel : **trois rouges, un vert, une nuance**.
 
 Mesuré le **2026-07-29**, sur `main`, dans la toolbox.
 
@@ -15,7 +18,7 @@ La même liste de tâches que P1, mais avec ce qu'elle exige : **import en masse
 | Critère | Cible | Mesuré le 2026-07-29 | Verdict |
 |---|---|---|---|
 | Réponse en flux possible | oui | **non** — aucun `http.Flusher`, aucun `text/event-stream` dans tout le dépôt | 🔴 |
-| Taille d'ingestion | configurable | **non** — et pas pour la raison écrite, voir ci-dessous | 🔴 |
+| Taille d'ingestion | configurable | ~~**non**~~ → **oui** ✅ le 2026-07-29 (#141). Au relevé : non, et **pas pour la raison écrite** — voir ci-dessous | ✅ |
 | File de travaux longs | oui | **aucune** — les huit modules noyau ne comportent aucune file généraliste ; `cmd/worker` ne dépile que l'outbox | 🔴 |
 | Benchmarks de non-régression | ≥ 1 | **`tests/perf/` existe** et tourne (#91) — mais **0 `func Benchmark`** en Go | ⚠️ |
 | Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`, aucun `GOMAXPROCS`** | 🔴 |
@@ -51,8 +54,25 @@ réglée.
 L'exploitant qui relève la limite verra sa configuration acceptée, le service démarrer, et les
 requêtes échouer avec une valeur qu'il n'a écrite nulle part.
 
-→ **Issue [#141](https://github.com/SteelHeart/go-hexa-fp-starter/issues/141).** Le remède est d'une
-ligne — plus le test sans lequel il n'est pas vérifiable.
+→ **Issue [#141](https://github.com/SteelHeart/go-hexa-fp-starter/issues/141).** ✅ **Corrigé le
+2026-07-29.**
+
+> ⚠️ **Le diagnostic écrit ci-dessus était juste sur le symptôme et faux sur la cause**, et « le
+> remède est d'une ligne » l'était encore plus.
+>
+> La borne n'est **pas** sur `huma.DefaultConfig` : elle est sur **chaque `huma.Operation`**, et
+> `huma.Register` la fixe à 1 MiB dès que l'entrée porte un `Body`. Dix opérations dans le dépôt,
+> plus le gabarit du générateur — donc **tout projet engendré naissait avec le défaut**.
+>
+> `middleware.MaxBody` faisait déjà son travail correctement. Le remède retenu est donc de
+> **désarmer la borne en double** plutôt que d'en synchroniser deux, et de rendre le `413`
+> nous-mêmes : désarmer huma seul aurait transformé le refus en **`500` « cannot read request
+> body »**, c'est-à-dire en accusation de panne serveur pour une requête qui dépasse simplement une
+> limite documentée.
+>
+> Un garde le tient désormais — `tools/verifie-borne-de-corps.sh` — parce qu'une route neuve qui
+> oublie le champ ne casse rien, ne logue rien, et retombe au défaut sans que personne ne
+> l'apprenne avant un import en masse en production.
 
 ## Le critère qui a bougé
 

@@ -8,6 +8,7 @@ import (
 
 	contract "github.com/SteelHeart/go-hexa-fp-starter/internal/contracts/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/middleware"
 )
 
 // openSessionInput is the sign-in request.
@@ -41,10 +42,11 @@ type openSessionOutput struct {
 // mountOpenSession exposes the exchange of a secret for a token.
 func mountOpenSession(api huma.API, mod auth.Module) {
 	huma.Register(api, huma.Operation{
-		OperationID: "open-session",
-		Method:      contract.OpenSessionRoute.Method,
-		Path:        contract.OpenSessionRoute.Path,
-		Summary:     "Open a session",
+		OperationID:  "open-session",
+		MaxBodyBytes: middleware.NoBodyLimit,
+		Method:       contract.OpenSessionRoute.Method,
+		Path:         contract.OpenSessionRoute.Path,
+		Summary:      "Open a session",
 		Description: "Exchanges a secret for an opaque token. " +
 			"The token AUTHENTICATES: it carries no permission, and the rights " +
 			"are re-read on every decision (ADR 017).",
