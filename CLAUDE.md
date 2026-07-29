@@ -45,6 +45,9 @@ chemin de module est la seule valeur nominative, isolée derrière `task rename`
    À interroger **avant** d'ouvrir un ADR : une décision qui ne sert aucune persona n'a pas à être
    prise. Porte aussi la **matrice par version** et la ligne de ce qu'on ne fera **jamais**.
 5. **[`documentation/process/`](documentation/process/README.md)** — nomenclature, labels, templates.
+6. **[`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md)** —
+   les **écarts connus** entre ce qui est écrit et ce qui est. Douze, nommés, avec leur devenir.
+   À lire avant de croire un document du dépôt sur parole.
 
 ## Règles d'or
 
@@ -105,10 +108,14 @@ sont fournis par la CI.
 rules/                        règlement d'ingénierie — fait foi
 documentation/adr/            décisions d'architecture — font foi
 documentation/produit/        personas, périmètre, matrice par version — le POUR QUI
-documentation/process/        nomenclature, labels, templates
+documentation/process/        nomenclature, labels, templates, journal de friction, audit #107
 documentation/securite/       registre de failles, matrice d'accès
+documentation/technique/      matrice des pilotes, modules noyau, parité des frameworks
+.github/                      CI, modèles d'issue et de PR, labels, dependabot
+.githooks/                    commit-msg · pre-push — filets locaux, pas des contrôles
 cmd/{server,worker}           composition root — le seul code qui connaît tout
 cmd/cli                       register · seed · health — MÊME port que HTTP (#8)
+cmd/hexa                      le générateur — coquille sur internal/generator (ADR 016)
 config/*.yaml                 configuration par groupes, secrets par ${VAR} uniquement
 internal/config/              lecture, fusion, validation — refuse le démarrage sur incohérence
 internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
@@ -116,20 +123,30 @@ internal/infrastructure/      socle technique sans métier : db, cache, http, te
 internal/contracts/           langage publié — ce que les modules s'échangent sans s'importer
 internal/generator/           la logique de `hexa` — cmd/hexa n'est qu'une coquille (ADR 016)
 internal/core/{nom}/          MODULE NOYAU — fourni par le socle
+internal/core/tests/          tests TRANSVERSES aux modules noyau, pas un module
 internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   ├── domain/                 pur : ni I/O, ni time.Now(), ni logger
   ├── ports/                  types fonction uniquement — ni struct, ni interface
   ├── application/            pipeline + décorateurs — rend compte, ne journalise pas
+  │                           ⟨absent⟩ des modules sans politique à orchestrer — voir
+  │                           l'audit #107 § É-09, dérogation écrite et motivée
   ├── drivers/{nom}/          une implémentation interchangeable, avec ses NON-garanties
   ├── adapters/primary/       http · cli · events — une surface par dossier
-  ├── adapters/secondary/     postgres · mailer
+  ├── adapters/secondary/     hashing · outboxpub · postgres · mailer
   ├── tests/                  boîte noire, un fichier par test
+  ├── catalog.go              les pilotes DÉCLARABLES — partage ses constantes avec New (ADR 014)
   └── module.go               composition root local — le SEUL à connaître les pilotes
+⚠️ l'ADR 012 nomme ce dossier `surfaces/`, le code écrit `adapters/primary/` — écart É-02
 migrations/{moteur}/          SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
 deploy/postgres/              provision.sql — les RÔLES, exécuté une fois, hors goose
+deploy/toolbox/               l'outillage EN IMAGE — `tb` ; rien n'est installé sur le poste
 api/openapi.yaml              ⟨absent⟩ — le contrat est SERVI sur /openapi.{json,yaml},
                               pas encore versionné : un fichier généré à la main dériverait
-tests/{e2e,perf}              tags `e2e` — hors du `go test ./...` par défaut
+tests/e2e/                    tag `e2e` — hors du `go test ./...` par défaut
+tests/integration/            tag `integration` — exige Postgres et Redis (#37)
+tests/perf/                   ⟨absent⟩ — `task test:perf` pointe dessus dans le vide (#91)
+tools/*.sh                    les gardes, UNE définition appelée par la CI et par `task`
+tools/testdata/               les cas qui font ÉCHOUER les gardes (ADR 013) — faux exprès
 tools/covergate/              cliquets de couverture — LA source unique des seuils,
                               lancée à l'identique par `task test` et par la CI
 ```
@@ -309,7 +326,7 @@ utilisable par personne. État cohérent, mais non énoncé : voir les arbitrage
 | `test` | **échoue** — et pas à cause du code |
 
 > ✅ **VÉRIFIÉ le 2026-07-27 : `task check` est VERT de bout en bout, code de retour 0**, depuis un
-> clone du dépôt placé hors du dossier protégé (`C:\Users\MAC\hexa-check`), **cliquets de couverture
+> clone du dépôt placé hors du dossier protégé (hors de la zone protégée par Defender), **cliquets de couverture
 > compris**. Les six étapes s'exécutent réellement — vérifié en listant les commandes lancées, pas
 > en lisant « pas d'erreur » :
 >
@@ -333,7 +350,7 @@ applications autorisées — ce dernier point relève de l'utilisateur, pas de l
 
 `go test -coverprofile=coverage.out` échoue sur « Le fichier spécifié est introuvable », et `go get`
 ne peut pas réécrire `go.mod` pour la même raison. Diagnostiqué par un programme témoin de dix
-lignes : création **refusée** dans le dépôt, **acceptée** dans `%TEMP%` et sous `C:\Users\MAC\`. Le
+lignes : création **refusée** dans le dépôt, **acceptée** dans `%TEMP%` et sous le profil utilisateur. Le
 shell, lui, écrit sans problème dans le dépôt — c'est donc une protection visant les binaires,
 propre au répertoire web de XAMPP (antivirus ou accès contrôlé aux dossiers).
 
@@ -387,8 +404,11 @@ périmètre **en le disant**.
 - ~~Aucun consommateur d'événement~~ — **RÉSOLU**. `user.registered.v1` a son consommateur, et la
   chaîne complète `inscription → outbox → dépileur → relais → garde d'idempotence → notification`
   a tourné sur les binaires réels (#9, #103)
-- **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire, donc pas
-  de schéma. On ne provisionne pas un rôle pour des données qui n'existent pas
+- **Aucune table de module MÉTIER** — `user_registration` n'a pas d'adaptateur secondaire **de
+  persistance**, donc pas de schéma. On ne provisionne pas un rôle pour des données qui n'existent
+  pas. ⚠️ La formulation précédente disait « pas d'adaptateur secondaire » tout court : il en a
+  **deux**, `hashing` et `outboxpub`. Prémisse fausse portant une conclusion juste — le cas que
+  personne ne corrige, puisque le résultat semble bon (audit #107 § É-12)
 - **Aucune politique RLS écrite** : le module `tenancy` n'existe pas, donc aucune table ne porte de
   `tenant_id`. En écrire une serait décorer une décision non prise (ADR 011 § ce qui n'est pas tranché)
 - ~~Aucune authentification ni autorisation~~ — **RÉSOLU** (#11, #109). `auth` existe, avec sa

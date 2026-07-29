@@ -8,19 +8,35 @@
 
 ## Ce qui est réellement construit
 
-Une centaine de pilotes sont décrits plus bas. **Onze existent.** Ce qui fait autorité sur ce qu'on
-peut activer est le `catalog.go` **de chaque module** — depuis l'ADR 014, `internal/config` ne nomme
-aucun module. Chaque catalogue ne liste que les pilotes écrits, testés, et qui documentent leurs
-NON-garanties, et il partage ses constantes avec la fabrique du même paquet.
+Une centaine de pilotes sont décrits plus bas. **Quinze existent**, relevé du 2026-07-29.
 
-| Module noyau | Pilotes construits |
-|---|---|
-| `outbox` | `memory` · `postgres` |
-| `idempotency` | `memory` · `postgres` · `redis` |
-| `dynconf` | `file` · `postgres` |
-| `audit` | `log` · `postgres` |
-| `storage` | `disk` |
-| `scheduler` | `cron-inproc` · `advisory-lock` |
+⚠️ **Ce tableau n'est PAS la source de vérité — il en est une copie, et une copie dérive.** Ce qui
+fait autorité sur ce qu'on peut activer est le `catalog.go` **de chaque module** : depuis l'ADR 014,
+`internal/config` ne nomme aucun module, chaque catalogue ne liste que les pilotes écrits, testés,
+documentant leurs NON-garanties, et il **partage ses constantes** avec la fabrique du même paquet.
+
+Le recompter, plutôt que le relire :
+
+```bash
+grep -rhoE 'driver[A-Za-z]+ +=? *"[a-z-]+"' internal/core/*/*.go internal/modules/*/*.go \
+  | sed 's/.*"\(.*\)"/\1/' | sort | uniq -c
+```
+
+L'audit #107 a trouvé ce tableau à **onze**, sans `auth`, sans `notification`, sans
+`user_registration` — un document qui proclame en en-tête que le catalogue fait autorité, et qui se
+contredit trois lignes plus bas.
+
+| Module | Pilotes construits | Défaut |
+|---|---|---|
+| `outbox` | `memory` · `postgres` | `memory` |
+| `idempotency` | `memory` · `postgres` · `redis` | `memory` |
+| `dynconf` | `file` · `postgres` | `file` |
+| `audit` | `log` · `postgres` | `log` |
+| `storage` | `disk` | `disk` |
+| `scheduler` | `cron-inproc` · `advisory-lock` | `cron-inproc` |
+| `auth` | `memory` | `memory` |
+| `notification` | `log` | `log` |
+| `user_registration` *(module métier)* | `memory` | `memory` |
 
 Tout le reste **refuse le démarrage**. C'est délibéré : accepter `driver: s3` dans la configuration
 puis échouer plus loin avec « pilote inconnu » ferait se contredire deux sources de vérité, et le
@@ -29,9 +45,13 @@ message accuserait l'utilisateur d'une faute qui serait la nôtre.
 Un pilote migre de ce catalogue d'intentions vers le `catalog.go` de son module le jour où il est
 écrit, testé, et où il déclare ce qu'il ne garantit pas — jamais avant.
 
-> Les pilotes `postgres` et `redis` ci-dessus sont **écrits mais jamais exécutés** : aucune migration
-> n'existe (issue #2) et aucun service ne tourne sur la machine de référence (friction F001). Ils
-> compilent, ils ont été relus, rien ne les a éprouvés.
+> ✅ **Les pilotes `postgres` et `redis` sont EXERCÉS** depuis #37 : le niveau `integration` les
+> teste contre un vrai Postgres et un vrai Redis, et le job CI du même nom l'exécute à chaque PR.
+> Les migrations sont appliquées et vérifiées depuis #5 et #84, F001 est résolue.
+>
+> Cet encadré affirmait le contraire — *« écrits mais jamais exécutés, aucune migration n'existe
+> (#2), aucun service sur la machine de référence (F001) »* — bien après que les trois faits ont
+> cessé d'être vrais.
 
 ## Six règles qui gouvernent tout pilote
 
