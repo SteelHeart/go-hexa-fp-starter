@@ -8,14 +8,17 @@ This is not an application, and not a project template you copy once either. The
 stops the shape from degrading. The path there is described in
 [`documentation/technique/parite-frameworks.md`](documentation/technique/parite-frameworks.md).
 
-> **⚠️ Readable, not reusable.** This repository is **public to read** and stays under
-> [`LICENSE`](LICENSE) **all rights reserved**: no right of use, copying, modification or
-> redistribution is granted. Publishing it serves transparency and security review, not adoption.
-> **Do not fork it, do not integrate it** — neither into a product, nor into a training set. Opening
-> up is considered, with no date and no commitment.
+> **Licensed under [Apache-2.0](LICENSE)** since 2026-07-29 — use, modification and redistribution
+> are granted, with an explicit patent grant. The decision and what it makes irreversible are
+> recorded in [ADR 020](documentation/adr/020-la-licence-est-apache-2-0.md).
 >
-> This is a decision, not an oversight. It is taken and recorded in
-> [#113](https://github.com/SteelHeart/go-hexa-fp-starter/issues/113).
+> **⚠️ Open licence, but not yet importable.** Every package still lives under `internal/`, which
+> the Go compiler forbids third parties from importing. `go list ./... | grep -v /internal/` returns
+> five packages, and **all five are `package main`** — so the number a third party can import is
+> **zero**. The licence removed the legal blocker; the public frontier is a separate piece of work,
+> and [ADR 015](documentation/adr/015-la-frontiere-publique-est-derivee-d-un-usage-mesure.md)
+> requires it to be derived from measured usage rather than declared. Until then, `hexa new` copies
+> the starter — it is not a dependency you can `require`.
 
 > **State of play.** The HTTP server, the command line and the event dispatcher exist and run — the
 > full chain `registration → outbox → dispatcher → relay → idempotency guard → notification` has
@@ -313,12 +316,19 @@ translates them "along the way" and makes it look like the question is settled.
 
 ## Licence
 
-[`LICENSE`](LICENSE) — **all rights reserved**. The repository is **public to read**: consultable,
-analysable, quotable. **No right of use, copying, modification or redistribution is granted**,
-including for model training.
+[`LICENSE`](LICENSE) — **Apache License 2.0**, since 2026-07-29. Use, modification and
+redistribution are granted, along with an **explicit patent grant** (§3) — the reason Apache-2.0 was
+picked over MIT for a starter meant to be embedded in third-party products.
 
-This is a *source-available* state, **chosen** — not an open licence somebody forgot to add.
-Transparency serves security review and evaluation; adoption is not the goal today. Opening up is
-considered, **with no date and no commitment**, and will be announced here before anywhere else.
+Attribution notices are in [`NOTICE`](NOTICE). Contributions are covered by §5: anything you submit
+for inclusion is under these same terms, so there is no CLA to sign.
 
-For a use that needs rights, open an issue.
+The decision is recorded in [ADR 020](documentation/adr/020-la-licence-est-apache-2-0.md). It
+reverses an earlier ruling — the repository was deliberately *source-available* (all rights
+reserved) until the persona proofs showed that stance was incompatible with the transfer condition:
+an external adopter could read this code and legally do nothing with it.
+
+> ⚠️ **What the licence does not do.** It does not make this importable. Every package is still
+> under `internal/`; the public frontier has to be built, and ADR 015 requires it to be derived from
+> measured usage rather than declared up front. Publishing a package under this licence cannot be
+> undone — which is exactly why it is not being rushed.

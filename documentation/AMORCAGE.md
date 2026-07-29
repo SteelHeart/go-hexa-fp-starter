@@ -204,8 +204,13 @@ Deux leçons, dans l'ordre où elles se paient :
 2. **Un environnement qui refuse ne prouve rien sur le code.** `codeql.yml` était juste depuis le
    début ; l'échec accusait le workflow et venait d'ailleurs. Même forme que F008.
 
-⚠️ **`LICENSE` dit « tous droits réservés »** — le code est donc lisible par tout le monde et
-utilisable par personne. État cohérent, mais non énoncé : voir les arbitrages en attente.
+✅ **`LICENSE` dit `Apache-2.0`** depuis le 2026-07-29 (ADR 020, #155) — usage, modification et
+redistribution accordés, **concession de brevet comprise**. Inverse l'arbitrage de #113, parce que
+la preuve P3 a montré que *tous droits réservés* rendait la condition de transfert insatisfiable.
+
+⚠️ **Ouvert ne veut pas dire importable.** Tout vit sous `internal/` ; le nombre de paquets qu'un
+tiers peut importer reste **zéro**. Et l'irréversibilité a commencé : un paquet publié sous cette
+licence ne se retire plus.
 
 ### La langue du CODE est l'anglais — ADR 018, campagne terminée
 
@@ -511,7 +516,8 @@ reste un filet contre l'accident ; il n'est plus le seul dispositif.
 | Le jeton AUTHENTIFIE, il n'autorise pas — le droit est relu à chaque appel | ADR 017 |
 | La langue du CODE est l'anglais, celle du règlement le français | ADR 018 |
 | L'anatomie nomme ses adaptateurs, et le générateur en pose un | ADR 019 |
-| Dépôt **PUBLIC en lecture**, `LICENSE` tous droits réservés | décision du 2026-07-28 |
+| Dépôt **PUBLIC en lecture** | décision du 2026-07-28 |
+| `LICENSE` **Apache-2.0** — inverse le *source-available* de #113 | ADR 020, décision du 2026-07-29 |
 | `v0.1.0` opérationnel · `v0.2.0+` nouveaux modules · `v1.0.0` frontière GELÉE | décision du 2026-07-27 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |
 | Séquencement : stabiliser AVANT de restructurer | décision de lead dev |
@@ -777,11 +783,17 @@ Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriét
   permissions exactes. Un fournisseur externe reste possible **en tant que pilote**, c'est
   précisément ce que l'anatomie de l'ADR 012 rend interchangeable
 - ~~**#18 F002**~~ — **TRANCHÉ** : dépôt public, ruleset serveur actif
-- 🔴 **#113 LA LICENCE** — question NEUVE ouverte par le passage en public. `LICENSE` dit *tous
-  droits réservés* : le code est **lisible par tout le monde et utilisable par personne**. État
-  cohérent — « source-available » — mais **subi, jamais choisi** : il résulte d'un changement de
-  visibilité fait pour débloquer #72 et #18. Se tranche **avant** le transfert vers l'organisation,
-  parce qu'il détermine ce que ce transfert signifie juridiquement
+- ~~**#113 LA LICENCE**~~ — **TRANCHÉ DEUX FOIS.** D'abord *source-available assumé* (#113, PR
+  #120) : l'état cessait d'être subi, il était énoncé. Puis **inversé** le 2026-07-29 par l'**ADR
+  020** (#155) : la licence est **Apache-2.0**.
+  Ce qui a forcé l'inversion n'est pas un changement d'avis, c'est une **mesure** : la preuve P3
+  (#138) a montré que le rouge de cette persona était **par décision**, donc insensible à tout
+  travail — et que la condition de transfert, qui exige **toutes** les personas éprouvées, devenait
+  de ce fait insatisfiable. La contradiction n'était visible nulle part avant que les personas ne
+  soient mesurées plutôt qu'affirmées.
+  ⚠️ **L'irréversibilité commence là.** Tout paquet rendu importable devient utilisable pour
+  toujours. La règle de l'ADR 015 — *la frontière se dérive d'un usage mesuré, elle ne se décrète
+  pas* — passe de prudente à indispensable
 - **#34** : langue du **code** — recommandation posée, anglais dès maintenant pour `godoc` et les
   identifiants, français pour `rules/` jusqu'à la PR de traduction
 - **#36** : SQLite comme pilote SQL par défaut ?

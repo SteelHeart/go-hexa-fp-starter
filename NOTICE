@@ -1,0 +1,15 @@
+go-hexa-fp-starter
+Copyright 2026 Pacôm Charbel YABI
+
+This product includes software developed by Pacôm Charbel YABI.
+
+Licensed under the Apache License, Version 2.0. See LICENSE for the full terms.
+
+---
+
+Third-party dependencies are NOT vendored in this repository. They are resolved
+by the Go module system from go.mod and go.sum, and each remains under its own
+licence. This NOTICE covers the original work only.
+
+The rationale for this licence, and what it makes irreversible, is recorded in
+documentation/adr/020-la-licence-est-apache-2-0.md.

@@ -291,7 +291,7 @@ Deux conclusions à ne pas reperdre :
 | Réf | Question ouverte |
 |---|---|
 | **PR #60** | Validation du périmètre produit — personas, matrice, ligne « ⛔ jamais » |
-| **#61** | **Licence.** Le `Dockerfile` déclare MIT, aucun `LICENSE` n'existe. MIT confirmée ou Apache-2.0 ? Quel titulaire ? Bloquant **avant publication**, plus urgent depuis le retour en privé |
+| ~~**#61**~~ ~~**#113**~~ | ~~Licence~~ — **TRANCHÉE** le 2026-07-29 : **Apache-2.0**, titulaire Pacôm Charbel YABI. ADR 020, issue #155. Cette ligne a été fausse deux fois — `LICENSE` existait depuis #61, et le dépôt est public depuis le 2026-07-28, pas « repassé privé » |
 | **H1** | P1 évolue-t-elle en contexte mobile-first / paiement mobile (XOF) ? Change l'ordre de `notification` et `ratelimit` |
 | **H3** | `v0.1.0` : jalon interne ou annonce publique ? |
 | **#18** | Protection de branche — **rouvre** : dépôt repassé privé, rulesets en `403` |
