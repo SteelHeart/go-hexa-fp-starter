@@ -8,7 +8,11 @@
 // into the dependency graph of EVERY generated project, including those that
 // will never go near an object store. The driver rules settle it: heavy drivers
 // are separate Go modules (issue #22). They are therefore not "forgotten", they
-// are elsewhere — and `knownDrivers` only lists what exists.
+// are elsewhere — and each module's `catalog.go` only lists what exists.
+//
+// ⚠️ This sentence used to name `knownDrivers`, a global table of
+// `internal/config` that ADR 014 REMOVED (#76). Whoever went looking for it
+// could not tell whether they were searching badly or whether it was gone.
 package storage
 
 import (

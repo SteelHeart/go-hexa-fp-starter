@@ -41,7 +41,9 @@ type Outcome struct {
 	Type string
 	// Event says what happened.
 	Event Event
-	// Attempts is the number of attempts AFTER this one.
+	// Attempts is the TOTAL number of attempts, this one included — it is
+	// `msg.Attempts + 1`, and it is what `NextAttempt` compares to
+	// `MaxAttempts`. It is not a remaining count.
 	Attempts int
 	// Duration measures the call to the publisher alone, not the recording of
 	// the fate.

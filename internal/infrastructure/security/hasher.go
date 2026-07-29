@@ -108,12 +108,17 @@ func (h Hasher) NeedsRehash(encoded string) bool {
 		decoded.params.Iterations < h.params.Iterations
 }
 
-// decodedHash carries the three pieces of a digest.
+// decodedHash carries the pieces of a digest: the parameters, the salt and the
+// key.
 //
-// Grouped into a type rather than three return values: they only mean something
-// together — verifying a key with the salt of another digest means nothing —
-// and three returns of the same shape (`[]byte`, `[]byte`) get swapped without
-// the compiler flinching.
+// Grouped into a type rather than separate return values: they only mean
+// something together — verifying a key with the salt of another digest means
+// nothing — and two returns of the same shape (`[]byte`, `[]byte`) get swapped
+// without the compiler flinching.
+//
+// ⚠️ This comment announced "three pieces" and then listed two. The count was
+// wrong, and it was wrong in the documentation of the very type born from the
+// "more than two returns = a missing type" rule.
 type decodedHash struct {
 	params Argon2Params
 	salt   []byte

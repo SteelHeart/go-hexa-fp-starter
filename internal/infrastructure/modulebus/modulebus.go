@@ -116,9 +116,22 @@ func Resolve[I, O any](
 
 // httpCaller calls the remote module.
 //
-// The error body is NOT interpreted: a calling module has no business knowing
-// another one's internal error taxonomy. It gets the status and the raw body,
-// and translates it itself.
+// # On failure, the caller gets the STATUS and nothing else
+//
+// Never the remote body — and that is a security decision, not an oversight.
+// The body of a failing reply is another module's error message, about ITS
+// data: it commonly carries the address that was refused, the customer
+// identifier, the business reason for the rejection.
+//
+// That error travels back to the caller, gets logged by it, and leaves for the
+// observability sink. Personal data from one module would then cross another
+// one's boundary and land in the logs — exactly what rules/securite.md §5
+// forbids.
+//
+// ⚠️ This comment used to say the opposite: "it gets the status and the raw
+// body". `TestAnHTTPFailureNeverLeaksTheRemoteBody` forbids precisely that, so
+// the comment described what the test exists to prevent — and invited whoever
+// read it to "fix" the code, then to conclude the test was wrong.
 func httpCaller[I, O any](client *http.Client, baseURL string, route Route) Caller[I, O] {
 	endpoint := strings.TrimSuffix(baseURL, "/") + route.Path
 	return func(ctx context.Context, in I) (O, error) {

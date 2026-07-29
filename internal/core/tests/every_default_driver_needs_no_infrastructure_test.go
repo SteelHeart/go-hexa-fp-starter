@@ -19,7 +19,7 @@ import (
 //
 // It used to live in `internal/config/internal_test.go`, where it queried a
 // framework table. Since ADR 014 there is no table any more: it therefore
-// queries the REAL catalogues of the six modules, which is what it should have
+// queries the REAL catalogues of every core module, which is what it should have
 // done from the start.
 func TestEveryDefaultDriverNeedsNoInfrastructure(t *testing.T) {
 	t.Parallel()

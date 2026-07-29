@@ -42,9 +42,20 @@ type Guard struct {
 // the event if the other one gives up. Replaying later costs only one attempt;
 // acknowledging wrongly costs the effect.
 //
-// **`Release` is in a `defer` on the failure path.** Forgetting it would make
-// the envelope unhandleable until the key expires — that is twenty-four hours
-// during which a replay is refused without anything explaining why.
+// **`Release` is called INLINE on the failure path, not deferred**, and its own
+// error is JOINED to the handler's rather than replacing it. A defer could not
+// do that: it has no return value to join into, so a key left locked would lose
+// its message — and a locked key is a distinct incident, hard to diagnose
+// without one.
+//
+// Forgetting the release altogether would make the envelope unhandleable until
+// the key expires: twenty-four hours during which a replay is refused without
+// anything explaining why.
+//
+// ⚠️ KNOWN LIMIT, named rather than kept quiet: a handler that PANICS skips the
+// release, since nothing here recovers. The key then stays locked until it
+// expires. Recovering here would mean deciding what a panicking consumer means
+// — a decision nobody has taken, and one this package must not take silently.
 func Once(guard Guard, handler messaging.Handler) messaging.Handler {
 	return func(ctx context.Context, env messaging.Envelope) error {
 		if env.ID == "" {
