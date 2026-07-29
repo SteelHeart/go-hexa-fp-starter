@@ -1,0 +1,83 @@
+package tests
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+// TestCreationAnswers201AndLeaksNothing is the nominal path of the surface.
+//
+// # Two properties, and the second is the one that matters
+//
+// The status is the easy half. The one worth a test is that the reply carries
+// ONLY what the outside world is entitled to know: returning the domain entity
+// as it stands would publish every field added to it later, without anyone
+// deciding to.
+//
+// The check runs on the RAW body, not on the decoded map: a field with a
+// harmless-looking name would escape a field-by-field inspection.
+func TestCreationAnswers201AndLeaksNothing(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(t)
+	resp := post(t, server, `{"reference":"ABC-123"}`)
+
+	if resp.status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 — %s", resp.status, resp.raw)
+	}
+
+	// The reference is normalised by the DOMAIN, case and spaces included. The
+	// surface does not touch it: it returns what the use case handed back.
+	if got, _ := resp.body["reference"].(string); got != "ABC-123" {
+		t.Errorf("reference = %v, want the normalised reference ABC-123", got)
+	}
+
+	// A record is born PENDING. Being born active would be a fail-open.
+	if got, _ := resp.body["status"].(string); got != "pending" {
+		t.Errorf("status = %v, want pending", got)
+	}
+
+	if got, _ := resp.body["id"].(string); got == "" {
+		t.Error("the reply must carry the identifier")
+	}
+}
+
+// TestAnInvalidReferenceAnswers422WithTheDomainMessage keeps the translation.
+//
+// The message must come from the DOMAIN, not from the surface nor from the
+// schema. A surface that produced its own wording would state a rule twice —
+// and the two would diverge, with the wrong one speaking to the user.
+func TestAnInvalidReferenceAnswers422WithTheDomainMessage(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(t)
+	resp := post(t, server, `{"reference":""}`)
+
+	if resp.status != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 — %s", resp.status, resp.raw)
+	}
+	if !strings.Contains(resp.raw, "reference") {
+		t.Errorf("the reply must name the faulty field: %s", resp.raw)
+	}
+}
+
+// TestATakenReferenceAnswers409NotUnprocessable keeps the distinction.
+//
+// 409 and not 422: the request is well formed, it is the STATE of the server
+// that opposes it. The distinction matters to a client deciding whether or not
+// to retry — and confusing the two makes it retry forever, or give up at once.
+func TestATakenReferenceAnswers409NotUnprocessable(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(t)
+
+	if first := post(t, server, `{"reference":"DUP-1"}`); first.status != http.StatusCreated {
+		t.Fatalf("first creation: %d — %s", first.status, first.raw)
+	}
+
+	second := post(t, server, `{"reference":"DUP-1"}`)
+	if second.status != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 — %s", second.status, second.raw)
+	}
+}

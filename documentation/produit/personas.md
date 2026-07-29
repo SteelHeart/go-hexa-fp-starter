@@ -186,7 +186,7 @@ consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du 
 | 1 | Comment je crée mon projet ? | ✅ | `hexa new` — et la garantie est **outillée** : un job CI génère un projet et y lance `task check`, cliquets de couverture compris | P1 |
 | 2 | De quoi ai-je besoin sur ma machine ? | ✅ | `deploy/toolbox/` — rien d'installé, `go run` démarre sans service | P1 |
 | **Écriture** ||||
-| 3 | Comment je crée un module ? | ✅ | `hexa make:feature <nom>` — domaine, ports, cas d'usage, pilote sans dépendance, catalogue, composition root et tests aux trois niveaux. Il **éprouve** le projet entier avant de rendre la main, et écrit la règle d'étanchéité `arch-go` du module neuf. ⚠️ Une **surface** reste à écrire à la main : `make:adapter` n'existe pas | P1 |
+| 3 | Comment je crée un module ? | ✅ | `hexa make:feature <nom>` — domaine, ports, cas d'usage, pilote sans dépendance, catalogue, composition root, **surface HTTP** et tests aux quatre niveaux. Il **éprouve** le projet entier avant de rendre la main, et écrit la règle d'étanchéité `arch-go` du module neuf. Le module engendré est **joignable dès sa création** (ADR 019) : la seconde surface s'écrit en copiant un frère | P1 |
 | 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` **21 règles**, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
 | 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||

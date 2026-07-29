@@ -29,6 +29,7 @@ refonte.
 | [016](016-le-generateur-est-une-bibliotheque-pas-un-composition-root.md) | Le générateur est une bibliothèque, pas un composition root | Accepté |
 | [017](017-authentification-et-autorisation.md) | Le jeton authentifie, il n'autorise pas | Accepté |
 | [018](018-la-langue-du-code-est-l-anglais.md) | La langue du code est l'anglais, celle du règlement le français | Accepté |
+| [019](019-l-anatomie-nomme-ses-adaptateurs.md) | L'anatomie nomme ses adaptateurs, et le générateur en pose un | Accepté |
 
 > ⚠️ **010 n'existe pas encore, et du code le référence déjà** — `internal/infrastructure/messaging`
 > et `internal/infrastructure/modulebus`. Le numéro est réservé pour que rien d'autre ne le prenne.
