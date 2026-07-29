@@ -28,6 +28,7 @@ refonte.
 | [015](015-la-frontiere-publique-est-derivee-d-un-usage-mesure.md) | La frontière publique est dérivée d'un usage mesuré, pas décidée d'avance | Accepté |
 | [016](016-le-generateur-est-une-bibliotheque-pas-un-composition-root.md) | Le générateur est une bibliothèque, pas un composition root | Accepté |
 | [017](017-authentification-et-autorisation.md) | Le jeton authentifie, il n'autorise pas | Accepté |
+| [018](018-la-langue-du-code-est-l-anglais.md) | La langue du code est l'anglais, celle du règlement le français | Accepté |
 
 > ⚠️ **010 n'existe pas encore, et du code le référence déjà** — `internal/infrastructure/messaging`
 > et `internal/infrastructure/modulebus`. Le numéro est réservé pour que rien d'autre ne le prenne.
