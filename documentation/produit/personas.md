@@ -190,7 +190,7 @@ consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du 
 | 4 | Quelles conventions m'impose-t-on ? | ✅ | `arch-go` **21 règles**, `golangci-lint` ~50 analyseurs, `rules/` | P1 · P5 |
 | 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||
-| 6 | Plusieurs frontends simultanés ? | ⚠️ | **deux** surfaces HTTP (`user_registration`, `auth`) et un **consommateur d'événements** qui produit un effet réel — la chaîne complète a tourné (#9, #103). Mais le consommateur est câblé dans `cmd/worker`, pas monté en `adapters/primary/events/` : la doctrine n'est donc pas encore démontrée par l'anatomie. La surface CLI (#8) est en revue | P2 |
+| 6 | Plusieurs frontends simultanés ? | ✅ | **trois** adaptateurs primaires — `user_registration/adapters/primary/{http,cli}` et `auth/adapters/primary/http` — plus un **consommateur d'événements** dont la chaîne complète a tourné (#9, #103). La démonstration tient parce que HTTP et CLI appellent le **même port** sur le **même module** : la carte d'impact de #8 ne touche ni `domain/`, ni `ports/`, ni `application/`. ⚠️ Le consommateur reste câblé dans `cmd/worker` et non monté en `adapters/primary/events/` — la doctrine est démontrée, cet adaptateur-là ne l'est pas | P2 |
 | 7 | Streaming et temps réel ? | 🔴 | aucun SSE, aucun WebSocket, aucun `Flusher` ; `write_timeout: 10s` ; `max_body_bytes: 1 MiB` | P2 |
 | **Configuration** ||||
 | 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée**, **19 champs** aujourd'hui contre 16 au premier relevé (`internal/config/config.go`) — aucun point d'extension, et elle se referme | **P1 · P2** |
@@ -206,7 +206,7 @@ consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du 
 | **Durée** ||||
 | 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**.
+**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**, 9 ✅ et 1 ⚠️.
 
 > 🔴 **Le relevé précédent annonçait « 6 rouges » alors que sa propre grille en portait 7.** L'écart
 > a été trouvé en recomptant la colonne, pas en la relisant. C'est exactement ce que la règle d'or
@@ -214,10 +214,11 @@ consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du 
 > document exige une **remesure**, jamais une recopie. Le compte est désormais vérifié
 > mécaniquement : `awk` sur la colonne d'état.
 
-Le gain de ce lot est **`auth` (#14)**, le critère le plus lourd de P1 et de P4 : il passe de
-« rien » à « prouvé sur le binaire réel ». Le second gain n'apparaît pas dans la colonne mais change
-le sens du critère 6 : le consommateur d'événements EXISTE et produit un effet — la chaîne
-`inscription → outbox → relais → notification` a tourné, en local puis en CI.
+Deux gains dans ce lot. **`auth` (#14)** — le critère le plus lourd de P1 et de P4 — passe de
+« rien » à « prouvé sur le binaire réel ». Et **le critère 6 passe au vert** : la surface CLI (#8)
+appelle le même port que HTTP sur le même module, et sa carte d'impact ne touche aucune couche
+interne. C'est la propriété n°2 du socle enfin *mesurée* plutôt qu'énoncée — elle avait attendu
+trois relevés.
 
 Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
 sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher**,
@@ -242,7 +243,7 @@ DERNIER blocage.
 
 | Version | Promesse en une phrase | Sert | Ce qui y entre |
 |---|---|---|---|
-| **v0.1** | « Le socle tient ce qu'il affiche » | **P1** partiellement, **P5** | Barrière CI réelle (#47) ✅ · `auth` (#11) ✅ *(garde d'autorisation en revue)* · 2ᵉ surface CLI (#8) *en revue* · tests d'intégration (#37) ✅ · observabilité branchée (#13) ✅ · consommateur d'événements (#9) ✅ |
+| **v0.1** | « Le socle tient ce qu'il affiche » | **P1** partiellement, **P5** | **Toute la ligne est livrée** : barrière CI réelle (#47) ✅ · `auth` et son garde d'autorisation (#11) ✅ · 2ᵉ surface CLI (#8) ✅ · tests d'intégration (#37) ✅ · observabilité branchée (#13) ✅ · consommateur d'événements (#9) ✅. Ne restent que des rouges d'ENVIRONNEMENT : #72 (CodeQL indisponible en dépôt privé) et #89 (séquencement du tag) |
 | **v1.0** | « Le framework s'utilise **sans le modifier** » | **P1** · **P2** · **P3** | **Configuration ouverte** · **déclaration des pilotes hors framework** · `hexa new` (#17) · file de travaux · streaming et délais par route · frontière API publique et politique de versions · `notification`, `tenancy`, `i18n` |
 | **v2.0** | « Le framework se déploie à l'échelle » | **P4** · **P5** | Cloud native, microservices, devops avancé, multi-région, découverte de services, disjoncteur, passerelle d'API |
 | **⛔ jamais** | — | — | CRUD administratif généré · Active Record / ORM · conteneur d'injection · façades statiques · système de plugins |
