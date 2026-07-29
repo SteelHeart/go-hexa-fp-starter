@@ -201,17 +201,19 @@ controle_pilotes() {
 # ─────────────────────────────────────────────────────────────────────────────
 # Aurait fait sauter É-02 et É-09 au premier passage, des mois plus tôt.
 #
-# ⚠️ Ce contrôle est DÉLIBÉRÉMENT minimal tant que #116 n'est pas tranchée :
-# l'ADR grave `surfaces/`, le code écrit `adapters/primary/`, et trancher ici
-# reviendrait à décider par l'outillage ce qu'un ADR doit décider.
+# Ce contrôle est resté minimal tant que #116 n'était pas tranchée : l'ADR 012
+# gravait `surfaces/`, le code écrivait `adapters/primary/`, et trancher dans un
+# garde reviendrait à décider par l'outillage ce qu'un ADR doit décider.
 #
-# Il vérifie donc ce qui n'est pas contesté : tout module a `domain/`, `ports/`,
-# `tests/`, `module.go` et `catalog.go`. `application/` est ABSENT de la liste —
-# la dérogation É-09 est écrite, quatre modules n'ont aucune politique à
-# orchestrer, et une couche qui réexporterait le pilote serait la couche de
+# L'ADR 019 a tranché — `adapters/{primary,secondary}` — donc le garde peut
+# désormais l'appliquer : AUCUN dossier `surfaces/` ne doit réapparaître.
+#
+# `application/` reste ABSENT de la liste des dossiers exigés : la dérogation
+# É-09 est écrite dans l'ADR 019 §3, quatre modules noyau n'ont aucune politique
+# à orchestrer, et une couche qui réexporterait le pilote serait la couche de
 # transfert que l'hexagonal reproche aux couches de service.
 controle_anatomie() {
-    echo "  3. l'anatomie ADR 012 contre l'arborescence"
+    echo "  3. l'anatomie ADR 012 + 019 contre l'arborescence"
 
     manque=$(
         for module in internal/core/*/ internal/modules/*/; do
@@ -227,6 +229,10 @@ controle_anatomie() {
             for exige in module.go catalog.go; do
                 [ -f "$module$exige" ] || echo "$module manque $exige"
             done
+            # ADR 019 : le nom retenu est `adapters/`, jamais `surfaces/`. Ce
+            # contrôle empêche la réapparition silencieuse de l'ancien nom —
+            # c'est-à-dire le retour de l'écart É-02, qui a vécu des mois.
+            [ -d "${module}surfaces" ] && echo "$module porte surfaces/ — l'ADR 019 impose adapters/"
         done
     )
     if [ -n "$manque" ]; then

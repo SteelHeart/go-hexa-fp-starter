@@ -1,0 +1,122 @@
+// Package tests exercises the HTTP SURFACE of the {{.Dir}} module.
+//
+// # In process, with no infrastructure at all
+//
+// The server is mounted in memory by `httptest`: no port opened, no binary
+// launched, no external service. These tests therefore run in an ordinary
+// `go test ./...`, on any machine, in a few milliseconds.
+//
+// That is deliberate. A surface test that requires orchestrating a binary and a
+// database only runs in CI; it is therefore written once, broken a month later,
+// and nobody sees it before the next integration. This one breaks the second
+// someone changes a status code.
+//
+// What they verify: the TRANSLATION. The domain has its own tests, so does the
+// pipeline. Here the only checks are that a domain error becomes the right HTTP
+// status, and that nothing internal leaks into the response.
+package tests
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/config"
+	"{{.Module}}/internal/infrastructure/httpserver"
+	{{.Package}} "{{.Module}}/internal/modules/{{.Dir}}"
+	modulehttp "{{.Module}}/internal/modules/{{.Dir}}/adapters/primary/http"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// newServer mounts the surface on an in-memory server.
+//
+// The module runs on its default driver: every test therefore has its own
+// store, pristine, and can run in parallel without interfering.
+func newServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	mod, err := {{.Package}}.New("", {{.Package}}.Deps{
+		GenerateID: func() domain.RecordID { return "01J8ZQ9V3K4M5N6P7R8S9T0V1W" },
+		Now:        func() time.Time { return time.Date(2026, time.July, 29, 9, 0, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatalf("mounting the module: %v", err)
+	}
+
+	router := httpserver.NewRouter(testConfig(), discardLogger(), nil)
+	modulehttp.Mount(router.API, mod)
+
+	server := httptest.NewServer(router.Mux)
+	t.Cleanup(server.Close)
+	return server
+}
+
+// testConfig carries the minimum the router needs.
+//
+// ⚠️ The rate limits are deliberately HIGH: at zero, the limiter would refuse
+// everything and every test would fail with a 429 — a defect whose cause would
+// be invisible in the error message.
+func testConfig() config.Config {
+	return config.Config{
+		App: config.App{
+			Env:     config.EnvTest,
+			Name:    "surface-test",
+			Version: "test",
+		},
+		HTTP:   config.HTTP{MaxBodyBytes: 1 << 20},
+		Limits: config.Limits{RPS: 10_000, Burst: 10_000},
+	}
+}
+
+// response is a fully consumed HTTP response.
+//
+// The RAW body is kept alongside the decoded one, and it matters just as much:
+// a leak is looked for in the TEXT, not in a map. An internal field carried by
+// a harmless-looking name would escape any field-by-field inspection.
+type response struct {
+	status int
+	body   map[string]any
+	raw    string
+}
+
+// post sends a creation request and returns the response, body read and closed.
+func post(t *testing.T, server *httptest.Server, payload string) response {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodPost,
+		server.URL+modulehttp.RoutePath,
+		bytes.NewBufferString(payload),
+	)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("sending the request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the body: %v", err)
+	}
+
+	out := response{status: resp.StatusCode, raw: string(raw)}
+	// A decoding failure is NOT fatal: an error reply has another shape, and
+	// the tests that check a refusal only look at the status and the raw body.
+	_ = json.Unmarshal(raw, &out.body)
+	return out
+}
+
+// discardLogger throws logs away.
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}

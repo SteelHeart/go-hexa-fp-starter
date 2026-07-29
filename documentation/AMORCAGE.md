@@ -141,7 +141,8 @@ internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
   ├── tests/                  boîte noire, un fichier par test
   ├── catalog.go              les pilotes DÉCLARABLES — partage ses constantes avec New (ADR 014)
   └── module.go               composition root local — le SEUL à connaître les pilotes
-⚠️ l'ADR 012 nomme ce dossier `surfaces/`, le code écrit `adapters/primary/` — écart É-02
+   les noms `adapters/{primary,secondary}` sont ceux de l'ADR 019, qui remplace
+   l'anatomie de l'ADR 012 — et `hexa make:feature` pose la surface HTTP
 migrations/{moteur}/          SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
 deploy/postgres/              provision.sql — les RÔLES, exécuté une fois, hors goose
 deploy/toolbox/               l'outillage EN IMAGE — `tb` ; rien n'est installé sur le poste
@@ -506,6 +507,8 @@ reste un filet contre l'accident ; il n'est plus le seul dispositif.
 | La frontière publique est dérivée d'un usage mesuré, pas décidée d'avance | ADR 015 |
 | Le générateur est une BIBLIOTHÈQUE ; `cmd/hexa` n'est qu'une coquille | ADR 016 |
 | Le jeton AUTHENTIFIE, il n'autorise pas — le droit est relu à chaque appel | ADR 017 |
+| La langue du CODE est l'anglais, celle du règlement le français | ADR 018 |
+| L'anatomie nomme ses adaptateurs, et le générateur en pose un | ADR 019 |
 | Dépôt **PUBLIC en lecture**, `LICENSE` tous droits réservés | décision du 2026-07-28 |
 | `v0.1.0` opérationnel · `v0.2.0+` nouveaux modules · `v1.0.0` frontière GELÉE | décision du 2026-07-27 |
 | Monorepo multi-modules `core/` + `cli/` + `template/` | issue #16, **après** v0.1.0 |

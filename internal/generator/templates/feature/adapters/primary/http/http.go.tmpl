@@ -1,0 +1,158 @@
+// Package http exposes the {{.Dir}} module on the HTTP surface.
+//
+// # A surface is a TRANSLATOR, never a place for business
+//
+// This package does exactly three things: translate an HTTP request into a
+// domain command, call the use case, translate the Result into an HTTP
+// response. It validates nothing itself — the domain already does, and
+// duplicating the validation guarantees that one day the two will diverge.
+//
+// # Why the generator writes this file
+//
+// A generated module reachable by no surface teaches "not necessary" — and
+// whoever copies its shape reproduces the gap (ADR 019). More concretely: the
+// starter's property number two, *the number of frontends is a non-subject*, is
+// demonstrated by adding a SECOND surface without touching the core. Without a
+// first one, that demonstration cannot even start.
+//
+// Adding a CLI or an event consumer therefore amounts to writing a sibling of
+// this file. Not a line of `domain/` or `application/` moves: that is the
+// property ADR 005 buys.
+package http
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+
+	{{.Package}} "{{.Module}}/internal/modules/{{.Dir}}"
+	"{{.Module}}/internal/modules/{{.Dir}}/domain"
+)
+
+// RoutePath is the path of the creation route.
+//
+// Declared here rather than inline: a published contract belongs to
+// `internal/contracts/` the day another module calls this one. Until then, one
+// constant is enough — and it is the single place to change to version the
+// route.
+const RoutePath = "/v1/{{.Dir}}"
+
+// createInput is the creation request.
+//
+// # No validation constraint in the schema, and that is deliberate
+//
+// A `minLength` or a `pattern` here would refuse the input BEFORE the domain,
+// and would return huma's message rather than the domain's. Two validation
+// rules for the same field is one too many: they will diverge, and it is the
+// wrong one that will speak to the user.
+//
+// The schema therefore DOCUMENTS, it does not validate.
+// `domain.NewReference` remains the sole judge.
+type createInput struct {
+	Body struct {
+		Reference string `json:"reference" doc:"Business reference of the record"`
+	}
+}
+
+// createOutput is the creation reply.
+//
+// It carries only what the outside world is entitled to know. Returning the
+// domain entity as it stands would publish every field added to it later,
+// without anyone deciding to.
+type createOutput struct {
+	Status int
+	Body   struct {
+		ID        string `json:"id"`
+		Reference string `json:"reference"`
+		Status    string `json:"status"`
+		CreatedAt string `json:"created_at"`
+	}
+}
+
+// Mount registers the module's operations on the API.
+//
+// Receives the Module, never a driver nor a pool: a surface cannot bypass the
+// use case, not even by accident.
+func Mount(api huma.API, mod {{.Package}}.Module) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-{{.Dir}}",
+		Method:        http.MethodPost,
+		Path:          RoutePath,
+		Summary:       "Create a {{.Dir}} record",
+		Tags:          []string{"{{.Dir}}"},
+		DefaultStatus: http.StatusCreated,
+	}, func(ctx context.Context, in *createInput) (*createOutput, error) {
+		value, failure, ok := mod.Create(ctx, in.Body.Reference).Get()
+		if !ok {
+			return nil, statusFor(failure)
+		}
+
+		out := &createOutput{Status: http.StatusCreated}
+		out.Body.ID = string(value.ID)
+		out.Body.Reference = value.Reference.String()
+		out.Body.Status = string(value.Status)
+		out.Body.CreatedAt = value.CreatedAt.UTC().Format("2006-01-02T15:04:05Z")
+		return out, nil
+	})
+}
+
+// statusFor translates a domain error into an HTTP response.
+//
+// The `switch` is EXHAUSTIVE, and the `exhaustive` linter fails the CI if it
+// stops being so. That is the intended effect: adding an error code to the
+// domain forces a decision, here, about what the outside world sees of it.
+// Without that constraint, a new code would silently translate into a 500 — and
+// a user input mistake would be counted as a service outage.
+//
+// The `default` stays, despite exhaustiveness: it covers the zero value and any
+// string fabricated by a conversion. Deny by default — the unknown is treated
+// as a breakdown, never as an acceptable request.
+func statusFor(err domain.Error) error {
+	switch err.Code {
+	case domain.CodeInvalidReference:
+		return huma.Error422UnprocessableEntity(err.Message, fieldDetail(err))
+
+	case domain.CodeReferenceTaken:
+		// 409 and not 422: the request is well formed, it is the STATE of the
+		// server that opposes it. The distinction matters to a client deciding
+		// whether or not to retry.
+		return huma.Error409Conflict(err.Message, fieldDetail(err))
+
+	case domain.CodeUnavailable:
+		// 503 and not 500: transient. That is what authorises a client to
+		// retry, and what avoids waking someone up for a database that is
+		// restarting.
+		return huma.Error503ServiceUnavailable(err.Message)
+
+	case domain.CodeInternal:
+		// The technical cause is NEVER returned to the caller: an SQL error
+		// sent back to the client is a structure leak. It is logged by the
+		// middleware, which ties it to the correlation identifier.
+		return huma.Error500InternalServerError(internalMessage)
+
+	default:
+		return huma.Error500InternalServerError(internalMessage)
+	}
+}
+
+// internalMessage is what the outside world sees of an internal fault.
+//
+// In French, like every other message meant for the END USER: these strings
+// leave in the response body, they are product content and not code language
+// (ADR 018). They will be the internationalisation's business.
+const internalMessage = "une erreur interne est survenue"
+
+// fieldDetail names the faulty field when the domain stated it.
+//
+// Without it, a form would not know which field to highlight and would display
+// the error at the top of the page — which forces the user to guess.
+func fieldDetail(err domain.Error) error {
+	if err.Field == "" {
+		return nil
+	}
+	return &huma.ErrorDetail{
+		Location: "body." + err.Field,
+		Message:  err.Message,
+	}
+}
