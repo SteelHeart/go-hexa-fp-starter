@@ -32,7 +32,7 @@ divergent, **c'est la divergence qui est le résultat**.
 |---|---|---|
 | [P1 — l'équipe produit](p1-equipe-produit.md) · **PRIMAIRE** | ✅ | ✅ **trois critères sur quatre**, et le quatrième n'est plus celui qui était écrit |
 | [P2 — le fort trafic](p2-fort-trafic.md) | ✅ | 🔴 **quatre sur cinq rouges** — dont un **pire** que la grille ne le disait (#141) |
-| [P3 — l'adoption externe](p3-adoption-externe.md) | ✅ | 🔴 **impossible en l'état** — zéro paquet importable, mesuré |
+| [P3 — l'adoption externe](p3-adoption-externe.md) | ✅ | 🔴 **impossible en l'état** — zéro paquet importable, mesuré. ⚠️ Cette preuve a **fait changer la licence** : elle a montré que le rouge était par décision, donc insensible à tout travail (ADR 020, #155) |
 | [P4 — l'exploitant](p4-exploitant.md) | ✅ | ✅ **cinq sur cinq** — la seule persona entièrement verte |
 | [P5 — le décideur](p5-decideur.md) | ✅ | ⚠️ **trois sur quatre** — le coût d'entrée est enfin **chiffré** : 4 917 lignes |
 

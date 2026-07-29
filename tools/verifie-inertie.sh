@@ -45,7 +45,20 @@
 #   INERTIE_LABELS     remplace la liste des labels (témoin)
 set -eu
 
-MOTIF_INERTIE='^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)'
+# LICENSE et NOTICE sont entrés dans cette liste avec l'ADR 020, et ils y
+# entrent en TÊTE de l'irréversibilité, devant `migrations/`.
+#
+# Une migration jouée peut se compenser par une autre migration. Une version
+# publiée sous Apache-2.0 ne se rappelle pas : quiconque a récupéré le commit
+# peut l'utiliser pour toujours, et un changement ultérieur ne vaut que pour les
+# versions suivantes.
+#
+# ⚠️ Ce lot a été le témoin de son propre besoin. La licence est passée de
+# « tous droits réservés » à Apache-2.0 sans qu'aucun garde n'exige quoi que ce
+# soit : l'ADR 020 a été écrit par discipline. Le suivant pourrait ne pas
+# l'être, et il n'existerait alors AUCUNE trace du motif d'un changement
+# définitif.
+MOTIF_INERTIE='^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/|LICENSE$|NOTICE$)'
 MOTIF_ADR='^documentation/adr/[0-9]{3}-'
 LABEL_ECHAPPATOIRE='inertia:justified'
 
@@ -132,6 +145,20 @@ temoin() {
     _cas "zone d'inertie, avec un ADR" \
         "rules/tests.md
 documentation/adr/018-un-exemple.md" "" 0 || echec=1
+
+    # La licence, dans les deux sens. Le cas ACCEPTÉ compte autant que l'autre :
+    # un garde qui refuserait toute modification de LICENSE serait inutilisable,
+    # et c'est le cas passant qui révèle les pannes — leçon de
+    # `verifie-mention-outillage.sh`, dont le cas de refus passait pour la
+    # mauvaise raison.
+    _cas "LICENSE sans ADR" "LICENSE" "" 1 || echec=1
+    _cas "LICENSE avec son ADR" \
+        "LICENSE
+NOTICE
+documentation/adr/020-un-exemple.md" "" 0 || echec=1
+    # `LICENSE` doit être ancré : un fichier dont le nom COMMENCE par LICENSE
+    # sans en être un ne doit pas déclencher le garde.
+    _cas "LICENSE-preambule.md, hors zone" "documentation/LICENSE-notes.md" "" 0 || echec=1
 
     [ "$echec" -eq 0 ] && echo "témoin complet : le garde refuse ET sait être satisfait"
     return "$echec"

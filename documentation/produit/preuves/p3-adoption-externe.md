@@ -1,6 +1,10 @@
 # P3 — L'équipe qui adopte de l'extérieur
 
 > **Verdict : 🔴 impossible en l'état.** Le projet n'a pas pu être écrit, et c'est le résultat.
+>
+> ✅ **Un verrou est tombé depuis** : la licence est passée en **Apache-2.0** le 2026-07-29 (ADR 020,
+> #155), et c'est **cette preuve qui l'a provoqué**. P3 reste rouge — zéro paquet importable — mais
+> son blocage n'est plus une décision, c'est du travail.
 
 Mesuré le **2026-07-29**, sur `main`, dans la toolbox.
 
@@ -67,10 +71,12 @@ non-`internal` est constituée de `main`. Il n'existe aucun paquet à promouvoir
 | Paquets importables depuis l'extérieur | > 0 | **0** — les 5 hors `internal/` sont des `package main` | 🔴 |
 | Politique de versions et de dépréciation | écrite | **inexistante** — `git tag` rend **0 tag**, aucun `CHANGELOG` | 🔴 |
 | Frontière API publique / interne | déclarée | **inexistante** — l'ADR 015 en fixe la méthode, pas le résultat | 🔴 |
-| Licence | existe | **existe** ✅ — tous droits réservés, énoncé (#113) | ⚠️ |
+| ~~Licence — existe~~ **licence permettant l'usage** | oui | **Apache-2.0** depuis le 2026-07-29, concession de brevet comprise (ADR 020, #155) | ✅ |
 | Langue de l'API et du règlement | lisible par l'équipe | **le code est en anglais** depuis l'ADR 018 ; `rules/` reste en français | ⚠️ |
 
-**Trois rouges, deux réserves, zéro vert.**
+**Trois rouges, une réserve, un vert** — remesuré le 2026-07-29 après l'ADR 020. Le seul vert est la
+licence, et il ne débloque aucun des trois rouges : il rend leur résolution **possible**, ce qu'elle
+n'était pas.
 
 ## Ce que P3 a pu faire malgré tout
 
@@ -81,10 +87,20 @@ un framework, quelle que soit l'intention. »*
 
 ## Les deux réserves méritent d'être lues
 
-**La licence.** Elle « existe », et le critère est donc formellement atteint. Mais elle dit *tous
-droits réservés* : P3 n'a le droit de rien faire, même une fois la frontière publiée. **Le critère
-tel qu'il est écrit ne mesure pas ce qui compte** — il faudrait le reformuler en « licence permettant
-l'usage », et il redeviendrait rouge.
+**La licence.** Elle « existait », et le critère était donc formellement atteint. Mais elle disait
+*tous droits réservés* : P3 n'avait le droit de rien faire, même une fois la frontière publiée. **Le
+critère tel qu'il était écrit ne mesurait pas ce qui compte** — il fallait le reformuler en « licence
+permettant l'usage », et il redevenait rouge.
+
+> ✅ **C'est fait, et l'avertissement du bas de page a été suivi le jour même.** Le critère est
+> reformulé, et la licence est passée en **Apache-2.0** (ADR 020, #155). Il est vert pour la bonne
+> raison.
+>
+> **Cette preuve est la cause directe du changement.** Elle n'a pas seulement constaté un rouge :
+> elle a montré que le rouge était **par décision**, donc insensible à tout travail — et que la
+> décision contredisait la condition de transfert, qui exige **toutes** les personas éprouvées.
+> C'est le seul relevé qui pouvait produire ce constat, parce qu'il a tenté de faire ce que P3 veut
+> faire au lieu de le décrire.
 
 **La langue.** L'ADR 018 a mis le code en anglais, ce qui lève l'obstacle sur le godoc. Le règlement
 reste en français, et c'est une décision. Pour une équipe non francophone, `rules/` — ~70 règles —
@@ -109,8 +125,21 @@ Dans l'ordre, et aucun n'est un détail :
 1. **Créer** des paquets publics — il n'y en a aucun à promouvoir, les cinq candidats sont des
    `main` ;
 2. une **politique de versions** écrite, et un premier tag — `v0.1.0` attend #89 ;
-3. une **licence permettant l'usage** — décision produit, écartée le 2026-07-29 (#113).
+3. ~~une **licence permettant l'usage**~~ — **fait** le 2026-07-29 : Apache-2.0 (ADR 020, #155).
 
-Le troisième point rend les deux premiers sans objet à court terme : **P3 restera rouge tant que la
-licence n'aura pas changé**, quel que soit l'état du code. C'est écrit ici pour que personne
-n'entreprenne la frontière publique en croyant débloquer cette persona.
+~~Le troisième point rend les deux premiers sans objet à court terme : **P3 restera rouge tant que la
+licence n'aura pas changé**, quel que soit l'état du code.~~
+
+> ✅ **Le verrou est levé.** Cet avertissement a été écrit pour que personne n'entreprenne la
+> frontière publique en croyant débloquer P3. Il a servi autrement : il a rendu visible que la
+> décision de licence **contredisait la condition de transfert**, et c'est cette contradiction qui a
+> été tranchée — en faveur de l'ouverture (ADR 020).
+>
+> 🔴 **Les points 1 et 2 restent entiers, et P3 reste rouge.** Ouvrir la licence ne crée aucun
+> paquet importable ; le compte est toujours **zéro**. Ce qui change, c'est que le travail cesse
+> d'être inutile.
+>
+> ⚠️ **Et il devient irréversible.** Sous Apache-2.0, tout paquet rendu importable est utilisable
+> pour toujours — un paquet publié par excès ne se retire plus. L'ADR 015 exige que la frontière se
+> **dérive d'un usage mesuré** ; cette exigence passe de prudente à indispensable. La première
+> donnée est dans cette preuve : l'import qu'un tiers écrit spontanément est `internal/pkg/result`.

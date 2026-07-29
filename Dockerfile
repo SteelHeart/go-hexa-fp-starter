@@ -56,11 +56,11 @@ LABEL org.opencontainers.image.title="go-hexa-fp-starter" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${COMMIT}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      # Le dépôt N'EST PAS sous licence libre à ce jour : voir LICENSE.
-      # L'étiquette portait « MIT » sans qu'aucune licence MIT n'ait jamais été
-      # accordée — une affirmation juridique fausse dans un artefact publiable.
-      # `NONE` est l'identifiant SPDX prévu pour « aucune licence accordée ».
-      org.opencontainers.image.licenses="NONE"
+      # Identifiant SPDX, et il doit dire EXACTEMENT ce que dit LICENSE.
+      # Cette étiquette a déjà menti : elle annonçait « MIT » sans qu'aucune
+      # licence MIT n'ait jamais été accordée (#61), puis « NONE » sous tous
+      # droits réservés (#113). Depuis l'ADR 020, c'est Apache-2.0.
+      org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /out/app /app

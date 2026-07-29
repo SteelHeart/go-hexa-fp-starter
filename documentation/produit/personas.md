@@ -151,11 +151,17 @@ pour elle, pas gênants.
 
 | Critère | Cible | Aujourd'hui |
 |---|---|---|
-| Paquets importables depuis l'extérieur du module | > 0 | **0** — `go list ./... \| grep -v /internal/` ne rend que trois binaires et un outil de build |
-| Politique de versions et de dépréciation | écrite | **inexistante** |
-| Frontière API publique / interne | déclarée | **inexistante** — mais l'ADR 015 en fixe désormais la **méthode**, voir plus bas |
-| Licence | existe | **existe** ✅ — `LICENSE`, **tous droits réservés**. L'obstacle légal est levé au sens où plus rien n'est ambigu ; P3 ne peut toujours rien faire, et c'est une décision assumée jusqu'à la preuve sur projets réels |
-| Langue de l'API et du règlement | lisible par l'équipe | **français** pour `rules/` et le godoc ; les **530 identifiants exportés sont en anglais** (#34) |
+| Paquets importables depuis l'extérieur du module | > 0 | **0** — les **cinq** paquets hors `internal/` sont **tous** `package main`, et Go interdit d'importer un `main`. Il n'y en a aucun à promouvoir : il faut en **créer** |
+| Politique de versions et de dépréciation | écrite | **inexistante** — zéro tag, aucun `CHANGELOG`. Dépend de #89 |
+| Frontière API publique / interne | déclarée | **inexistante** — l'ADR 015 en fixe la **méthode**, pas le résultat |
+| **Licence permettant l'usage** | oui | **oui** ✅ — **Apache-2.0** depuis le 2026-07-29 (ADR 020, #155), concession de brevet comprise |
+| Langue de l'API et du règlement | lisible par l'équipe | le **code est en anglais** (ADR 018) ; `rules/` reste en **français**, ~4 600 lignes — coût d'entrée réel pour une équipe non francophone |
+
+> ⚠️ **Le critère « Licence » a été REFORMULÉ, et c'est la preuve P3 qui l'a exigé.** Il disait
+> « Licence — existe », et il était **formellement atteint** alors que P3 n'avait le droit de rien
+> faire : *tous droits réservés* est un fichier de licence parfaitement existant. Un critère qui
+> passe au vert sans que la persona puisse agir ne mesure pas ce qu'il prétend mesurer. Il dit
+> désormais **« licence permettant l'usage »**, et il passe au vert pour la bonne raison.
 
 **Ce qu'elle tue** : `internal/` partout. Tant qu'il tient, ce dépôt **ne peut qu'être copié** — donc
 ce n'est pas encore un framework, quelle que soit l'intention.
@@ -374,11 +380,23 @@ a plus d'ambiguïté, et que le refus est daté et motivé au lieu d'être un si
 licence d'ouverture — `Apache-2.0` recommandé plutôt que MIT, pour sa clause de brevets — **n'est pas
 tranché**, pas plus que le titulaire du droit d'auteur.
 
+> ✅ **TRANCHÉ le 2026-07-29 — la licence est `Apache-2.0`** (ADR 020, #155). La recommandation
+> ci-dessus est retenue, pour le motif exact qui y était écrit.
+>
+> **Ce qui a forcé la décision est la preuve P3**, pas un changement d'avis : la condition de
+> transfert exige que **toutes** les personas soient éprouvées, et P3 était rouge **par décision**.
+> Aucune quantité de travail ne l'aurait fait passer au vert. La contradiction n'était visible nulle
+> part avant que les personas ne soient **mesurées** plutôt qu'affirmées.
+>
+> ⚠️ **Et l'irréversibilité commence là.** Tout paquet rendu importable devient utilisable pour
+> toujours ; un paquet publié par excès ne se retire plus. La règle de l'ADR 015 — *la frontière se
+> dérive d'un usage mesuré, elle ne se décrète pas* — passe de prudente à indispensable.
+
 ### Ce qui devient bloquant pour `v1.0`
 
 | Sujet | Statut | Pourquoi maintenant |
 |---|---|---|
-| **Licence** | ✅ #61 | Faite. `CONTRIBUTING` et `CHANGELOG` restent 🔴 |
+| **Licence** | ✅ #155 | **Apache-2.0** (ADR 020). `CONTRIBUTING` et `CHANGELOG` restent 🔴 — §5 règle le **juridique** des contributions entrantes, pas le **processus** |
 | **Sortir de `internal/`** (#16) | 🔴 | 75 paquets, **0 importable** : le dépôt ne peut qu'être **copié**. Sans ça, il n'y a pas de framework, quelle que soit l'intention |
 | **Frontière API publique / interne** | 🔴 | Extraire 530 identifiants sans les classer publierait une API par accident, et on ne la reprendrait plus |
 | **Politique de versions et de dépréciation** | 🔴 | Ce qu'un framework promet et qu'un boilerplate n'a jamais eu à promettre |
