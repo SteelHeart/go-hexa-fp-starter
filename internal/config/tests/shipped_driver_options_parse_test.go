@@ -7,23 +7,23 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestShippedDriverOptionsParse : une option de pilote n'est validée qu'à la
-// construction du module. Sans ce test, `ttl: 24` — un entier au lieu d'une durée,
-// donc 24 secondes au lieu de 24 heures — resterait invisible jusqu'à ce qu'un
-// rejeu légitime soit refusé en production.
+// TestShippedDriverOptionsParse: a driver option is only validated at the
+// construction of the module. Without this test, `ttl: 24` — an integer instead
+// of a duration, hence 24 seconds instead of 24 hours — would stay invisible
+// until a legitimate replay was refused in production.
 func TestShippedDriverOptionsParse(t *testing.T) {
 	withShippedConfig(t)
 
 	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
-		t.Fatalf("chargement: %v", err)
+		t.Fatalf("loading: %v", err)
 	}
 
 	ttl, err := cfg.Modules.Get("idempotency").DurationOption("ttl", 0)
 	if err != nil {
-		t.Fatalf("options du module idempotency illisibles: %v", err)
+		t.Fatalf("options of the idempotency module are unreadable: %v", err)
 	}
 	if ttl < time.Hour {
-		t.Errorf("ttl livré = %v : une fenêtre de rejeu si courte trahit une unité oubliée", ttl)
+		t.Errorf("shipped ttl = %v: a replay window that short betrays a forgotten unit", ttl)
 	}
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestTransportIgnoresEmptyOverride : une entrée vide dans la configuration ne
-// doit pas désactiver silencieusement le transport — elle retombe sur le défaut.
+// TestTransportIgnoresEmptyOverride: an empty entry in the configuration must
+// not silently disable the transport — it falls back on the default.
 func TestTransportIgnoresEmptyOverride(t *testing.T) {
 	t.Parallel()
 
@@ -16,6 +16,6 @@ func TestTransportIgnoresEmptyOverride(t *testing.T) {
 		Transports:       map[string]string{"billing": ""},
 	}
 	if got := interop.TransportFor("billing"); got != "inproc" {
-		t.Errorf("surcharge vide = %q, attendu le défaut \"inproc\"", got)
+		t.Errorf("empty override = %q, want the default \"inproc\"", got)
 	}
 }

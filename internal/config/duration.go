@@ -7,33 +7,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Duration est une durée lisible dans un fichier de configuration.
+// Duration is a duration readable in a configuration file.
 //
-// # Pourquoi ce type existe
+// # Why this type exists
 //
-// `gopkg.in/yaml.v3` ne décode PAS une chaîne comme "5s" en time.Duration : il
-// n'accepte qu'un entier de nanosecondes. Sans ce type, toute la configuration
-// échouerait au chargement — et le message d'erreur ne dirait pas pourquoi.
+// `gopkg.in/yaml.v3` does NOT decode a string such as "5s" into a
+// time.Duration: it only accepts an integer of nanoseconds. Without this type,
+// the whole configuration would fail at loading — and the error message would
+// not say why.
 //
-// Le type sous-jacent EST time.Duration, donc la conversion au site d'usage est
-// gratuite : `time.Duration(cfg.HTTP.ReadTimeout)`.
+// The underlying type IS time.Duration, so the conversion at the point of use
+// is free: `time.Duration(cfg.HTTP.ReadTimeout)`.
 type Duration time.Duration
 
-// UnmarshalYAML accepte les deux formes utiles :
-//   - une chaîne : "5s", "1h30m", "250ms" — la forme attendue dans conf
-//   - un entier  : interprété en SECONDES, jamais en nanosecondes
+// UnmarshalYAML accepts the two useful forms:
+//   - a string:  "5s", "1h30m", "250ms" — the form expected in conf
+//   - an integer: interpreted in SECONDS, never in nanoseconds
 //
-// Les nanosecondes sont volontairement refusées : `read_timeout: 5` doit valoir
-// cinq secondes, pas cinq nanosecondes. Interpréter un entier nu en nanosecondes
-// produirait un délai de zéro en pratique, donc une panne silencieuse.
+// Nanoseconds are deliberately refused: `read_timeout: 5` must mean five
+// seconds, not five nanoseconds. Interpreting a bare integer as nanoseconds
+// would produce a timeout of zero in practice, hence a silent outage.
 func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
-	// Discriminer sur le TAG, pas sur le succès du décodage : yaml.v3 décode
-	// volontiers un nœud entier vers une string, donc tenter la chaîne d'abord
-	// ferait échouer `30` au lieu de le lire comme trente secondes.
+	// Discriminate on the TAG, not on the success of the decoding: yaml.v3
+	// happily decodes an integer node into a string, so trying the string first
+	// would make `30` fail instead of reading it as thirty seconds.
 	if node.Tag == "!!int" {
 		var asSeconds int64
 		if err := node.Decode(&asSeconds); err != nil {
-			return fmt.Errorf("durée entière illisible à la ligne %d: %w", node.Line, err)
+			return fmt.Errorf("unreadable integer duration at line %d: %w", node.Line, err)
 		}
 		*d = Duration(time.Duration(asSeconds) * time.Second)
 		return nil
@@ -42,24 +43,24 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 	var asString string
 	if err := node.Decode(&asString); err != nil {
 		return fmt.Errorf(
-			"durée illisible à la ligne %d (attendu une chaîne comme \"5s\") : %w", node.Line, err)
+			"unreadable duration at line %d (expected a string such as \"5s\"): %w", node.Line, err)
 	}
 	parsed, err := time.ParseDuration(asString)
 	if err != nil {
-		return fmt.Errorf("durée %q illisible (attendu: 5s, 1h30m, 250ms): %w", asString, err)
+		return fmt.Errorf("duration %q is unreadable (expected: 5s, 1h30m, 250ms): %w", asString, err)
 	}
 	*d = Duration(parsed)
 	return nil
 }
 
-// MarshalYAML réécrit la durée sous sa forme lisible, pour que la configuration
-// effective puisse être affichée telle qu'elle serait écrite.
+// MarshalYAML rewrites the duration in its readable form, so that the effective
+// configuration can be displayed exactly as it would be written.
 func (d Duration) MarshalYAML() (any, error) {
 	return time.Duration(d).String(), nil
 }
 
-// Duration convertit vers le type de la bibliothèque standard.
+// Duration converts to the type of the standard library.
 func (d Duration) Duration() time.Duration { return time.Duration(d) }
 
-// String rend la forme lisible.
+// String returns the readable form.
 func (d Duration) String() string { return time.Duration(d).String() }

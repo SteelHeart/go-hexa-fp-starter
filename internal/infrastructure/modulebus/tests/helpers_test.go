@@ -1,14 +1,14 @@
-// Package tests exerce le bus inter-module par son API PUBLIQUE.
+// Package tests exercises the inter-module bus through its PUBLIC API.
 //
-// Ce paquet décide COMMENT un module en appelle un autre — appel direct, appel
-// réseau, ou dépôt d'événement — par configuration seule. C'est donc le point où
-// une erreur de configuration se transforme en appel qui part au mauvais endroit,
-// ou qui ne part pas du tout.
+// This package decides HOW one module calls another — direct call, network
+// call, or event posting — by configuration alone. It is therefore the point
+// where a configuration mistake turns into a call that goes to the wrong place,
+// or that does not go at all.
 //
-// Les trois modes se testent SANS INFRASTRUCTURE : `inproc` est une closure,
-// `http` se sert d'un `httptest.Server` en mémoire, `event` d'un publieur qui
-// est lui-même une closure. C'est la promesse du socle, appliquée à son propre
-// outillage de test.
+// The three modes are tested WITHOUT INFRASTRUCTURE: `inproc` is a closure,
+// `http` uses an in-memory `httptest.Server`, `event` a publisher that is
+// itself a closure. That is the starter's promise, applied to its own test
+// tooling.
 package tests
 
 import (
@@ -21,15 +21,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/modulebus"
 )
 
-// Le module et la capacité fictifs de ces tests. Aucun module réel n'est nommé :
-// le bus ne connaît AUCUN module en particulier, et le test doit refléter ça.
+// The fictitious module and capability of these tests. No real module is named:
+// the bus knows NO module in particular, and the test must reflect that.
 const (
 	someModule = "some_module"
 	someEvent  = "some_module.thing_done.v1"
 )
 
-// request et reply sont les types traversant le bus : des enregistrements
-// sérialisables, jamais un type du domaine d'un module.
+// request and reply are the types crossing the bus: serialisable records, never
+// a type from a module's domain.
 type request struct {
 	Ref string `json:"ref"`
 }
@@ -38,7 +38,7 @@ type reply struct {
 	Accepted bool `json:"accepted"`
 }
 
-// interop construit une configuration d'interopérabilité.
+// interop builds an interoperability configuration.
 func interop(mode string, baseURLs map[string]string) config.Interop {
 	return config.Interop{
 		DefaultTransport: mode,
@@ -48,14 +48,14 @@ func interop(mode string, baseURLs map[string]string) config.Interop {
 	}
 }
 
-// route est l'exposition HTTP de la capacité fictive.
+// route is the HTTP exposure of the fictitious capability.
 func route() modulebus.Route {
 	return modulebus.Route{Method: "POST", Path: "/v1/things"}
 }
 
-// localCaller est l'implémentation en processus. Elle est TOUJOURS passée à
-// Resolve, quel que soit le mode : c'est ce qui garantit que le module local
-// reste compilable et testable indépendamment du transport retenu.
+// localCaller is the in-process implementation. It is ALWAYS passed to Resolve,
+// whatever the mode: that is what guarantees the local module stays compilable
+// and testable independently of the transport selected.
 func localCaller(called *int) modulebus.Caller[request, reply] {
 	return func(_ context.Context, in request) (reply, error) {
 		*called++
@@ -63,7 +63,7 @@ func localCaller(called *int) modulebus.Caller[request, reply] {
 	}
 }
 
-// resolve monte le bus et résout la capacité, ou fait échouer le test.
+// resolve mounts the bus and resolves the capability, or fails the test.
 func resolve(
 	t *testing.T,
 	cfg config.Interop,
@@ -75,19 +75,19 @@ func resolve(
 	call, err := modulebus.Resolve(
 		modulebus.New(cfg, publisher), someModule, route(), someEvent, local)
 	if err != nil {
-		t.Fatalf("résolution en échec: %v", err)
+		t.Fatalf("resolution failed: %v", err)
 	}
 	return call
 }
 
-// noPublisher refuse toute publication : il est passé aux tests des modes qui ne
-// doivent PAS publier. Un mode `http` qui déposerait un événement au passage
-// serait sinon indétectable.
+// noPublisher refuses any publication: it is passed to the tests of the modes
+// that must NOT publish. An `http` mode that posted an event along the way
+// would otherwise be undetectable.
 func noPublisher(t *testing.T) messaging.Publisher {
 	t.Helper()
 
 	return func(_ context.Context, env messaging.Envelope) error {
-		t.Errorf("publication inattendue d'un événement %q", env.Type)
+		t.Errorf("unexpected publication of an event %q", env.Type)
 		return nil
 	}
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestRequiresSQL verrouille la promesse centrale de l'ADR 012 : avec les
-// pilotes par défaut, AUCUNE base n'est nécessaire pour démarrer.
+// TestRequiresSQL locks down the central promise of ADR 012: with the default
+// drivers, NO database is needed in order to start.
 func TestRequiresSQL(t *testing.T) {
 	t.Parallel()
 
@@ -15,7 +15,7 @@ func TestRequiresSQL(t *testing.T) {
 		modules config.Modules
 		want    bool
 	}{
-		"pilotes par defaut, aucune base SQL requise": {
+		"default drivers, no SQL database required": {
 			modules: config.Modules{
 				"outbox":      {Enabled: true},
 				"idempotency": {Enabled: true},
@@ -26,26 +26,26 @@ func TestRequiresSQL(t *testing.T) {
 			},
 			want: false,
 		},
-		"un seul pilote postgres suffit": {
+		"a single postgres driver is enough": {
 			modules: config.Modules{"outbox": {Enabled: true, Driver: "postgres"}},
 			want:    true,
 		},
-		"le scheduler en advisory-lock exige une base": {
+		"the scheduler on advisory-lock requires a database": {
 			modules: config.Modules{"scheduler": {Enabled: true, Driver: "advisory-lock"}},
 			want:    true,
 		},
-		"un pilote postgres sur un module DESACTIVE n'exige rien": {
+		"a postgres driver on a DISABLED module requires nothing": {
 			modules: config.Modules{"outbox": {Enabled: false, Driver: "postgres"}},
 			want:    false,
 		},
-		"configuration vide": {modules: config.Modules{}, want: false},
+		"empty configuration": {modules: config.Modules{}, want: false},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.modules.RequiresSQL(shippedCatalog(t)); got != tc.want {
-				t.Errorf("RequiresSQL() = %v, attendu %v", got, tc.want)
+				t.Errorf("RequiresSQL() = %v, want %v", got, tc.want)
 			}
 		})
 	}

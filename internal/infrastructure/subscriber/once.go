@@ -10,42 +10,41 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// Guard porte les trois ports de l'idempotence dont le décorateur a besoin.
+// Guard carries the three idempotency ports the decorator needs.
 //
-// Une structure plutôt que trois paramètres : `Once(handler, reserve, complete,
-// release)` fait quatre arguments, et surtout laisse l'appelant libre d'en
-// inverser deux — `complete` et `release` ont la même signature, et l'inversion
-// libérerait la clé de chaque succès tout en verrouillant chaque échec. Le
-// compilateur ne verrait rien.
+// A struct rather than three parameters: `Once(handler, reserve, complete,
+// release)` makes four arguments, and above all leaves the caller free to swap
+// two of them — `complete` and `release` have the same signature, and the swap
+// would release the key on every success while locking every failure. The
+// compiler would see nothing.
 type Guard struct {
 	Reserve  idempotencyports.Reserve
 	Complete idempotencyports.Complete
 	Release  idempotencyports.Release
 }
 
-// Once fait que l'effet n'a lieu qu'UNE fois, même si l'enveloppe revient.
+// Once makes the effect take place only ONCE, even if the envelope comes back.
 //
-// # Le protocole, et pourquoi chaque branche est là
+// # The protocol, and why each branch is there
 //
-//	réserver → déjà rejoué ? acquitter sans rien faire
-//	         → en vol ?      RENDRE UNE ERREUR pour que le transport rejoue
-//	         → sinon         exécuter, puis compléter ou libérer
+//	reserve → already replayed? acknowledge without doing anything
+//	        → in flight?        RETURN AN ERROR so the transport replays
+//	        → otherwise         run, then complete or release
 //
-// **Un rejeu acquitte sans exécuter.** C'est tout l'objet : les transports
-// d'ici sont « au moins une fois », donc la même enveloppe arrive deux fois dès
-// qu'un accusé de réception se perd. Sans ce garde, un courriel de bienvenue
-// part deux fois — et le jour où le consommateur débitera une carte, ce sera le
-// débit.
+// **A replay acknowledges without running.** That is the whole object: the
+// transports here are "at least once", so the same envelope arrives twice as
+// soon as an acknowledgement is lost. Without this guard, a welcome email
+// leaves twice — and on the day the consumer debits a card, it will be the
+// debit.
 //
-// **Un « en vol » rend une ERREUR, délibérément.** Une autre réplique traite
-// déjà cette enveloppe et peut encore échouer. L'acquitter ici perdrait
-// l'événement si l'autre abandonne. Rejouer plus tard ne coûte qu'une tentative ;
-// acquitter à tort coûte l'effet.
+// **An "in flight" returns an ERROR, deliberately.** Another replica is already
+// handling that envelope and may still fail. Acknowledging it here would lose
+// the event if the other one gives up. Replaying later costs only one attempt;
+// acknowledging wrongly costs the effect.
 //
-// **`Release` est en `defer` sur le chemin d'échec.** L'oublier rendrait
-// l'enveloppe intraitable jusqu'à l'expiration de la clé — soit vingt-quatre
-// heures pendant lesquelles un rejeu est refusé sans que rien n'explique
-// pourquoi.
+// **`Release` is in a `defer` on the failure path.** Forgetting it would make
+// the envelope unhandleable until the key expires — that is twenty-four hours
+// during which a replay is refused without anything explaining why.
 func Once(guard Guard, handler messaging.Handler) messaging.Handler {
 	return func(ctx context.Context, env messaging.Envelope) error {
 		if env.ID == "" {
@@ -55,51 +54,52 @@ func Once(guard Guard, handler messaging.Handler) messaging.Handler {
 		key := idempotencydomain.Key(env.ID)
 		reservation, err := guard.Reserve(ctx, idempotencydomain.Request{
 			Key: key,
-			// L'empreinte est le TYPE et non la charge utile : deux enveloppes
-			// de même identifiant portent le même fait. Empreinter la charge
-			// utile ferait échouer en conflit un rejeu que le producteur aurait
-			// sérialisé différemment — un ordre de clés JSON suffit.
+			// The fingerprint is the TYPE and not the payload: two envelopes
+			// with the same identifier carry the same fact. Fingerprinting the
+			// payload would make a replay fail in conflict when the producer
+			// had serialised it differently — a JSON key order is enough.
 			Fingerprint: env.Type,
 		})
 		switch {
 		case errors.Is(err, idempotencydomain.ErrInFlight):
-			return fmt.Errorf("enveloppe %s déjà en cours de traitement: %w", env.ID, err)
+			return fmt.Errorf("envelope %s already being handled: %w", env.ID, err)
 		case err != nil:
-			return fmt.Errorf("réservation de %s: %w", env.ID, err)
+			return fmt.Errorf("reservation of %s: %w", env.ID, err)
 		case reservation.Replayed:
-			// Déjà traité. On acquitte sans réexécuter : c'est la seule branche
-			// qui rend `nil` sans avoir rien fait, et c'est la raison d'être du
-			// paquet.
+			// Already handled. We acknowledge without re-running: it is the only
+			// branch that returns `nil` without having done anything, and it is
+			// the reason this package exists.
 			return nil
 		}
 
 		if err := handler(ctx, env); err != nil {
-			// Libérer AVANT de remonter, pour qu'un rejeu soit possible tout de
-			// suite. L'erreur de libération est jointe plutôt qu'écrasée : une
-			// clé restée verrouillée est un incident distinct, qui se
-			// diagnostique mal quand son message a disparu.
+			// Release BEFORE returning, so that a replay is possible straight
+			// away. The release error is joined rather than overwritten: a key
+			// left locked is a distinct incident, which is hard to diagnose when
+			// its message has disappeared.
 			return errors.Join(
-				fmt.Errorf("traitement de %s: %w", env.ID, err),
+				fmt.Errorf("handling of %s: %w", env.ID, err),
 				release(ctx, guard, key),
 			)
 		}
 
 		if err := guard.Complete(ctx, key, nil); err != nil {
-			// L'effet A EU LIEU. Remonter l'erreur fera rejouer l'enveloppe, et
-			// le rejeu ne sera PAS reconnu puisque la clé n'est pas complétée :
-			// l'effet aura donc lieu deux fois. C'est le seul cas où ce paquet
-			// ne tient pas sa promesse, et il est nommé plutôt que tu — même
-			// forme que le « publié mais non marqué » du dépileur d'outbox.
-			return fmt.Errorf("enveloppe %s traitée mais NON marquée: %w", env.ID, err)
+			// The effect HAS TAKEN PLACE. Returning the error will make the
+			// envelope be replayed, and the replay will NOT be recognised since
+			// the key is not completed: the effect will therefore take place
+			// twice. It is the only case where this package does not keep its
+			// promise, and it is named rather than kept quiet — same shape as
+			// the "published but not marked" of the outbox dispatcher.
+			return fmt.Errorf("envelope %s handled but NOT marked: %w", env.ID, err)
 		}
 		return nil
 	}
 }
 
-// release libère la clé et enveloppe son erreur.
+// release releases the key and wraps its error.
 func release(ctx context.Context, guard Guard, key idempotencydomain.Key) error {
 	if err := guard.Release(ctx, key); err != nil {
-		return fmt.Errorf("libération de la clé %s: %w", key, err)
+		return fmt.Errorf("release of key %s: %w", key, err)
 	}
 	return nil
 }

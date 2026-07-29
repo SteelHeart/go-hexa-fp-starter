@@ -7,20 +7,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestAnUnknownDriverOptionIsRefused : une clé d'option que le pilote ne lit pas
-// refuse le démarrage.
+// TestAnUnknownDriverOptionIsRefused: an option key that the driver does not
+// read refuses to start.
 //
-// # Le défaut que ce test aurait attrapé
+// # The defect this test would have caught
 //
-// Le deny-par-défaut s'arrêtait au nom du pilote. Mesuré avant correction (#93) :
-// avec `bath_size` au lieu de `batch_size`, le serveur DÉMARRAIT, montait le
-// module et n'en disait rien. Le dépileur tournait avec un lot par défaut que
-// personne n'avait demandé.
+// Deny-by-default stopped at the name of the driver. Measured before the fix
+// (#93): with `bath_size` instead of `batch_size`, the server STARTED, mounted
+// the module and said nothing about it. The dispatcher ran with a default batch
+// nobody had asked for.
 //
-// La cause est que les accesseurs d'options rendent la valeur par défaut quand
-// la clé est absente — correct pris isolément — et que rien n'énumérait les clés
-// connues. « Absente » et « mal orthographiée » étaient donc indiscernables :
-// exactement la forme de défaut que ce dépôt rencontre à répétition.
+// The cause is that the option accessors return the default value when the key
+// is absent — correct taken in isolation — and that nothing enumerated the
+// known keys. "Absent" and "misspelt" were therefore indistinguishable: exactly
+// the shape of defect this repository meets over and over.
 func TestAnUnknownDriverOptionIsRefused(t *testing.T) {
 	withCatalogTestConfig(t, `modules:
   facturation:
@@ -30,28 +30,27 @@ func TestAnUnknownDriverOptionIsRefused(t *testing.T) {
       bath_size: 50
 `)
 
-	_, err := config.Load(catalogueAvecOptions())
+	_, err := config.Load(catalogueWithOptions())
 	if err == nil {
-		t.Fatal("une option inconnue doit refuser le démarrage")
+		t.Fatal("an unknown option must refuse to start")
 	}
 
 	message := err.Error()
 	if !strings.Contains(message, "bath_size") {
-		t.Errorf("le message doit nommer la clé fautive: %v", err)
+		t.Errorf("the message must name the offending key: %v", err)
 	}
-	// Refuser sans dire ce qui est admis transforme une garde en impasse : la
-	// personne devant l'erreur doit deviner l'orthographe exacte.
+	// Refusing without saying what is admitted turns a guard into a dead end:
+	// the person facing the error has to guess the exact spelling.
 	if !strings.Contains(message, "batch_size") {
-		t.Errorf("le message doit lister les clés admises: %v", err)
+		t.Errorf("the message must list the admitted keys: %v", err)
 	}
 }
 
-// catalogueAvecOptions déclare un module dont les pilotes admettent des options
-// DIFFÉRENTES.
+// catalogueWithOptions declares a module whose drivers admit DIFFERENT options.
 //
-// La différence est le sujet : c'est elle qui permet de dire qu'une option
-// valide pour un pilote ne l'est pas pour un autre.
-func catalogueAvecOptions() config.ModuleCatalog {
+// The difference is the subject: it is what makes it possible to say that an
+// option valid for one driver is not valid for another.
+func catalogueWithOptions() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		"facturation": {
 			Default: "memory",

@@ -8,49 +8,48 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
 )
 
-// TestProbesStayOutOfThePublicContract : les sondes ne sont pas dans l'OpenAPI.
+// TestProbesStayOutOfThePublicContract: the probes are not in the OpenAPI.
 //
-// # Pourquoi ça compte
+// # Why it matters
 //
-// Le contrat OpenAPI est ce que consomment les clients : générateurs de SDK,
-// portails, tests de contrat. Les sondes n'en font pas partie — elles sont un
-// détail d'exploitation, susceptible de changer sans préavis.
+// The OpenAPI contract is what the clients consume: SDK generators, portals,
+// contract tests. The probes are no part of it — they are an operational
+// detail, liable to change without notice.
 //
-// Si elles y entraient, un générateur produirait des méthodes `healthz()` dans
-// chaque SDK publié, et les retirer deviendrait une RUPTURE de contrat. Une
-// décision d'exploitation se serait transformée en engagement public, sans que
-// personne l'ait voulu.
+// Were they to enter it, a generator would produce `healthz()` methods in every
+// published SDK, and removing them would become a BREAKING change of contract.
+// An operational decision would have turned into a public commitment, without
+// anyone having wanted it.
 //
-// C'est pourquoi elles sont montées sur le `*chi.Mux` directement, et non via
-// `huma.Register`. Ce test verrouille cette distinction, qui ne se voit pas en
-// lisant `NewRouter`.
+// That is why they are mounted on the `*chi.Mux` directly, and not via
+// `huma.Register`. This test locks that distinction, which does not show when
+// reading `NewRouter`.
 func TestProbesStayOutOfThePublicContract(t *testing.T) {
 	t.Parallel()
 
 	router := router(config.EnvProduction, map[string]httpserver.Probe{"database": healthyProbe()})
 
-	// La description OpenAPI est construite par huma à partir des routes
-	// ENREGISTRÉES auprès de lui. Les sondes n'en étant pas, elle doit être vide
-	// de tout chemin.
+	// The OpenAPI description is built by huma from the routes REGISTERED with
+	// it. The probes not being among them, it must be empty of any path.
 	paths := router.API.OpenAPI().Paths
 	for path := range paths {
 		if strings.Contains(path, "healthz") || strings.Contains(path, "readyz") {
-			t.Errorf("la sonde %q figure dans le contrat OpenAPI — un SDK généré l'exposerait", path)
+			t.Errorf("probe %q appears in the OpenAPI contract — a generated SDK would expose it", path)
 		}
 	}
 }
 
-// TestProbesRespondEvenThoughTheyAreUndocumented : hors contrat ≠ absent.
+// TestProbesRespondEvenThoughTheyAreUndocumented: out of contract ≠ absent.
 //
-// Le pendant du test précédent : une sonde retirée du contrat pourrait aussi
-// avoir été retirée du routeur. Les deux tests ensemble disent la seule chose
-// vraie — montée, mais non publiée.
+// The counterpart of the previous test: a probe removed from the contract could
+// also have been removed from the router. The two tests together say the only
+// true thing — mounted, but not published.
 func TestProbesRespondEvenThoughTheyAreUndocumented(t *testing.T) {
 	t.Parallel()
 
 	for _, path := range []string{"/healthz", "/readyz"} {
 		if code := get(t, config.EnvProduction, nil, path).Code; code == 404 {
-			t.Errorf("%s rend 404 — la sonde n'est pas montée", path)
+			t.Errorf("%s returns 404 — the probe is not mounted", path)
 		}
 	}
 }

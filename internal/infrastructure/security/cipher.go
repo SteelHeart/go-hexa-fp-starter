@@ -9,68 +9,68 @@ import (
 	"fmt"
 )
 
-// aesKeyLen impose AES-256, et rien d'autre.
+// aesKeyLen enforces AES-256, and nothing else.
 //
-// `aes.NewCipher` accepte 16, 24 ou 32 octets : une clé de 16 octets produit
-// silencieusement de l'AES-128. Le repli est invisible — tout chiffre et déchiffre
-// normalement — alors que la garantie annoncée par ce paquet, et par la
-// documentation qui s'appuie dessus, est AES-256.
+// `aes.NewCipher` accepts 16, 24 or 32 bytes: a 16-byte key silently produces
+// AES-128. The fallback is invisible — everything encrypts and decrypts
+// normally — whereas the guarantee announced by this package, and by the
+// documentation that relies on it, is AES-256.
 //
-// C'est un fail-open : on croit avoir 256 bits, on en a 128. Deny par défaut exige
-// de refuser plutôt que de dégrader.
+// This is a fail-open: you believe you have 256 bits, you have 128. Deny by
+// default requires refusing rather than degrading.
 const aesKeyLen = 32
 
-// ErrInvalidKey signale une clé de chiffrement de mauvaise longueur.
-var ErrInvalidKey = errors.New("clé de chiffrement invalide")
+// ErrInvalidKey reports an encryption key of the wrong length.
+var ErrInvalidKey = errors.New("invalid encryption key")
 
-// Cipher chiffre et déchiffre des données au repos en AES-256-GCM.
+// Cipher encrypts and decrypts data at rest with AES-256-GCM.
 type Cipher struct{ aead cipher.AEAD }
 
-// NewCipher construit un chiffreur à partir d'une clé de 32 octets.
+// NewCipher builds a cipher from a 32-byte key.
 //
-// Toute autre longueur est REFUSÉE, y compris celles qu'AES accepte : voir aesKeyLen.
+// Any other length is REFUSED, including those AES accepts: see aesKeyLen.
 func NewCipher(key []byte) (Cipher, error) {
 	if len(key) != aesKeyLen {
 		return Cipher{}, fmt.Errorf(
-			"%w: %d octets fournis, %d attendus (AES-256)", ErrInvalidKey, len(key), aesKeyLen)
+			"%w: %d bytes supplied, %d expected (AES-256)", ErrInvalidKey, len(key), aesKeyLen)
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return Cipher{}, fmt.Errorf("clé AES invalide: %w", err)
+		return Cipher{}, fmt.Errorf("invalid AES key: %w", err)
 	}
 	aead, err := cipher.NewGCM(block)
 	if err != nil {
-		return Cipher{}, fmt.Errorf("initialisation GCM: %w", err)
+		return Cipher{}, fmt.Errorf("GCM initialisation: %w", err)
 	}
 	return Cipher{aead: aead}, nil
 }
 
-// Encrypt chiffre et authentifie. Le nonce est aléatoire et préfixé au message :
-// réutiliser un nonce avec GCM révèle le contenu, il n'est donc jamais dérivé.
+// Encrypt encrypts and authenticates. The nonce is random and prefixed to the
+// message: reusing a nonce with GCM reveals the content, so it is never derived.
 func (c Cipher) Encrypt(plaintext []byte) (string, error) {
 	nonce := make([]byte, c.aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("génération du nonce: %w", err)
+		return "", fmt.Errorf("nonce generation: %w", err)
 	}
 	sealed := c.aead.Seal(nonce, nonce, plaintext, nil)
 	return base64.RawURLEncoding.EncodeToString(sealed), nil
 }
 
-// Decrypt déchiffre et vérifie l'authenticité.
+// Decrypt decrypts and checks authenticity.
 func (c Cipher) Decrypt(encoded string) ([]byte, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("chiffré illisible: %w", err)
+		return nil, fmt.Errorf("unreadable ciphertext: %w", err)
 	}
 	size := c.aead.NonceSize()
 	if len(raw) < size {
-		return nil, errors.New("chiffré trop court")
+		return nil, errors.New("ciphertext too short")
 	}
 	plaintext, err := c.aead.Open(nil, raw[:size], raw[size:], nil)
 	if err != nil {
-		// Message volontairement muet : distinguer « mauvaise clé » de
-		// « message altéré » aiderait un attaquant.
-		return nil, errors.New("déchiffrement refusé")
+		// Message deliberately mute: distinguishing "wrong key" from
+		// "tampered message" would help an attacker.
+		return nil, errors.New("decryption refused")
 	}
 	return plaintext, nil
 }

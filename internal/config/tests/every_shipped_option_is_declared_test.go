@@ -6,33 +6,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestEveryShippedOptionIsDeclared : la configuration LIVRÉE passe le nouveau
-// contrôle.
+// TestEveryShippedOptionIsDeclared: the SHIPPED configuration passes the new
+// check.
 //
-// Sans lui, ce lot pourrait être vert en n'ayant qu'ajouté une garde que le
-// dépôt lui-même ne franchit pas — et le défaut n'apparaîtrait qu'au premier
-// `go run` de quelqu'un d'autre.
+// Without it, this batch could be green having only added a guard that the
+// repository itself does not clear — and the defect would only appear at
+// somebody else's first `go run`.
 //
-// C'est le pendant positif du témoin d'échec : un garde doit refuser ce qui est
-// faux ET accepter ce qui est juste. Les deux moitiés sont nécessaires, et
-// l'expérience de ce dépôt est que c'est la première qu'on oublie de vérifier.
+// It is the positive counterpart of the failure witness: a guard must refuse
+// what is wrong AND accept what is right. Both halves are necessary, and the
+// experience of this repository is that it is the first one people forget to
+// verify.
 func TestEveryShippedOptionIsDeclared(t *testing.T) {
 	withShippedConfig(t)
 
 	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
-		t.Fatalf("la configuration livrée doit se charger: %v", err)
+		t.Fatalf("the shipped configuration must load: %v", err)
 	}
 
-	// Et le contrôle doit avoir quelque chose à contrôler : si `modules.yaml`
-	// cessait de porter la moindre option, ce test resterait vert sans rien
-	// prouver.
+	// And the check must have something to check: if `modules.yaml` stopped
+	// carrying the slightest option, this test would stay green while proving
+	// nothing.
 	options := 0
-	for nom := range cfg.Modules {
-		options += len(cfg.Modules.Get(nom).Options)
+	for name := range cfg.Modules {
+		options += len(cfg.Modules.Get(name).Options)
 	}
 	if options == 0 {
-		t.Fatal("la configuration livrée ne porte aucune option — ce test ne prouve alors rien")
+		t.Fatal("the shipped configuration carries no option — this test then proves nothing")
 	}
-	t.Logf("%d options déclarées dans la configuration livrée", options)
+	t.Logf("%d options declared in the shipped configuration", options)
 }

@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du paquet config : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the config package: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for the unexported identifiers. One file per
+// test — the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -20,44 +20,46 @@ import (
 	userregistration "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration"
 )
 
-// shippedCatalog assemble le catalogue EXACTEMENT comme le composition root.
+// shippedCatalog assembles the catalogue EXACTLY like the composition root.
 //
-// Charger la configuration livrée contre un catalogue inventé ne prouverait
-// rien : c'est l'accord entre les fichiers de `config/` et les modules
-// réellement embarqués qui est en jeu (ADR 014). Si ces deux-là divergent, la
-// configuration livrée refuse de se charger — et c'est ce que ces tests
-// doivent attraper, pas un binaire au premier démarrage.
+// Loading the shipped configuration against a made-up catalogue would prove
+// nothing: what is at stake is the agreement between the files of `config/` and
+// the modules actually embedded (ADR 014). If those two diverge, the shipped
+// configuration refuses to load — and that is what these tests must catch, not
+// a binary at its first startup.
 func shippedCatalog(t *testing.T) config.ModuleCatalog {
 	t.Helper()
 	coreCatalog, err := core.Catalog()
 	if err != nil {
-		t.Fatalf("catalogue du noyau: %v", err)
+		t.Fatalf("catalogue of the core: %v", err)
 	}
 	catalog, err := config.MergeCatalogs(coreCatalog, userregistration.Catalog())
 	if err != nil {
-		t.Fatalf("fusion des catalogues: %v", err)
+		t.Fatalf("merge of the catalogues: %v", err)
 	}
 	return catalog
 }
 
-// shippedConfigDir pointe sur le répertoire config/ RÉELLEMENT livré.
+// shippedConfigDir points at the config/ directory that is ACTUALLY shipped.
 //
-// Les autres tests de ce paquet valident des structures construites à la main.
-// Ceux-ci valident les fichiers du dépôt : sans eux, une faute de frappe dans
-// config/modules.yaml passerait `task check` et n'apparaîtrait qu'au premier
-// démarrage. C'est exactement le faux vert que rules/README.md interdit.
+// The other tests of this package validate structures built by hand. These ones
+// validate the files of the repository: without them, a typo in
+// config/modules.yaml would pass `task check` and would only appear at the
+// first startup. That is exactly the false green that rules/README.md forbids.
 func shippedConfigDir() string { return filepath.Join("..", "..", "..", "config") }
 
-// testEncryptionKey fabrique une clé AES-256 nulle, encodée à l'exécution.
+// testEncryptionKey builds a zeroed AES-256 key, encoded at runtime.
 //
-// Aucune clé n'est écrite en dur dans le dépôt, même de test : rules/securite.md
-// interdit tout secret versionné, et une chaîne base64 de 32 octets dans un
-// fichier est indiscernable d'une vraie fuite pour gitleaks comme pour un lecteur.
+// No key is written hard-coded in the repository, not even a test one:
+// rules/securite.md forbids any versioned secret, and a base64 string of 32
+// bytes in a file is indistinguishable from a real leak, for gitleaks as for a
+// reader.
 func testEncryptionKey() string {
 	return base64.StdEncoding.EncodeToString(make([]byte, 32))
 }
 
-// withShippedConfig pointe le chargeur sur la configuration livrée, secret fourni.
+// withShippedConfig points the loader at the shipped configuration, with the
+// secret supplied.
 func withShippedConfig(t *testing.T) {
 	t.Helper()
 	t.Setenv(config.EnvVarConfigDir, shippedConfigDir())
@@ -65,54 +67,54 @@ func withShippedConfig(t *testing.T) {
 	t.Setenv("SECURITY_ENCRYPTION_KEY", testEncryptionKey())
 }
 
-// withCatalogTestConfig prépare une configuration chargeable où seule la section
-// `modules:` est celle du test.
+// withCatalogTestConfig prepares a loadable configuration where only the
+// `modules:` section is the one of the test.
 //
-// Elle recopie tous les groupes livrés SAUF `modules.yaml`, qu'elle remplace.
-// Recopier plutôt que réécrire à la main est délibéré : une configuration
-// minimale écrite ici divergerait de la vraie au premier réglage obligatoire
-// ajouté, et le test échouerait pour une raison sans rapport avec ce qu'il
-// vérifie.
+// It copies every shipped group EXCEPT `modules.yaml`, which it replaces.
+// Copying rather than rewriting by hand is deliberate: a minimal configuration
+// written here would diverge from the real one at the first mandatory setting
+// added, and the test would fail for a reason unrelated to what it verifies.
 func withCatalogTestConfig(t *testing.T, modules string) {
 	t.Helper()
 
 	dir := t.TempDir()
-	// La couche d'environnement compte aussi : c'est `env/development.yaml` qui
-	// donne un défaut explicite à `DB_DSN`. L'oublier ferait échouer le test sur
-	// un secret manquant, c'est-à-dire pour une raison sans aucun rapport avec
-	// ce qu'il vérifie.
+	// The environment layer counts too: it is `env/development.yaml` that gives
+	// an explicit default to `DB_DSN`. Forgetting it would make the test fail on
+	// a missing secret, that is to say for a reason entirely unrelated to what
+	// it verifies.
 	if err := os.MkdirAll(filepath.Join(dir, "env"), 0o750); err != nil {
-		t.Fatalf("création de env/: %v", err)
+		t.Fatalf("creation of env/: %v", err)
 	}
-	var copies int
-	for _, motif := range []string{"*.yaml", filepath.Join("env", "*.yaml")} {
-		livres, err := filepath.Glob(filepath.Join(shippedConfigDir(), motif))
+	var copied int
+	for _, pattern := range []string{"*.yaml", filepath.Join("env", "*.yaml")} {
+		shipped, err := filepath.Glob(filepath.Join(shippedConfigDir(), pattern))
 		if err != nil {
-			t.Fatalf("lecture de la configuration livrée: %v", err)
+			t.Fatalf("reading of the shipped configuration: %v", err)
 		}
-		for _, chemin := range livres {
-			relatif, err := filepath.Rel(shippedConfigDir(), chemin)
+		for _, path := range shipped {
+			relative, err := filepath.Rel(shippedConfigDir(), path)
 			if err != nil {
-				t.Fatalf("chemin relatif de %s: %v", chemin, err)
+				t.Fatalf("relative path of %s: %v", path, err)
 			}
-			if filepath.Base(chemin) == "modules.yaml" || strings.HasPrefix(filepath.Base(chemin), "local") {
+			if filepath.Base(path) == "modules.yaml" || strings.HasPrefix(filepath.Base(path), "local") {
 				continue
 			}
-			contenu, err := os.ReadFile(chemin)
+			content, err := os.ReadFile(path)
 			if err != nil {
-				t.Fatalf("lecture de %s: %v", relatif, err)
+				t.Fatalf("reading of %s: %v", relative, err)
 			}
-			if err := os.WriteFile(filepath.Join(dir, relatif), sansModules(t, relatif, contenu), 0o600); err != nil {
-				t.Fatalf("écriture de %s: %v", relatif, err)
+			if err := os.WriteFile(
+				filepath.Join(dir, relative), withoutModules(t, relative, content), 0o600); err != nil {
+				t.Fatalf("writing of %s: %v", relative, err)
 			}
-			copies++
+			copied++
 		}
 	}
-	if copies == 0 {
-		t.Fatal("aucun fichier de configuration copié : le test ne vérifierait rien")
+	if copied == 0 {
+		t.Fatal("no configuration file copied: the test would verify nothing")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "modules.yaml"), []byte(modules), 0o600); err != nil {
-		t.Fatalf("écriture de modules.yaml: %v", err)
+		t.Fatalf("writing of modules.yaml: %v", err)
 	}
 
 	t.Setenv(config.EnvVarConfigDir, dir)
@@ -120,42 +122,42 @@ func withCatalogTestConfig(t *testing.T, modules string) {
 	t.Setenv("SECURITY_ENCRYPTION_KEY", testEncryptionKey())
 }
 
-// sansModules retire la section `modules:` d'une couche recopiée.
+// withoutModules removes the `modules:` section from a copied layer.
 //
-// # Le défaut que ceci corrige
+// # The defect this fixes
 //
-// L'aide promet que « seule la section `modules:` est celle du test », et elle
-// ne remplaçait que `modules.yaml`. Or une couche d'environnement peut elle
-// aussi déclarer des modules — `config/env/development.yaml` active `auth`
-// (ADR 017) — et cette déclaration atteignait alors le test, qui refusait un
-// module absent de SON catalogue.
+// The helper promises that "only the `modules:` section is the one of the
+// test", and it only replaced `modules.yaml`. Now, an environment layer can
+// declare modules too — `config/env/development.yaml` enables `auth`
+// (ADR 017) — and that declaration then reached the test, which refused a
+// module absent from ITS catalogue.
 //
-// L'échec était juste : la configuration nommait un module que le catalogue de
-// ce test ne connaît pas. C'est l'aide qui mentait sur ce qu'elle isolait.
-func sansModules(t *testing.T, nom string, contenu []byte) []byte {
+// The failure was right: the configuration named a module that the catalogue of
+// this test does not know. It was the helper that lied about what it isolated.
+func withoutModules(t *testing.T, name string, content []byte) []byte {
 	t.Helper()
 
-	var couche map[string]any
-	if err := yaml.Unmarshal(contenu, &couche); err != nil {
-		t.Fatalf("YAML invalide dans %s: %v", nom, err)
+	var layer map[string]any
+	if err := yaml.Unmarshal(content, &layer); err != nil {
+		t.Fatalf("invalid YAML in %s: %v", name, err)
 	}
-	if _, present := couche["modules"]; !present {
-		return contenu
+	if _, present := layer["modules"]; !present {
+		return content
 	}
 
-	delete(couche, "modules")
-	nettoye, err := yaml.Marshal(couche)
+	delete(layer, "modules")
+	cleaned, err := yaml.Marshal(layer)
 	if err != nil {
-		t.Fatalf("réassemblage de %s: %v", nom, err)
+		t.Fatalf("reassembling of %s: %v", name, err)
 	}
-	return nettoye
+	return cleaned
 }
 
-// applicationCatalog est le catalogue qu'une APPLICATION fournirait.
+// applicationCatalog is the catalogue an APPLICATION would supply.
 //
-// `facturation` n'existe nulle part dans le socle : ni code, ni pilote, ni
-// ligne dans `internal/config`. Il n'a qu'un catalogue — et c'est tout ce que
-// l'ADR 014 exige.
+// `facturation` exists nowhere in the starter: no code, no driver, no line in
+// `internal/config`. It only has a catalogue — and that is all ADR 014
+// requires.
 func applicationCatalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		"facturation": {

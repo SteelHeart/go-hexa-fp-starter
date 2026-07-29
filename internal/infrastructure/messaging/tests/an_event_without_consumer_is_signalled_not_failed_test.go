@@ -9,23 +9,22 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestAnEventWithoutConsumerIsSignalledNotFailed : signalé, pas mis en échec.
+// TestAnEventWithoutConsumerIsSignalledNotFailed: signalled, not failed.
 //
-// # Les deux défauts opposés que ce test attrape
+// # The two opposite defects this test catches
 //
-// C'est un équilibre, et les deux côtés coûtent cher :
+// It is a balance, and both sides are expensive:
 //
-//  1. RENDRE UNE ERREUR serait faux. Le dépileur de l'outbox interpréterait
-//     « personne n'écoute » comme « publication échouée » : il rejouerait, avec
-//     un recul croissant, puis ABANDONNERAIT un événement parfaitement valide.
-//     Or l'absence de consommateur est un état NORMAL du socle — aujourd'hui
-//     même, `user.registered.v1` n'a aucun abonné.
-//  2. NE RIEN DIRE serait faux aussi. Un module de notification mal monté, ou
-//     un type d'événement renommé d'un côté seulement, produit exactement la
-//     même trace qu'un fonctionnement nominal : le courriel ne part pas, et
-//     rien ne l'explique.
+//  1. RETURNING AN ERROR would be wrong. The outbox dispatcher would interpret
+//     "nobody is listening" as "publication failed": it would replay, with a
+//     growing backoff, then ABANDON a perfectly valid event. Yet the absence of
+//     a consumer is a NORMAL state of the starter — this very day,
+//     `user.registered.v1` has no subscriber.
+//  2. SAYING NOTHING would be wrong too. A badly mounted notification module, or
+//     an event type renamed on one side only, produces exactly the same trace as
+//     nominal operation: the email does not go out, and nothing explains it.
 //
-// La sortie correcte est donc : succès, ET un avertissement qui NOMME le type.
+// The correct outcome is therefore: success, AND a warning that NAMES the type.
 func TestAnEventWithoutConsumerIsSignalledNotFailed(t *testing.T) {
 	t.Parallel()
 
@@ -33,13 +32,13 @@ func TestAnEventWithoutConsumerIsSignalledNotFailed(t *testing.T) {
 	bus := messaging.NewInproc(logger)
 
 	if err := bus.Publish(context.Background(), envelope("user.registered.v1")); err != nil {
-		t.Fatalf("un événement sans consommateur a rendu %v — "+
-			"le dépileur le prendrait pour un échec et finirait par l'abandonner", err)
+		t.Fatalf("an event without a consumer returned %v — "+
+			"the dispatcher would take it for a failure and end up abandoning it", err)
 	}
 
 	trace := logs.String()
 	if !strings.Contains(trace, "user.registered.v1") {
-		t.Errorf("l'avertissement ne nomme pas le type d'événement, trace=%q — "+
-			"sans le nom, il est inexploitable", trace)
+		t.Errorf("the warning does not name the event type, trace=%q — "+
+			"without the name, it is unusable", trace)
 	}
 }

@@ -110,8 +110,8 @@ openssl rand -base64 32
 Sans elle, le démarrage échoue en **nommant la variable** :
 
 ```
-démarrage impossible: configuration: variables d'environnement requises
-par la configuration et non définies: SECURITY_ENCRYPTION_KEY
+démarrage impossible: configuration: environment variables required by the
+configuration and not defined: SECURITY_ENCRYPTION_KEY
 ```
 
 C'est le comportement voulu. Un socle qui démarrerait avec une clé par défaut livrerait cette clé à

@@ -6,32 +6,32 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 )
 
-// TestAnotherKeyCannotDecrypt : une autre clé ne déchiffre pas.
+// TestAnotherKeyCannotDecrypt: another key does not decrypt.
 //
-// Évident sur le papier, décisif en exploitation : c'est ce qui rend une rotation de
-// clé visible. Si une clé erronée déchiffrait quand même, une rotation ratée ne se
-// remarquerait qu'au moment où les données seraient devenues illisibles pour tout le
-// monde — bien après le déploiement fautif.
+// Obvious on paper, decisive in operation: it is what makes a key rotation
+// visible. If a wrong key still decrypted, a failed rotation would only be
+// noticed once the data had become unreadable for everyone — long after the
+// faulty deployment.
 func TestAnotherKeyCannotDecrypt(t *testing.T) {
 	t.Parallel()
 
-	original, err := security.NewCipher(cleAES())
+	original, err := security.NewCipher(aesKey())
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
-	chiffre, err := original.Encrypt([]byte("une donnée personnelle"))
+	ciphertext, err := original.Encrypt([]byte("some personal data"))
 	if err != nil {
 		t.Fatalf("Encrypt: %v", err)
 	}
 
-	autreCle := cleAES()
-	autreCle[0] ^= 0xFF
-	autre, err := security.NewCipher(autreCle)
+	otherKey := aesKey()
+	otherKey[0] ^= 0xFF
+	other, err := security.NewCipher(otherKey)
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
 
-	if _, err := autre.Decrypt(chiffre); err == nil {
-		t.Error("une autre clé ne doit PAS pouvoir déchiffrer")
+	if _, err := other.Decrypt(ciphertext); err == nil {
+		t.Error("another key must NOT be able to decrypt")
 	}
 }

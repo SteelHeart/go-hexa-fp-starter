@@ -44,6 +44,18 @@ les neuf premiers ADR aient été écrits. Ceux-ci emploient donc les mots de l'
 | *feature* | **module métier** (`internal/modules/{nom}/`) |
 | *socle technique* | selon le cas : **module noyau** (`internal/core/`) ou infrastructure |
 
+**Depuis l'ADR 018, la même chose vaut pour la LANGUE.** Les ADR antérieurs citent des messages du
+code — d'erreur, de journal — qui étaient en français et ne le sont plus. L'ADR 014 en donne
+l'exemple le plus visible : il montre `configuration invalide: modules.billing : module inconnu`,
+que le chargeur rend désormais `invalid configuration: modules.billing: unknown module`.
+
+Ces citations ne sont **pas mises à jour**, pour exactement la même raison que le vocabulaire :
+elles disent ce que le code répondait **au moment de la décision**, et c'est cela qui donne son sens
+au texte. Un ADR n'est pas une documentation de référence — c'est une trace datée.
+
+⚠️ Corollaire : **ne jamais recopier un message d'erreur depuis un ADR pour écrire un test ou un
+garde.** La source vivante est le code.
+
 Ces textes ne sont **pas corrigés**, et c'est délibéré : un ADR est immuable, il se remplace, il ne
 se réécrit pas. Réviser leur vocabulaire reviendrait à effacer la trace du moment où le vocabulaire
 n'était pas encore fixé — c'est-à-dire à faire croire qu'il l'avait toujours été.

@@ -6,23 +6,23 @@ import (
 	"testing"
 )
 
-// Ce fichier porte les tests des identifiants NON EXPORTÉS : `expand`,
-// `deepMerge` et les `validate()`. Ils ne peuvent pas vivre dans
-// `internal/config/tests/`, qui est un autre paquet.
+// This file carries the tests of the UNEXPORTED identifiers: `expand`,
+// `deepMerge` and the `validate()`. They cannot live in
+// `internal/config/tests/`, which is another package.
 //
-// Convention du dépôt (rules/tests.md) :
-//   - `{paquet}/tests/`            tests en boîte noire, API publique seulement
-//   - `{paquet}/internal_test.go`  tests d'internes, à côté du code
+// Repository convention (rules/tests.md):
+//   - `{package}/tests/`            black box tests, public API only
+//   - `{package}/internal_test.go`  tests of internals, next to the code
 //
-// Un test d'interne est un aveu de couplage à l'implémentation : il doit rester
-// minoritaire, et disparaître si la fonction devient exportée.
+// A test of an internal is an admission of coupling to the implementation: it
+// must stay a minority, and disappear if the function becomes exported.
 
-// TestAnEmptyCatalogRefusesEverything : le deny-par-défaut de l'ADR 014.
+// TestAnEmptyCatalogRefusesEverything: the deny-by-default of ADR 014.
 //
-// Le catalogue vient du composition root. S'il est vide — parce que personne ne
-// l'a construit, ou parce qu'on l'a oublié — la configuration ne doit RIEN
-// admettre. L'oubli du catalogue doit être bruyant, jamais permissif : c'est ce
-// qui distingue « aucun module déclaré » de « tous les modules acceptés ».
+// The catalogue comes from the composition root. If it is empty — because
+// nobody built it, or because it was forgotten — the configuration must admit
+// NOTHING. Forgetting the catalogue must be loud, never permissive: that is
+// what distinguishes "no module declared" from "every module accepted".
 func TestAnEmptyCatalogRefusesEverything(t *testing.T) {
 	t.Parallel()
 
@@ -30,15 +30,15 @@ func TestAnEmptyCatalogRefusesEverything(t *testing.T) {
 
 	problems := mods.validate(ModuleCatalog{})
 	if len(problems) == 0 {
-		t.Fatal("un catalogue vide doit tout refuser")
+		t.Fatal("an empty catalogue must refuse everything")
 	}
 	if !strings.Contains(problems[0].Error(), "quelconque") {
-		t.Errorf("le message doit nommer le module refusé: %v", problems[0])
+		t.Errorf("the message must name the refused module: %v", problems[0])
 	}
 }
 
-// TestADriverAbsentFromTheCatalogIsRefused : une faute de frappe dans un nom de
-// pilote ne se résout jamais en « le plus proche ».
+// TestADriverAbsentFromTheCatalogIsRefused: a typo in a driver name never
+// resolves to "the closest one".
 func TestADriverAbsentFromTheCatalogIsRefused(t *testing.T) {
 	t.Parallel()
 
@@ -49,84 +49,83 @@ func TestADriverAbsentFromTheCatalogIsRefused(t *testing.T) {
 
 	problems := mods.validate(catalog)
 	if len(problems) != 1 {
-		t.Fatalf("un pilote inconnu doit produire exactement un refus, obtenu %d", len(problems))
+		t.Fatalf("an unknown driver must produce exactly one refusal, got %d", len(problems))
 	}
 	if !strings.Contains(problems[0].Error(), "memry") {
-		t.Errorf("le message doit citer le pilote fautif: %v", problems[0])
+		t.Errorf("the message must quote the offending driver: %v", problems[0])
 	}
 }
 
-// TestADisabledModuleIsNotValidated : on ne refuse pas le démarrage pour le
-// pilote d'un module que personne n'a activé.
+// TestADisabledModuleIsNotValidated: one does not refuse to start because of
+// the driver of a module nobody has enabled.
 //
-// Sans ça, une configuration d'exemple laissée en place — module désactivé,
-// pilote `postgres` — empêcherait de démarrer sans base, ce qui contredirait
-// frontalement l'ADR 012.
+// Without that, an example configuration left in place — module disabled,
+// `postgres` driver — would prevent starting without a database, which would
+// flatly contradict ADR 012.
 func TestADisabledModuleIsNotValidated(t *testing.T) {
 	t.Parallel()
 
 	catalog := ModuleCatalog{
 		"facturation": {Default: "memory", Drivers: map[string]Resources{"memory": {}}},
 	}
-	mods := Modules{"facturation": {Enabled: false, Driver: "un-pilote-qui-n-existe-pas"}}
+	mods := Modules{"facturation": {Enabled: false, Driver: "a-driver-that-does-not-exist"}}
 
 	if problems := mods.validate(catalog); len(problems) != 0 {
-		t.Errorf("un module désactivé ne doit pas être validé: %v", problems)
+		t.Errorf("a disabled module must not be validated: %v", problems)
 	}
 }
 
-// TestResolveDoesNotMutateItsInput : Resolve est une fonction PURE.
+// TestResolveDoesNotMutateItsInput: Resolve is a PURE function.
 //
-// Elle rend une copie où les défauts sont posés. Si elle modifiait son entrée,
-// « appliquer les défauts » redeviendrait un effet caché — exactement ce que
-// l'ADR 014 déplace hors des accesseurs.
+// It returns a copy where the defaults are placed. If it modified its input,
+// "applying the defaults" would become a hidden effect again — exactly what
+// ADR 014 moves out of the accessors.
 func TestResolveDoesNotMutateItsInput(t *testing.T) {
 	t.Parallel()
 
 	catalog := ModuleCatalog{
 		"facturation": {Default: "memory", Drivers: map[string]Resources{"memory": {}}},
 	}
-	origine := Modules{"facturation": {Enabled: true}}
+	original := Modules{"facturation": {Enabled: true}}
 
-	resolved := origine.Resolve(catalog)
+	resolved := original.Resolve(catalog)
 
-	if got := origine["facturation"].Driver; got != "" {
-		t.Errorf("Resolve a modifié son entrée: pilote devenu %q", got)
+	if got := original["facturation"].Driver; got != "" {
+		t.Errorf("Resolve modified its input: driver became %q", got)
 	}
 	if got := resolved["facturation"].Driver; got != "memory" {
-		t.Errorf("le défaut du catalogue n'a pas été posé: %q", got)
+		t.Errorf("the default of the catalogue was not placed: %q", got)
 	}
 }
 
-// TestMergeCatalogsRefusesACollision : deux modules ne peuvent pas porter le
-// même nom.
+// TestMergeCatalogsRefusesACollision: two modules cannot carry the same name.
 //
-// Le mode de défaillance évité est silencieux : l'un des deux se retrouverait
-// configuré par les pilotes de l'autre, et le premier symptôme serait un pilote
-// « inconnu » pour un module qui le déclare pourtant.
+// The failure mode avoided is silent: one of the two would end up configured by
+// the drivers of the other, and the first symptom would be an "unknown" driver
+// for a module that nonetheless declares it.
 func TestMergeCatalogsRefusesACollision(t *testing.T) {
 	t.Parallel()
 
-	un := ModuleCatalog{"facturation": {Default: "memory"}}
-	deux := ModuleCatalog{"facturation": {Default: "postgres"}}
+	first := ModuleCatalog{"facturation": {Default: "memory"}}
+	second := ModuleCatalog{"facturation": {Default: "postgres"}}
 
-	if _, err := MergeCatalogs(un, deux); err == nil {
-		t.Fatal("un nom de module déclaré deux fois doit être refusé")
+	if _, err := MergeCatalogs(first, second); err == nil {
+		t.Fatal("a module name declared twice must be refused")
 	}
 }
 
-// TestExpandFailsOnMissingRequiredSecret : un secret manquant qui se résoudrait
-// en chaîne vide produirait une connexion anonyme ou un chiffrement avec une
-// clé vide. Il doit refuser le démarrage.
+// TestExpandFailsOnMissingRequiredSecret: a missing secret that resolved to the
+// empty string would produce an anonymous connection or an encryption with an
+// empty key. It must refuse to start.
 func TestExpandFailsOnMissingRequiredSecret(t *testing.T) {
 	t.Parallel()
 
 	_, err := expand("dsn: ${HEXA_TEST_ABSENT_VAR}")
 	if err == nil {
-		t.Fatal("une référence obligatoire non définie doit refuser le chargement")
+		t.Fatal("a mandatory reference that is not defined must refuse the loading")
 	}
 	if !strings.Contains(err.Error(), "HEXA_TEST_ABSENT_VAR") {
-		t.Errorf("le message doit nommer la variable manquante: %v", err)
+		t.Errorf("the message must name the missing variable: %v", err)
 	}
 }
 
@@ -135,75 +134,76 @@ func TestExpandUsesExplicitDefault(t *testing.T) {
 
 	out, err := expand("addr: ${HEXA_TEST_ABSENT_VAR:-localhost:6379}")
 	if err != nil {
-		t.Fatalf("un défaut explicite doit être accepté: %v", err)
+		t.Fatalf("an explicit default must be accepted: %v", err)
 	}
 	if !strings.Contains(out, "localhost:6379") {
-		t.Errorf("défaut non appliqué: %q", out)
+		t.Errorf("default not applied: %q", out)
 	}
 }
 
-// TestExpandAcceptsEmptyExplicitDefault : `${VAR:-}` signale un réglage
-// optionnel. C'est légitime, contrairement à une référence sans défaut.
+// TestExpandAcceptsEmptyExplicitDefault: `${VAR:-}` signals an optional
+// setting. That is legitimate, unlike a reference without a default.
 func TestExpandAcceptsEmptyExplicitDefault(t *testing.T) {
 	t.Parallel()
 
 	if _, err := expand("password: ${HEXA_TEST_ABSENT_VAR:-}"); err != nil {
-		t.Errorf("un défaut vide explicite doit être accepté: %v", err)
+		t.Errorf("an explicit empty default must be accepted: %v", err)
 	}
 }
 
-// TestExpandFailsOnDefinedButEmptySecret : le secret déclaré dans une chaîne de
-// déploiement mais jamais injecté arrive comme chaîne VIDE, pas comme variable
-// absente. C'est la forme la plus fréquente du secret manquant, et celle qui
-// passerait le plus facilement inaperçue.
+// TestExpandFailsOnDefinedButEmptySecret: the secret declared in a deployment
+// chain but never injected arrives as an EMPTY string, not as an absent
+// variable. That is the most frequent form of the missing secret, and the one
+// that would most easily go unnoticed.
 //
-// Ce test ne peut pas être parallèle : il manipule l'environnement du processus.
+// This test cannot be parallel: it manipulates the environment of the process.
 func TestExpandFailsOnDefinedButEmptySecret(t *testing.T) {
 	t.Setenv("HEXA_TEST_EMPTY_VAR", "")
 
 	_, err := expand("key: ${HEXA_TEST_EMPTY_VAR}")
 	if err == nil {
-		t.Fatal("une variable définie mais vide doit refuser le chargement")
+		t.Fatal("a variable that is defined but empty must refuse the loading")
 	}
 	var missing ErrMissingSecret
 	if !errors.As(err, &missing) {
-		t.Fatalf("attendu ErrMissingSecret, reçu %v", err)
+		t.Fatalf("want ErrMissingSecret, got %v", err)
 	}
 }
 
-// TestExpandPrefersDefaultOverEmptyValue : sémantique POSIX de `${VAR:-défaut}`.
-// Le `:` fait porter le repli sur le vide autant que sur l'absence — sinon une
-// variable vidée par accident écraserait un défaut pourtant valide.
+// TestExpandPrefersDefaultOverEmptyValue: POSIX semantics of `${VAR:-default}`.
+// The `:` makes the fallback apply to the empty value as much as to the absence
+// — otherwise a variable emptied by accident would overwrite an otherwise valid
+// default.
 func TestExpandPrefersDefaultOverEmptyValue(t *testing.T) {
 	t.Setenv("HEXA_TEST_EMPTY_VAR", "")
 
 	out, err := expand("addr: ${HEXA_TEST_EMPTY_VAR:-localhost:6379}")
 	if err != nil {
-		t.Fatalf("un défaut explicite doit s'appliquer: %v", err)
+		t.Fatalf("an explicit default must apply: %v", err)
 	}
 	if !strings.Contains(out, "localhost:6379") {
-		t.Errorf("défaut non appliqué face à une variable vide: %q", out)
+		t.Errorf("default not applied in the face of an empty variable: %q", out)
 	}
 }
 
 func TestExpandReportsAllMissingVariablesAtOnce(t *testing.T) {
 	t.Parallel()
 
-	// Corriger sa configuration en six redémarrages est inacceptable : toutes
-	// les variables manquantes sont signalées d'un coup.
+	// Fixing your configuration over six restarts is unacceptable: every
+	// missing variable is reported at once.
 	_, err := expand("a: ${HEXA_TEST_A}\nb: ${HEXA_TEST_B}")
 	if err == nil {
-		t.Fatal("attendu un échec")
+		t.Fatal("want a failure")
 	}
 	for _, name := range []string{"HEXA_TEST_A", "HEXA_TEST_B"} {
 		if !strings.Contains(err.Error(), name) {
-			t.Errorf("le message doit nommer %s: %v", name, err)
+			t.Errorf("the message must name %s: %v", name, err)
 		}
 	}
 }
 
-// TestDeepMergeOverridesLists : concaténer ajouterait silencieusement des
-// origines CORS qu'on croyait avoir retirées.
+// TestDeepMergeOverridesLists: concatenating would silently add back CORS
+// origins one believed had been removed.
 func TestDeepMergeOverridesLists(t *testing.T) {
 	t.Parallel()
 
@@ -212,14 +212,14 @@ func TestDeepMergeOverridesLists(t *testing.T) {
 
 	http, ok := base["http"].(map[string]any)
 	if !ok {
-		t.Fatal("structure perdue lors de la fusion")
+		t.Fatal("structure lost during the merge")
 	}
 	origins, ok := http["allowed_origins"].([]any)
 	if !ok {
-		t.Fatal("liste perdue lors de la fusion")
+		t.Fatal("list lost during the merge")
 	}
 	if len(origins) != 1 || origins[0] != "https://b" {
-		t.Errorf("la couche supérieure doit ÉCRASER la liste, obtenu: %v", origins)
+		t.Errorf("the upper layer must OVERWRITE the list, got: %v", origins)
 	}
 }
 
@@ -231,18 +231,18 @@ func TestDeepMergeMergesNestedTables(t *testing.T) {
 
 	db, ok := base["db"].(map[string]any)
 	if !ok {
-		t.Fatal("structure perdue")
+		t.Fatal("structure lost")
 	}
 	if db["max_conns"] != 25 {
-		t.Errorf("max_conns non surchargé: %v", db["max_conns"])
+		t.Errorf("max_conns not overridden: %v", db["max_conns"])
 	}
 	if db["dsn"] != "a" {
-		t.Errorf("dsn perdu lors de la fusion: %v", db["dsn"])
+		t.Errorf("dsn lost during the merge: %v", db["dsn"])
 	}
 }
 
-// TestInteropValidateRequiresBaseURLForHTTP : un transport http sans adresse
-// échouerait au premier appel, en production. Il doit échouer au démarrage.
+// TestInteropValidateRequiresBaseURLForHTTP: an http transport without an
+// address would fail on the first call, in production. It must fail at startup.
 func TestInteropValidateRequiresBaseURLForHTTP(t *testing.T) {
 	t.Parallel()
 
@@ -251,7 +251,7 @@ func TestInteropValidateRequiresBaseURLForHTTP(t *testing.T) {
 		Transports:       map[string]string{"billing": "http"},
 	}.validate()
 	if len(problems) != 1 {
-		t.Fatalf("%d problème(s), attendu 1 (base_urls manquant)", len(problems))
+		t.Fatalf("%d problem(s), want 1 (base_urls missing)", len(problems))
 	}
 }
 
@@ -263,6 +263,6 @@ func TestInteropValidateRefusesUnknownTransport(t *testing.T) {
 		Transports:       map[string]string{"billing": "grpc"},
 	}.validate()
 	if len(problems) != 1 {
-		t.Fatalf("%d problème(s), attendu 1", len(problems))
+		t.Fatalf("%d problem(s), want 1", len(problems))
 	}
 }

@@ -11,9 +11,9 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Ces tests visent des champs NON EXPORTÉS : `Server.http` est privé, et les
-// délais qu'il porte sont précisément ce qu'il faut vérifier. C'est le cas
-// prévu par rules/tests.md §2 pour un `internal_test.go`.
+// These tests target UNEXPORTED fields: `Server.http` is private, and the
+// timeouts it carries are precisely what has to be checked. This is the case
+// provided for by rules/tests.md §2 for an `internal_test.go`.
 
 func testConfig() config.Config {
 	var cfg config.Config
@@ -30,21 +30,21 @@ func quiet() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// TestEveryTimeoutIsSet : aucun délai laissé à zéro.
+// TestEveryTimeoutIsSet: no timeout left at zero.
 //
-// # Le défaut que ce test attrape : une attaque à une ligne
+// # The defect this test catches: a one-line attack
 //
-// `ReadHeaderTimeout` à zéro signifie « pas de limite ». Une connexion qui
-// envoie ses en-têtes un octet à la fois immobilise alors une goroutine
-// INDÉFINIMENT. Quelques milliers de connexions de ce type — un script trivial,
-// pas d'outil spécialisé — épuisent le serveur.
+// `ReadHeaderTimeout` at zero means "no limit". A connection that sends its
+// headers one byte at a time then ties up a goroutine INDEFINITELY. A few
+// thousand connections of that kind — a trivial script, no specialised tool —
+// exhaust the server.
 //
-// C'est l'attaque Slowloris, et sa particularité est de ne ressembler à rien :
-// pas de pic de trafic, pas d'erreur, pas de log. Le service arrête simplement
-// d'accepter des connexions.
+// This is the Slowloris attack, and its peculiarity is to look like nothing at
+// all: no traffic spike, no error, no log. The service simply stops accepting
+// connections.
 //
-// Go ne met AUCUN de ces délais par défaut. Un `http.Server{}` écrit sans y
-// penser est vulnérable, et c'est le cas le plus courant.
+// Go sets NONE of these timeouts by default. An `http.Server{}` written without
+// thinking about it is vulnerable, and that is the most common case.
 func TestEveryTimeoutIsSet(t *testing.T) {
 	t.Parallel()
 
@@ -57,52 +57,53 @@ func TestEveryTimeoutIsSet(t *testing.T) {
 		"IdleTimeout":       server.http.IdleTimeout,
 	} {
 		if got == 0 {
-			t.Errorf("%s vaut 0 — « pas de limite », donc une goroutine par connexion lente", name)
+			t.Errorf("%s is 0 — \"no limit\", therefore one goroutine per slow connection", name)
 		}
 	}
-	// ReadHeaderTimeout doit suivre la configuration, pas une constante oubliée.
+	// ReadHeaderTimeout must follow the configuration, not a forgotten constant.
 	if server.http.ReadHeaderTimeout != 3*time.Second {
-		t.Errorf("ReadHeaderTimeout = %s, attendu 3s (la valeur configurée)",
+		t.Errorf("ReadHeaderTimeout = %s, want 3s (the configured value)",
 			server.http.ReadHeaderTimeout)
 	}
 }
 
-// TestMetricsServerListensOnLoopbackOnly : les métriques ne sortent pas de la machine.
+// TestMetricsServerListensOnLoopbackOnly: the metrics do not leave the machine.
 //
-// # Pourquoi c'est une exigence de sécurité et pas de propreté
+// # Why this is a security requirement and not a tidiness one
 //
-// `/metrics` publie la volumétrie, les noms de routes, les latences, le nombre
-// d'erreurs par type. C'est une carte de la structure interne et de l'activité du
-// service, sans authentification.
+// `/metrics` publishes the traffic volume, the route names, the latencies, the
+// number of errors per type. It is a map of the internal structure and of the
+// activity of the service, without authentication.
 //
-// Écouter sur `0.0.0.0` l'exposerait à tout ce qui peut joindre le conteneur. La
-// liaison est donc explicitement `127.0.0.1`, et un collecteur y accède par un
-// side-car ou une redirection choisie — décision explicite, pas défaut implicite.
+// Listening on `0.0.0.0` would expose it to anything that can reach the
+// container. The binding is therefore explicitly `127.0.0.1`, and a collector
+// reaches it through a side-car or a chosen redirection — an explicit decision,
+// not an implicit default.
 func TestMetricsServerListensOnLoopbackOnly(t *testing.T) {
 	t.Parallel()
 
 	server := NewMetricsServer(9100, quiet())
 
 	if got := server.http.Addr; got != "127.0.0.1:9100" {
-		t.Errorf("adresse des métriques = %q, attendu 127.0.0.1:9100 — "+
-			"toute autre liaison publie la structure interne du service", got)
+		t.Errorf("metrics address = %q, want 127.0.0.1:9100 — "+
+			"any other binding publishes the internal structure of the service", got)
 	}
 	if server.http.ReadHeaderTimeout == 0 {
-		t.Error("le serveur de métriques n'a pas de ReadHeaderTimeout")
+		t.Error("the metrics server has no ReadHeaderTimeout")
 	}
 }
 
-// TestRunReturnsCleanlyOnCancellation : l'arrêt rend la main, sans erreur.
+// TestRunReturnsCleanlyOnCancellation: shutdown hands back, without an error.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un `Run` qui rendrait l'erreur `http.ErrServerClosed` ferait échouer l'arrêt
-// NORMAL : le processus sortirait avec un code non nul à chaque déploiement,
-// l'orchestrateur le compterait comme un plantage, et le déploiement serait
-// marqué en échec alors que tout s'est bien passé.
+// A `Run` that returned the `http.ErrServerClosed` error would make the NORMAL
+// shutdown fail: the process would exit with a non-zero code at every
+// deployment, the orchestrator would count it as a crash, and the deployment
+// would be marked as failed although everything went well.
 //
-// Le test se lie au port 0 — le système en choisit un libre — donc il n'entre en
-// conflit avec rien, ni avec un autre test, ni avec un service de la machine.
+// The test binds to port 0 — the system picks a free one — so it conflicts with
+// nothing, neither with another test nor with a service of the machine.
 func TestRunReturnsCleanlyOnCancellation(t *testing.T) {
 	t.Parallel()
 
@@ -112,16 +113,16 @@ func TestRunReturnsCleanlyOnCancellation(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- server.Run(ctx) }()
 
-	// L'écoute est asynchrone : on annule sans attendre, et Run doit gérer les
-	// deux ordres possibles (annulé avant ou après le début de l'écoute).
+	// Listening is asynchronous: we cancel without waiting, and Run must handle
+	// both possible orders (cancelled before or after listening starts).
 	cancel()
 
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Errorf("Run a rendu %v à l'arrêt — le déploiement serait compté en échec", err)
+			t.Errorf("Run returned %v on shutdown — the deployment would be counted as failed", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("Run n'a pas rendu la main : l'arrêt bloquerait jusqu'au SIGKILL")
+		t.Fatal("Run did not hand back: shutdown would block until SIGKILL")
 	}
 }

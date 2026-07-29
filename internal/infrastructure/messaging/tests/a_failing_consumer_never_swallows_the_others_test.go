@@ -8,25 +8,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestAFailingConsumerNeverSwallowsTheOthers : un échec ne court-circuite rien,
-// et il REMONTE.
+// TestAFailingConsumerNeverSwallowsTheOthers: a failure short-circuits nothing,
+// and it GOES BACK UP.
 //
-// # Les deux défauts que ce test attrape
+// # The two defects this test catches
 //
-//  1. Un `return err` dans la boucle sur les consommateurs. Le premier échec
-//     empêcherait les suivants de s'exécuter — et comme l'ordre d'itération est
-//     celui de l'abonnement, quel module est privé dépendrait de l'ordre de
-//     montage. Un défaut qui change de victime à chaque redémarrage.
-//  2. Un échec avalé. Le dépileur marquerait le message publié alors qu'un
-//     consommateur ne l'a pas traité : perte définitive, sans trace, et l'outbox
-//     aurait fait tout son travail pour rien.
+//  1. A `return err` inside the loop over the consumers. The first failure would
+//     prevent the following ones from running — and since the iteration order is
+//     that of the subscription, which module is deprived would depend on the
+//     mounting order. A defect that changes victim at every restart.
+//  2. A swallowed failure. The dispatcher would mark the message as published
+//     although a consumer has not handled it: definitive loss, without a trace,
+//     and the outbox would have done all its work for nothing.
 //
-// L'erreur remontée doit AUSSI rester identifiable par `errors.Is` : le dépileur
-// distingue les échecs pour décider du recul, il ne lit pas des chaînes.
+// The error that goes back up must ALSO stay identifiable by `errors.Is`: the
+// dispatcher tells failures apart to decide on the backoff, it does not read
+// strings.
 func TestAFailingConsumerNeverSwallowsTheOthers(t *testing.T) {
 	t.Parallel()
 
-	boom := errors.New("consommateur indisponible")
+	boom := errors.New("consumer unavailable")
 	bus := messaging.NewInproc(quietLogger())
 
 	var afterFailure int
@@ -41,14 +42,14 @@ func TestAFailingConsumerNeverSwallowsTheOthers(t *testing.T) {
 	err := bus.Publish(context.Background(), envelope("user.registered.v1"))
 
 	if err == nil {
-		t.Fatal("un consommateur en échec n'a pas fait échouer la publication — " +
-			"le dépileur marquerait le message traité, et il serait perdu")
+		t.Fatal("a failing consumer did not fail the publication — " +
+			"the dispatcher would mark the message as handled, and it would be lost")
 	}
 	if !errors.Is(err, boom) {
-		t.Errorf("l'erreur remontée = %v, elle doit rester identifiable par errors.Is", err)
+		t.Errorf("the error that went back up = %v, it must stay identifiable by errors.Is", err)
 	}
 	if afterFailure != 1 {
-		t.Errorf("le consommateur suivant a été appelé %d fois, attendu 1 — "+
-			"un échec ne doit pas priver les autres de l'événement", afterFailure)
+		t.Errorf("the following consumer was called %d times, want 1 — "+
+			"a failure must not deprive the others of the event", afterFailure)
 	}
 }

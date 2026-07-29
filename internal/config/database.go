@@ -1,10 +1,10 @@
 package config
 
-// DB porte la connexion à la base de données.
+// DB carries the connection to the database.
 //
-// MigrationDSN est distinct de DSN : le rôle applicatif ne possède pas le
-// schéma, ce qui empêche une injection SQL réussie de le modifier ou de
-// désactiver une politique RLS (rules/donnees-et-migrations.md §6).
+// MigrationDSN is distinct from DSN: the application role does not own the
+// schema, which prevents a successful SQL injection from modifying it or from
+// disabling an RLS policy (rules/donnees-et-migrations.md §6).
 type DB struct {
 	DSN             string   `yaml:"dsn"`
 	MigrationDSN    string   `yaml:"migration_dsn"`
@@ -14,7 +14,7 @@ type DB struct {
 	ConnectTimeout  Duration `yaml:"connect_timeout"`
 }
 
-// Cache porte la connexion au cache.
+// Cache carries the connection to the cache.
 type Cache struct {
 	Addr       string   `yaml:"addr"`
 	Password   string   `yaml:"password"`

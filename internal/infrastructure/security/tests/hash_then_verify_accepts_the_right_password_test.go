@@ -2,28 +2,28 @@ package tests
 
 import "testing"
 
-// TestHashThenVerifyAcceptsTheRightPassword : le chemin nominal.
+// TestHashThenVerifyAcceptsTheRightPassword: the nominal path.
 //
-// Il paraît trivial et ne l'est pas : c'est lui qui échouerait si le format encodé
-// changeait d'un côté sans l'autre, et ce défaut-là verrouillerait TOUS les comptes
-// existants au prochain déploiement.
+// It looks trivial and is not: it is the one that would fail if the encoded
+// format changed on one side without the other, and that defect would lock ALL
+// existing accounts on the next deployment.
 //
-// Les cas ne sont pas décoratifs. Le format encodé est
-// `$argon2id$v=…$m=…,t=…,p=…$sel$condensé` : il utilise `$` comme séparateur. Un
-// mot de passe qui contient `$` est donc le cas où une implémentation naïve — qui
-// découperait avant de décoder, ou qui concaténerait sans échapper — se briserait.
-// De même, un mot de passe non-ASCII vérifie que le hachage porte sur des OCTETS et
-// non sur des runes : compter en runes n'échouerait qu'en production, pour les seuls
-// utilisateurs dont la langue s'écrit avec des accents.
+// The cases are not decorative. The encoded format is
+// `$argon2id$v=…$m=…,t=…,p=…$salt$digest`: it uses `$` as a separator. A password
+// that contains `$` is therefore the case where a naive implementation — one
+// that split before decoding, or that concatenated without escaping — would
+// break. Likewise, a non-ASCII password checks that hashing operates on BYTES
+// and not on runes: counting in runes would only fail in production, for the
+// sole users whose language is written with accents.
 func TestHashThenVerifyAcceptsTheRightPassword(t *testing.T) {
 	t.Parallel()
 
 	secrets := map[string]string{
-		"phrase ASCII":         "correct cheval batterie agrafe",
-		"accents et espaces":   "un été à Nîmes, où l'on flâne",
-		"contient le sépareur": "mot$de$passe$argon2id$v=19",
-		"symboles et chiffres": "9!£{}[]|\\~`^@#%&*()_+-=<>?/",
-		"idéogrammes":          "正しい馬のバッテリーステープル",
+		"ASCII phrase":           "correct horse battery staple",
+		"accents and spaces":     "a naïve café in Zürich, Straße 12",
+		"contains the separator": "pass$word$argon2id$v=19",
+		"symbols and digits":     "9!£{}[]|\\~`^@#%&*()_+-=<>?/",
+		"ideograms":              "正しい馬のバッテリーステープル",
 	}
 
 	hasher := newHasher()
@@ -38,7 +38,7 @@ func TestHashThenVerifyAcceptsTheRightPassword(t *testing.T) {
 				t.Fatalf("Verify: %v", err)
 			}
 			if !ok {
-				t.Error("le bon mot de passe doit être accepté")
+				t.Error("the right password must be accepted")
 			}
 		})
 	}

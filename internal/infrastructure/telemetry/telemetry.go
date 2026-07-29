@@ -1,9 +1,9 @@
-// Package telemetry câble les traces, les métriques et les logs, et les relie
-// par le trace_id.
+// Package telemetry wires the traces, the metrics and the logs, and links them
+// through the trace_id.
 //
-// Un log sans trace_id est un log qu'on ne pourra pas recouper en incident :
-// c'est pour cela que le gestionnaire slog l'injecte lui-même plutôt que de
-// compter sur les appelants.
+// A log without a trace_id is a log that cannot be cross-checked during an
+// incident: that is why the slog handler injects it itself rather than relying
+// on the callers.
 package telemetry
 
 import (
@@ -28,24 +28,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Shutdown libère les exportateurs. À appeler sur un contexte NON annulé,
-// sinon les spans en tampon sont perdus au moment où ils sont les plus utiles.
+// Shutdown releases the exporters. To be called on a NON-cancelled context,
+// otherwise the buffered spans are lost at the very moment they are the most
+// useful.
 type Shutdown = func(context.Context) error
 
-// NewLogger construit le journal structuré.
+// NewLogger builds the structured log.
 //
-// JSON hors développement : c'est ce que les collecteurs savent lire. Texte en
-// local, parce qu'un humain lit mieux du texte.
+// JSON outside development: that is what the collectors know how to read. Text
+// locally, because a human reads text better.
 func NewLogger(cfg config.Config) *slog.Logger {
 	return newLoggerTo(cfg, os.Stdout)
 }
 
-// newLoggerTo porte toute la logique, la destination étant un paramètre.
+// newLoggerTo carries the whole logic, the destination being a parameter.
 //
-// La destination est extraite pour UNE raison : `os.Stdout` en dur rendait
-// invérifiable la seule règle intéressante de cette fonction — hors
-// développement, le format est JSON même si la configuration demande du texte.
-// Une règle qu'aucun test ne peut observer n'est pas une règle.
+// The destination is extracted for ONE reason: a hard-coded `os.Stdout` made
+// the only interesting rule of this function unverifiable — outside
+// development, the format is JSON even if the configuration asks for text. A
+// rule that no test can observe is not a rule.
 func newLoggerTo(cfg config.Config, out io.Writer) *slog.Logger {
 	level := parseLevel(cfg.Telemetry.LogLevel)
 	opts := &slog.HandlerOptions{Level: level, AddSource: level == slog.LevelDebug}
@@ -78,7 +79,7 @@ func parseLevel(raw string) slog.Level {
 	}
 }
 
-// traceHandler injecte trace_id et span_id dans chaque enregistrement.
+// traceHandler injects trace_id and span_id into every record.
 type traceHandler struct{ inner slog.Handler }
 
 func (h *traceHandler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -92,7 +93,7 @@ func (h *traceHandler) Handle(ctx context.Context, record slog.Record) error {
 			slog.String("span_id", sc.SpanID().String()),
 		)
 	}
-	return h.inner.Handle(ctx, record) //nolint:wrapcheck // délégation directe
+	return h.inner.Handle(ctx, record) //nolint:wrapcheck // direct delegation
 }
 
 func (h *traceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
@@ -103,11 +104,11 @@ func (h *traceHandler) WithGroup(name string) slog.Handler {
 	return &traceHandler{inner: h.inner.WithGroup(name)}
 }
 
-// Setup installe les fournisseurs de traces et de métriques.
+// Setup installs the trace and metric providers.
 //
-// Désactivée, la fonction retourne un arrêt inerte : le code appelant n'a pas à
-// savoir si la télémétrie est active, et les no-op providers d'OpenTelemetry
-// rendent tout appel gratuit.
+// Disabled, the function returns an inert shutdown: the calling code does not
+// have to know whether telemetry is active, and OpenTelemetry's no-op providers
+// make every call free.
 func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 	if !cfg.Telemetry.Enabled {
 		return func(context.Context) error { return nil }, nil
@@ -119,7 +120,7 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 		attribute.String("deployment.environment", string(cfg.App.Env)),
 	))
 	if err != nil {
-		return nil, fmt.Errorf("ressource OpenTelemetry: %w", err)
+		return nil, fmt.Errorf("OpenTelemetry resource: %w", err)
 	}
 
 	traceExporter, err := otlptracegrpc.New(ctx,
@@ -127,7 +128,7 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("exportateur de traces: %w", err)
+		return nil, fmt.Errorf("trace exporter: %w", err)
 	}
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
@@ -140,7 +141,7 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 
 	metricExporter, err := prometheus.New()
 	if err != nil {
-		return nil, fmt.Errorf("exportateur Prometheus: %w", err)
+		return nil, fmt.Errorf("prometheus exporter: %w", err)
 	}
 	meterProvider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(metricExporter),
@@ -149,28 +150,28 @@ func Setup(ctx context.Context, cfg config.Config) (Shutdown, error) {
 	otel.SetMeterProvider(meterProvider)
 
 	return func(shutdownCtx context.Context) error {
-		// Les DEUX arrêts sont tentés, puis leurs erreurs sont jointes.
+		// BOTH shutdowns are attempted, then their errors are joined.
 		//
-		// Deux défauts vivaient ici, tous deux invisibles sans test :
+		// Two defects lived here, both invisible without a test:
 		//
-		//  1. Le `fmt.Errorf(... %w ...)` était INCONDITIONNEL. Avec un `%w` sur
-		//     un nil, il ne rend pas nil : il rend une erreur portant
-		//     « %!w(<nil>) ». Un arrêt PARFAITEMENT RÉUSSI remontait donc une
-		//     erreur, et l'appelant aurait compté chaque déploiement normal comme
-		//     un échec.
-		//  2. L'aide s'appelait `errJoin` et ne joignait rien : elle rendait la
-		//     PREMIÈRE erreur non nulle et jetait la seconde. Si l'exportateur de
-		//     métriques échouait à se vider après celui des traces, son erreur
-		//     disparaissait — et un exportateur qui ne se vide pas perd les
-		//     mesures de l'incident qu'on cherche justement à comprendre.
+		//  1. The `fmt.Errorf(... %w ...)` was UNCONDITIONAL. With a `%w` on a
+		//     nil, it does not return nil: it returns an error carrying
+		//     "%!w(<nil>)". A PERFECTLY SUCCESSFUL shutdown therefore returned
+		//     an error, and the caller would have counted every normal
+		//     deployment as a failure.
+		//  2. The helper was called `errJoin` and joined nothing: it returned
+		//     the FIRST non-nil error and threw away the second. If the metric
+		//     exporter failed to flush after the trace one, its error
+		//     disappeared — and an exporter that does not flush loses the
+		//     measurements of the very incident one is trying to understand.
 		//
-		// `errors.Join` fait exactement ce qu'annonçait le nom, et rend nil quand
-		// tout va bien. L'aide maison n'avait aucune raison d'exister.
+		// `errors.Join` does exactly what the name announced, and returns nil
+		// when all is well. The home-made helper had no reason to exist.
 		if err := errors.Join(
 			tracerProvider.Shutdown(shutdownCtx),
 			meterProvider.Shutdown(shutdownCtx),
 		); err != nil {
-			return fmt.Errorf("arrêt de la télémétrie: %w", err)
+			return fmt.Errorf("telemetry shutdown: %w", err)
 		}
 		return nil
 	}, nil

@@ -1,39 +1,39 @@
-// Package messaging abstrait le transport d'événements entre modules.
+// Package messaging abstracts the event transport between modules.
 //
-// # L'outbox n'est pas à la place du broker, elle est devant lui
+// # The outbox does not stand in place of the broker, it stands in front of it
 //
-// Un module écrit TOUJOURS dans l'outbox, dans sa transaction métier : c'est
-// ce qui garantit qu'aucun événement n'est perdu ni fantôme (ADR 006). Le
-// worker dépile ensuite et remet l'enveloppe à un RELAIS — c'est le relais qui
-// connaît Kafka, RabbitMQ, ou rien du tout.
+// A module ALWAYS writes into the outbox, inside its business transaction: that
+// is what guarantees no event is lost nor phantom (ADR 006). The worker then
+// dispatches and hands the envelope over to a RELAY — it is the relay that
+// knows Kafka, RabbitMQ, or nothing at all.
 //
-// Conséquence : changer de broker ne touche aucune ligne de `domain/`, `ports/`
-// ou `application/`. C'est une ligne de configuration.
+// Consequence: changing broker touches no line of `domain/`, `ports/` or
+// `application/`. It is one line of configuration.
 //
-//	module ──► outbox (transactionnel) ──► worker ──► relais ──► Kafka / AMQP / inproc
+//	module ──► outbox (transactional) ──► worker ──► relay ──► Kafka / AMQP / inproc
 //
-// # Choisir le relais
+// # Choosing the relay
 //
-//	messaging.driver: inproc     tout dans le même processus (défaut)
+//	messaging.driver: inproc     everything in the same process (default)
 //	messaging.driver: kafka      messaging.kafka.brokers: [host:9092]
 //	messaging.driver: rabbitmq   messaging.rabbitmq.url: amqp://…
-//	messaging.driver: noop       aucune publication (tests, migrations)
+//	messaging.driver: noop       no publication at all (tests, migrations)
 //
-// # Un fichier par relais
+// # One file per relay
 //
-// Ce fichier ne porte que le LANGAGE — l'enveloppe et les types fonction. Chaque
-// relais vit dans le sien (rules/tests.md §2) :
+// This file carries only the LANGUAGE — the envelope and the function types.
+// Each relay lives in its own (rules/tests.md §2):
 //
-//	broker.go      Broker et New : le seul point qui choisit un transport
-//	inproc.go      bus en mémoire — le mode normal d'un monolithe modulaire
-//	noop.go        aucune publication
-//	kafka.go       relais Kafka        ⚠️ écrit, jamais exécuté contre un broker réel
-//	rabbitmq.go    relais AMQP         ⚠️ écrit, jamais exécuté contre un broker réel
-//	with_retry.go  décorateur de réessai, commun aux deux relais réseau
+//	broker.go      Broker and New: the only point that chooses a transport
+//	inproc.go      in-memory bus — the normal mode of a modular monolith
+//	noop.go        no publication
+//	kafka.go       Kafka relay       ⚠️ written, never run against a real broker
+//	rabbitmq.go    AMQP relay        ⚠️ written, never run against a real broker
+//	with_retry.go  retry decorator, shared by both network relays
 //
-// Les deux relais réseau sont NON PROUVÉS. Les séparer physiquement rend cette
-// frontière visible : un fichier entier est marqué non prouvé, plutôt qu'un
-// paragraphe perdu au milieu de code qui, lui, tourne.
+// Both network relays are UNPROVEN. Separating them physically makes that
+// boundary visible: a whole file is marked unproven, rather than a paragraph
+// lost in the middle of code that does run.
 package messaging
 
 import (
@@ -42,10 +42,10 @@ import (
 	"time"
 )
 
-// Driver nomme un relais.
+// Driver names a relay.
 type Driver string
 
-// Les relais disponibles.
+// The available relays.
 const (
 	DriverInproc   Driver = "inproc"
 	DriverKafka    Driver = "kafka"
@@ -53,17 +53,17 @@ const (
 	DriverNoop     Driver = "noop"
 )
 
-// ErrUnknownDriver signale un relais non reconnu.
+// ErrUnknownDriver signals an unrecognised relay.
 //
-// Deny par défaut : un pilote inconnu refuse le démarrage plutôt que de se
-// rabattre silencieusement sur « aucune publication ».
-var ErrUnknownDriver = errors.New("relais de messagerie inconnu")
+// Deny by default: an unknown driver refuses to start rather than silently
+// falling back on "no publication".
+var ErrUnknownDriver = errors.New("unknown messaging relay")
 
-// Envelope est le format de transport d'un événement.
+// Envelope is the transport format of an event.
 //
-// Il est volontairement pauvre et sans type Go du domaine : c'est ce qui permet
-// à un consommateur écrit dans un autre langage, ou déployé séparément, de le
-// lire. Payload est du JSON opaque.
+// It is deliberately poor and free of any domain Go type: that is what lets a
+// consumer written in another language, or deployed separately, read it.
+// Payload is opaque JSON.
 type Envelope struct {
 	ID          string            `json:"id"`
 	Type        string            `json:"type"`
@@ -74,22 +74,22 @@ type Envelope struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 }
 
-// Publisher remet une enveloppe au transport.
+// Publisher hands an envelope over to the transport.
 //
-// Type fonction, donc substituable par une closure en test — et un décorateur
-// (retry, métrique) est un simple `func(Publisher) Publisher`.
+// A function type, hence substitutable by a closure in tests — and a decorator
+// (retry, metric) is a plain `func(Publisher) Publisher`.
 type Publisher = func(ctx context.Context, env Envelope) error
 
-// Handler consomme une enveloppe.
+// Handler consumes an envelope.
 //
-// Il DOIT être idempotent : tous les transports d'ici sont « au moins une fois ».
+// It MUST be idempotent: every transport here is "at least once".
 type Handler = func(ctx context.Context, env Envelope) error
 
-// Consumer s'abonne à des types d'événements et boucle jusqu'à annulation.
+// Consumer subscribes to event types and loops until cancellation.
 type Consumer interface {
 	Subscribe(eventType string, handler Handler)
 	Run(ctx context.Context) error
 }
 
-// Closer libère les ressources du transport.
+// Closer releases the transport's resources.
 type Closer = func() error

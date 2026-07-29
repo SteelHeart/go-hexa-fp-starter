@@ -6,15 +6,15 @@ import (
 	"strings"
 )
 
-// validateHardening porte les exigences qui ne s'appliquent qu'hors local.
+// validateHardening carries the requirements that only apply outside local.
 //
-// Deny par défaut : ce qui n'est pas explicitement sûr est refusé.
+// Deny by default: what is not explicitly safe is refused.
 //
-// Ce fichier existe séparément de validation.go pour une raison précise : ce sont
-// les seules règles dont l'application DÉPEND de l'environnement. Les mêler aux
-// autres, c'est risquer d'ajouter un jour une exigence de production dans un
-// vérificateur qui tourne aussi en local — où elle serait alors contournée en
-// l'affaiblissant pour tout le monde.
+// This file exists separately from validation.go for a precise reason: these
+// are the only rules whose application DEPENDS on the environment. Mixing them
+// with the others means risking, one day, adding a production requirement to a
+// checker that also runs locally — where it would then be circumvented by
+// weakening it for everybody.
 func (c Config) validateHardening() []error {
 	if c.App.Env.IsLocal() {
 		return nil
@@ -31,28 +31,28 @@ func (c Config) validateHardening() []error {
 func (c Config) hardenDatabase() []error {
 	if c.Database.MigrationDSN == c.Database.DSN {
 		return []error{errors.New(
-			"database.migration_dsn doit différer de database.dsn hors développement " +
-				"(le rôle applicatif ne possède pas le schéma)")}
+			"database.migration_dsn must differ from database.dsn outside development " +
+				"(the application role does not own the schema)")}
 	}
 	return nil
 }
 
 func (c Config) hardenOrigins() []error {
 	if len(c.HTTP.AllowedOrigins) == 0 {
-		return []error{errors.New("http.allowed_origins ne peut pas être vide hors développement")}
+		return []error{errors.New("http.allowed_origins cannot be empty outside development")}
 	}
 	var problems []error
 	for _, origin := range c.HTTP.AllowedOrigins {
 		switch {
 		case origin == "*":
 			problems = append(problems, errors.New(
-				"http.allowed_origins ne peut pas contenir '*' hors développement"))
+				"http.allowed_origins cannot contain '*' outside development"))
 		case strings.HasPrefix(origin, "http://"):
 			problems = append(problems, fmt.Errorf(
-				"origine non chiffrée interdite hors développement: %s", origin))
+				"unencrypted origin forbidden outside development: %s", origin))
 		case origin == "":
 			problems = append(problems, errors.New(
-				"http.allowed_origins contient une entrée vide (référence ${VAR} non résolue ?)"))
+				"http.allowed_origins contains an empty entry (unresolved ${VAR} reference?)"))
 		}
 	}
 	return problems
@@ -61,8 +61,8 @@ func (c Config) hardenOrigins() []error {
 func (c Config) hardenMessaging() []error {
 	if c.Messaging.Driver == relayKafka && c.Messaging.Kafka.AllowAutoTopicCreation {
 		return []error{errors.New(
-			"messaging.kafka.allow_auto_topic_creation doit être false hors développement : " +
-				"créer un topic à la volée masque une erreur de configuration")}
+			"messaging.kafka.allow_auto_topic_creation must be false outside development: " +
+				"creating a topic on the fly hides a configuration error")}
 	}
 	return nil
 }
@@ -70,7 +70,7 @@ func (c Config) hardenMessaging() []error {
 func (c Config) hardenTelemetry() []error {
 	if !c.Telemetry.Enabled {
 		return []error{errors.New(
-			"telemetry.enabled doit être true hors développement : un service non observable n'est pas exploitable")}
+			"telemetry.enabled must be true outside development: an unobservable service is not operable")}
 	}
 	return nil
 }

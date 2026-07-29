@@ -8,104 +8,105 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/subscriber"
 )
 
-// TestAReplayedEnvelopeNeverRepeatsTheEffect est le TÉMOIN de l'issue #9.
+// TestAReplayedEnvelopeNeverRepeatsTheEffect is the WITNESS of issue #9.
 //
-// # Ce qu'il constate
+// # What it observes
 //
-// La même enveloppe, remise dix fois, ne produit l'effet QU'UNE fois — et les
-// neuf autres remises acquittent sans erreur, parce qu'un rejeu reconnu n'est
-// pas une panne.
+// The same envelope, delivered ten times, produces the effect ONLY ONCE — and
+// the nine other deliveries acknowledge without an error, because a recognised
+// replay is not a breakdown.
 //
-// # Pourquoi ce test est indispensable
+// # Why this test is indispensable
 //
-// Tous les transports d'ici sont « au moins une fois ». La même enveloppe arrive
-// donc deux fois dès qu'un accusé de réception se perd — ce qui est banal, pas
-// exceptionnel. Sans ce garde, un courriel de bienvenue part deux fois : le
-// symptôme visible. Le jour où un consommateur débitera une carte, ce sera le
-// débit, et il ne sera pas visible avant le relevé.
+// Every transport here is "at least once". The same envelope therefore arrives
+// twice as soon as an acknowledgement is lost — which is commonplace, not
+// exceptional. Without this guard, a welcome email leaves twice: the visible
+// symptom. On the day a consumer debits a card, it will be the debit, and it
+// will not be visible before the statement.
 func TestAReplayedEnvelopeNeverRepeatsTheEffect(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	effet := &compteur{}
-	handler := subscriber.Once(newGuard(t), effet.handler())
+	effect := &counter{}
+	handler := subscriber.Once(newGuard(t), effect.handler())
 	env := envelope("evt-1")
 
-	for essai := 1; essai <= 10; essai++ {
+	for attempt := 1; attempt <= 10; attempt++ {
 		if err := handler(ctx, env); err != nil {
-			t.Fatalf("remise n°%d : un rejeu reconnu n'est pas une panne — %v", essai, err)
+			t.Fatalf("delivery no. %d: a recognised replay is not a breakdown — %v", attempt, err)
 		}
 	}
 
-	if effet.total() != 1 {
-		t.Fatalf("l'effet a eu lieu %d fois, attendu exactement 1", effet.total())
+	if effect.total() != 1 {
+		t.Fatalf("the effect took place %d times, want exactly 1", effect.total())
 	}
 }
 
-// TestTwoDistinctEnvelopesBothProduceTheirEffect garde l'autre moitié.
+// TestTwoDistinctEnvelopesBothProduceTheirEffect guards the other half.
 //
-// Un garde qui bloquerait TOUT serait vert au test précédent et parfaitement
-// inutile. C'est la forme la plus courante de garde cassé : celui qui refuse
-// tout ressemble en tout point à celui qui ne laisse passer que ce qu'il faut.
+// A guard that blocked EVERYTHING would be green on the previous test and
+// perfectly useless. It is the most common shape of a broken guard: the one
+// that refuses everything looks in every respect like the one that only lets
+// through what it should.
 func TestTwoDistinctEnvelopesBothProduceTheirEffect(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	effet := &compteur{}
-	handler := subscriber.Once(newGuard(t), effet.handler())
+	effect := &counter{}
+	handler := subscriber.Once(newGuard(t), effect.handler())
 
 	for _, id := range []string{"evt-1", "evt-2", "evt-3"} {
 		if err := handler(ctx, envelope(id)); err != nil {
-			t.Fatalf("enveloppe %s : %v", id, err)
+			t.Fatalf("envelope %s: %v", id, err)
 		}
 	}
 
-	if effet.total() != 3 {
-		t.Fatalf("trois enveloppes distinctes ont produit %d effets, attendu 3", effet.total())
+	if effect.total() != 3 {
+		t.Fatalf("three distinct envelopes produced %d effects, want 3", effect.total())
 	}
 }
 
-// TestConcurrentDeliveriesProduceASingleEffect : le rejeu SIMULTANÉ.
+// TestConcurrentDeliveriesProduceASingleEffect: the SIMULTANEOUS replay.
 //
-// Le cas séquentiel passerait même avec une vérification naïve « déjà vu ? »
-// posée avant l'exécution. C'est la remise simultanée qui fait apparaître la
-// fenêtre — et derrière deux répliques, elle est la norme, pas l'exception.
+// The sequential case would pass even with a naive "already seen?" check placed
+// before the execution. It is the simultaneous delivery that makes the window
+// appear — and behind two replicas, it is the norm, not the exception.
 //
-// Les remises perdantes rendent une ERREUR, et c'est voulu : une autre réplique
-// traite l'enveloppe et peut encore échouer. Les acquitter perdrait l'événement
-// si l'autre abandonne.
+// The losing deliveries return an ERROR, and that is intended: another replica
+// is handling the envelope and may still fail. Acknowledging them would lose
+// the event if the other one gives up.
 func TestConcurrentDeliveriesProduceASingleEffect(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	effet := &compteur{}
-	handler := subscriber.Once(newGuard(t), effet.handler())
-	env := envelope("evt-simultane")
+	effect := &counter{}
+	handler := subscriber.Once(newGuard(t), effect.handler())
+	env := envelope("evt-simultaneous")
 
-	const remises = 16
+	const deliveries = 16
 	var (
-		wg     sync.WaitGroup
-		mu     sync.Mutex
-		reussi int
+		wg        sync.WaitGroup
+		mu        sync.Mutex
+		succeeded int
 	)
 
-	wg.Add(remises)
-	for range remises {
+	wg.Add(deliveries)
+	for range deliveries {
 		go func() {
 			defer wg.Done()
 			if err := handler(ctx, env); err == nil {
 				mu.Lock()
-				reussi++
+				succeeded++
 				mu.Unlock()
 			}
 		}()
 	}
 	wg.Wait()
 
-	if effet.total() != 1 {
-		t.Fatalf("%d remises simultanées ont produit %d effets, attendu 1", remises, effet.total())
+	if effect.total() != 1 {
+		t.Fatalf("%d simultaneous deliveries produced %d effects, want 1", deliveries, effect.total())
 	}
-	if reussi < 1 {
-		t.Fatal("aucune remise n'a abouti : l'événement serait perdu")
+	if succeeded < 1 {
+		t.Fatal("no delivery succeeded: the event would be lost")
 	}
 }

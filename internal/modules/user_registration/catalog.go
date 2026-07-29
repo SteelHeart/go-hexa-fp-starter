@@ -8,7 +8,7 @@ import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 //
 // Avant l'ADR 014, un module métier ne pouvait pas figurer dans
 // `config/modules.yaml` : la configuration refusait son nom avec
-// `modules.user_registration : module inconnu`, parce que la seule table de
+// `modules.user_registration: unknown module`, parce que la seule table de
 // modules vivait dans `internal/config/modules.go` — un fichier du framework.
 //
 // Conséquence mesurée : `cmd/server` lisait `cfg.Modules[Name].Driver`, un

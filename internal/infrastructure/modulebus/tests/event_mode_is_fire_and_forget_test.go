@@ -9,27 +9,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestEventModeIsFireAndForget : l'événement part, et il n'y a PAS de réponse.
+// TestEventModeIsFireAndForget: the event goes out, and there is NO reply.
 //
-// # Ce que ce test verrouille
+// # What this test locks down
 //
-// Le mode `event` rend la valeur zéro avec `nil`. C'est correct — il n'y a pas de
-// réponse dans un envoi asynchrone — et c'est un piège : la même signature que
-// les deux autres modes rend une absence de réponse indiscernable d'une réponse
-// négative.
+// The `event` mode returns the zero value with `nil`. That is correct — there
+// is no reply in an asynchronous send — and it is a trap: the same signature as
+// the other two modes makes an absence of reply indistinguishable from a
+// negative reply.
 //
-// Le test l'affirme donc explicitement, pour que cette propriété soit une
-// DÉCISION lisible et non un effet de bord. La configuration seule décide du
-// mode : l'activer sur une capacité dont l'appelant lit le résultat le ferait
-// lire « refusé » à chaque appel, sans aucune erreur.
+// The test therefore asserts it explicitly, so that this property is a readable
+// DECISION and not a side effect. Configuration alone decides the mode:
+// enabling it on a capability whose caller reads the result would make it read
+// "refused" on every call, with no error at all.
 //
-// ⚠️ NON-GARANTIE CONNUE, ici parce qu'un test est le seul endroit qu'on relit :
-// l'enveloppe produite ne porte AUCUN AggregateID — le bus est générique, il ne
-// sait pas quelle entité l'appel concerne. Conséquence sur un relais Kafka :
-// la clé de partition est vide, donc aucun ordre n'est garanti entre deux
-// événements de la même entité, et tous atterrissent sur la même partition. Pour
-// une capacité en oubli-après-envoi c'est acceptable ; ça ne l'est pas pour une
-// capacité dont l'ordre compte. À trancher avant d'ouvrir ce mode largement.
+// ⚠️ KNOWN NON-GUARANTEE, here because a test is the only place that gets
+// re-read: the envelope produced carries NO AggregateID — the bus is generic,
+// it does not know which entity the call concerns. Consequence on a Kafka
+// relay: the partition key is empty, so no ordering is guaranteed between two
+// events of the same entity, and they all land on the same partition. For a
+// fire-and-forget capability that is acceptable; it is not for a capability
+// whose ordering matters. To be settled before opening this mode up widely.
 func TestEventModeIsFireAndForget(t *testing.T) {
 	t.Parallel()
 
@@ -44,51 +44,52 @@ func TestEventModeIsFireAndForget(t *testing.T) {
 
 	got, err := call(context.Background(), request{Ref: "r-7"})
 	if err != nil {
-		t.Fatalf("dépôt de l'événement en échec: %v", err)
+		t.Fatalf("posting the event failed: %v", err)
 	}
 
 	if got.Accepted {
-		t.Errorf("réponse = %+v, attendu la valeur zéro : un envoi asynchrone n'a pas de réponse", got)
+		t.Errorf("reply = %+v, want the zero value: an asynchronous send has no reply", got)
 	}
 	if localCalls != 0 {
-		t.Errorf("l'implémentation locale a été appelée %d fois en mode event", localCalls)
+		t.Errorf("the local implementation was called %d times in event mode", localCalls)
 	}
 	if len(published) != 1 {
-		t.Fatalf("%d événement(s) publié(s), attendu 1", len(published))
+		t.Fatalf("%d event(s) published, want 1", len(published))
 	}
 
 	env := published[0]
 	if env.Type != someEvent {
-		t.Errorf("type publié = %q, attendu %q", env.Type, someEvent)
+		t.Errorf("type published = %q, want %q", env.Type, someEvent)
 	}
 	if env.ID == "" {
-		t.Error("événement sans identifiant — un consommateur ne peut plus dédupliquer")
+		t.Error("event with no identifier — a consumer can no longer deduplicate")
 	}
 	if env.OccurredAt.IsZero() {
-		t.Error("événement sans horodatage")
+		t.Error("event with no timestamp")
 	}
 	var payload request
 	if err := json.Unmarshal(env.Payload, &payload); err != nil {
-		t.Fatalf("charge utile illisible: %v", err)
+		t.Fatalf("unreadable payload: %v", err)
 	}
 	if payload.Ref != "r-7" {
-		t.Errorf("charge utile = %+v, la requête n'a pas traversé", payload)
+		t.Errorf("payload = %+v, the request did not cross over", payload)
 	}
 }
 
-// TestEventModeSurfacesAPublicationFailure : un dépôt raté n'est pas un succès.
+// TestEventModeSurfacesAPublicationFailure: a failed posting is not a success.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// C'est le point le plus délicat de ce mode. « Oubli-après-envoi » qualifie
-// l'absence de RÉPONSE, pas l'absence de GARANTIE : si la publication échoue,
-// l'appel doit échouer. Avaler l'erreur ferait croire l'appelant servi alors que
-// rien n'est parti — et comme le mode ne rend jamais de réponse, il n'existe
-// aucun autre signal. La capacité serait morte en silence, définitivement.
+// This is the trickiest point of this mode. "Fire-and-forget" qualifies the
+// absence of a REPLY, not the absence of a GUARANTEE: if publication fails, the
+// call must fail. Swallowing the error would let the caller believe it was
+// served while nothing went out — and since the mode never returns a reply,
+// there is no other signal. The capability would be dead in silence,
+// permanently.
 func TestEventModeSurfacesAPublicationFailure(t *testing.T) {
 	t.Parallel()
 
-	refused := errors.New("relais indisponible")
+	refused := errors.New("relay unavailable")
 	publisher := func(context.Context, messaging.Envelope) error { return refused }
 
 	var localCalls int
@@ -97,9 +98,9 @@ func TestEventModeSurfacesAPublicationFailure(t *testing.T) {
 	_, err := call(context.Background(), request{Ref: "r-7"})
 
 	if err == nil {
-		t.Fatal("une publication en échec a rendu nil — la capacité serait morte en silence")
+		t.Fatal("a failed publication returned nil — the capability would be dead in silence")
 	}
 	if !errors.Is(err, refused) {
-		t.Errorf("la cause d'origine est perdue: %v", err)
+		t.Errorf("the original cause is lost: %v", err)
 	}
 }

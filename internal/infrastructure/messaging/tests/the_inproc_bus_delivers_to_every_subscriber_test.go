@@ -7,19 +7,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestTheInprocBusDeliversToEverySubscriber : plusieurs consommateurs, un événement.
+// TestTheInprocBusDeliversToEverySubscriber: several consumers, one event.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Une table `map[string]Handler` au lieu de `map[string][]Handler` — c'est ce
-// qu'écrivent les deux relais réseau — remplace silencieusement le consommateur
-// précédent. Le second module qui s'abonne à `user.registered.v1` désabonne le
-// premier, et personne ne le voit : chaque module a son test, chaque test passe
-// seul.
+// A `map[string]Handler` table instead of `map[string][]Handler` — which is
+// what both network relays write — silently replaces the previous consumer. The
+// second module that subscribes to `user.registered.v1` unsubscribes the first,
+// and nobody sees it: each module has its test, each test passes on its own.
 //
-// Le test vérifie AUSSI que l'événement n'atteint pas un autre type : un bus qui
-// diffuse à tout le monde marche en développement, et fait exécuter la facturation
-// sur un événement d'inscription en production.
+// The test ALSO checks that the event does not reach another type: a bus that
+// broadcasts to everybody works in development, and makes billing run on a
+// registration event in production.
 func TestTheInprocBusDeliversToEverySubscriber(t *testing.T) {
 	t.Parallel()
 
@@ -40,30 +39,30 @@ func TestTheInprocBusDeliversToEverySubscriber(t *testing.T) {
 	})
 
 	if err := bus.Publish(context.Background(), envelope("user.registered.v1")); err != nil {
-		t.Fatalf("publication en échec: %v", err)
+		t.Fatalf("publication failed: %v", err)
 	}
 
 	if first != 1 || second != 1 {
-		t.Errorf("consommateurs appelés %d et %d fois, attendu 1 et 1 — "+
-			"un abonnement ne doit jamais en remplacer un autre", first, second)
+		t.Errorf("consumers called %d and %d times, want 1 and 1 — "+
+			"a subscription must never replace another", first, second)
 	}
 	if other != 0 {
-		t.Errorf("un consommateur d'un AUTRE type a été appelé %d fois", other)
+		t.Errorf("a consumer of ANOTHER type was called %d times", other)
 	}
 
-	// Puis l'AUTRE type. Sans ce second envoi, le test resterait vert sur un bus
-	// qui ne livrerait QU'AU premier type enregistré : « rien n'est arrivé à
-	// `other` » se démontre aussi bien par un routage correct que par un routage
-	// mort. Il faut prouver que la route existe avant de prouver qu'elle est
-	// étanche.
+	// Then the OTHER type. Without this second send, the test would stay green
+	// on a bus that would deliver ONLY to the first registered type: "nothing
+	// reached `other`" is demonstrated just as well by correct routing as by
+	// dead routing. One must prove the route exists before proving it is
+	// watertight.
 	if err := bus.Publish(context.Background(), envelope("invoice.issued.v1")); err != nil {
-		t.Fatalf("publication du second type en échec: %v", err)
+		t.Fatalf("publication of the second type failed: %v", err)
 	}
 	if other != 1 {
-		t.Errorf("le consommateur de invoice.issued.v1 a été appelé %d fois, attendu 1", other)
+		t.Errorf("the consumer of invoice.issued.v1 was called %d times, want 1", other)
 	}
 	if first != 1 || second != 1 {
-		t.Errorf("les consommateurs de user.registered.v1 ont reçu un événement d'un AUTRE type "+
-			"(%d et %d) — la facturation s'exécuterait sur une inscription", first, second)
+		t.Errorf("the consumers of user.registered.v1 received an event of ANOTHER type "+
+			"(%d and %d) — billing would run on a registration", first, second)
 	}
 }

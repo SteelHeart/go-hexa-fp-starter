@@ -11,28 +11,29 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/subscriber"
 )
 
-// TestTheTraceIsRejoinedNotRestarted est le témoin du troisième critère de #9.
+// TestTheTraceIsRejoinedNotRestarted is the witness of the third criterion of
+// #9.
 //
-// # Ce que l'oubli produit, et pourquoi personne ne le remarque
+// # What the oversight produces, and why nobody notices it
 //
-// Tout continue de fonctionner. Les événements partent, les effets ont lieu, les
-// tests passent. Seulement la moitié asynchrone d'une requête devient une trace
-// ORPHELINE : l'inscription a la sienne, l'envoi du courriel a la sienne, et
-// rien ne les relie.
+// Everything keeps working. The events leave, the effects take place, the tests
+// pass. Only the asynchronous half of a request becomes an ORPHAN trace: the
+// registration has its own, the email sending has its own, and nothing links
+// them.
 //
-// Le jour où un envoi échoue, on ne peut pas remonter à l'inscription qui l'a
-// causé — et c'est précisément le jour où l'on en a besoin. C'est la même faute
-// que `relay` documente en sens inverse : oublier `TraceParent` au dépilage
-// coupe la chaîne côté producteur. Les deux moitiés doivent être branchées pour
-// qu'une seule serve à quelque chose.
+// On the day a sending fails, one cannot go back up to the registration that
+// caused it — and that is precisely the day one needs to. It is the same fault
+// that `relay` documents in the other direction: forgetting `TraceParent` at
+// dispatching time cuts the chain on the producer side. Both halves must be
+// wired for either one to serve any purpose.
 //
-// Le test compare l'identifiant de trace REÇU par le gestionnaire à celui écrit
-// dans l'enveloppe. Vérifier seulement qu'un contexte « a une trace » passerait
-// avec une trace toute neuve — c'est-à-dire avec le défaut.
+// The test compares the trace identifier RECEIVED by the handler with the one
+// written in the envelope. Checking only that a context "has a trace" would
+// pass with a brand new trace — that is to say, with the defect.
 func TestTheTraceIsRejoinedNotRestarted(t *testing.T) {
-	// Pas de `t.Parallel()` : ce test installe le propagateur GLOBAL, celui que
-	// `telemetry.Setup` configure en production. En construire un local
-	// éprouverait un propagateur que le producteur n'utilise pas.
+	// No `t.Parallel()`: this test installs the GLOBAL propagator, the one
+	// `telemetry.Setup` configures in production. Building a local one would
+	// exercise a propagator the producer does not use.
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	const (
@@ -41,66 +42,66 @@ func TestTheTraceIsRejoinedNotRestarted(t *testing.T) {
 	)
 	parent := "00-" + traceID + "-" + spanID + "-01"
 
-	effet := &compteur{}
+	effect := &counter{}
 	env := envelope("evt-trace")
 	env.TraceParent = parent
 
-	if err := subscriber.WithTrace(effet.handler())(context.Background(), env); err != nil {
-		t.Fatalf("le gestionnaire ne doit pas échouer : %v", err)
+	if err := subscriber.WithTrace(effect.handler())(context.Background(), env); err != nil {
+		t.Fatalf("the handler must not fail: %v", err)
 	}
 
-	span := trace.SpanContextFromContext(effet.dernierContexte(t))
+	span := trace.SpanContextFromContext(effect.lastContext(t))
 	if !span.IsValid() {
-		t.Fatal("aucun contexte de trace restauré : la moitié asynchrone serait orpheline")
+		t.Fatal("no trace context restored: the asynchronous half would be an orphan")
 	}
 	if span.TraceID().String() != traceID {
-		t.Fatalf("trace RECOMMENCÉE au lieu d'être rejointe : %s au lieu de %s",
+		t.Fatalf("trace RESTARTED instead of being rejoined: %s instead of %s",
 			span.TraceID(), traceID)
 	}
 	if span.SpanID().String() != spanID {
-		t.Fatalf("span parent perdu : %s au lieu de %s", span.SpanID(), spanID)
+		t.Fatalf("parent span lost: %s instead of %s", span.SpanID(), spanID)
 	}
 }
 
-// TestAnEnvelopeWithoutTraceIsStillDelivered garde la remise avant la trace.
+// TestAnEnvelopeWithoutTraceIsStillDelivered guards delivery before the trace.
 //
-// Une enveloppe sans `traceparent` n'est PAS une erreur : le contexte d'origine
-// repart intact et un nouveau tronçon commence. Refuser ferait perdre un
-// événement pour un défaut d'observabilité — sacrifier ce qu'on mesure à la
-// façon dont on le mesure.
+// An envelope without a `traceparent` is NOT an error: the original context
+// leaves intact and a new segment begins. Refusing it would lose an event over
+// an observability defect — sacrificing what one measures to the way one
+// measures it.
 //
-// Le cas n'est pas théorique : tout producteur écrit avant le branchement de la
-// télémétrie (#13) a laissé le champ vide.
+// The case is not theoretical: every producer written before telemetry was
+// wired in (#13) left the field empty.
 func TestAnEnvelopeWithoutTraceIsStillDelivered(t *testing.T) {
 	t.Parallel()
 
-	effet := &compteur{}
-	if err := subscriber.WithTrace(effet.handler())(context.Background(), envelope("evt-sans-trace")); err != nil {
-		t.Fatalf("une enveloppe sans trace doit être remise : %v", err)
+	effect := &counter{}
+	if err := subscriber.WithTrace(effect.handler())(context.Background(), envelope("evt-without-trace")); err != nil {
+		t.Fatalf("an envelope without a trace must be delivered: %v", err)
 	}
-	if effet.total() != 1 {
-		t.Fatalf("l'effet devait avoir lieu, obtenu %d appels", effet.total())
+	if effect.total() != 1 {
+		t.Fatalf("the effect was to take place, got %d calls", effect.total())
 	}
 }
 
-// TestAMalformedTraceParentDoesNotDropTheEnvelope garde la remise aussi.
+// TestAMalformedTraceParentDoesNotDropTheEnvelope guards delivery too.
 //
-// Un en-tête illisible ne doit pas coûter un événement. Le propagateur ignore ce
-// qu'il ne comprend pas, et le gestionnaire est appelé quand même — la remise du
-// message compte plus que la continuité de sa trace.
+// An unreadable header must not cost an event. The propagator ignores what it
+// does not understand, and the handler is called all the same — the delivery of
+// the message counts more than the continuity of its trace.
 func TestAMalformedTraceParentDoesNotDropTheEnvelope(t *testing.T) {
 	t.Parallel()
 
-	for _, parent := range []string{"pas-un-traceparent", "00-", "99-xxx-yyy-zz"} {
-		effet := &compteur{}
-		env := envelope("evt-trace-cassee")
+	for _, parent := range []string{"not-a-traceparent", "00-", "99-xxx-yyy-zz"} {
+		effect := &counter{}
+		env := envelope("evt-broken-trace")
 		env.TraceParent = parent
 
-		if err := subscriber.WithTrace(effet.handler())(context.Background(), env); err != nil {
-			t.Errorf("traceparent %q : l'enveloppe doit être remise, obtenu %v", parent, err)
+		if err := subscriber.WithTrace(effect.handler())(context.Background(), env); err != nil {
+			t.Errorf("traceparent %q: the envelope must be delivered, got %v", parent, err)
 		}
-		if effet.total() != 1 {
-			t.Errorf("traceparent %q : l'effet devait avoir lieu", parent)
+		if effect.total() != 1 {
+			t.Errorf("traceparent %q: the effect was to take place", parent)
 		}
 	}
 }

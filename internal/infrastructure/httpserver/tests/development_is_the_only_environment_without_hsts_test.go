@@ -6,51 +6,52 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestDevelopmentIsTheOnlyEnvironmentWithoutHSTS : deny par défaut sur HSTS.
+// TestDevelopmentIsTheOnlyEnvironmentWithoutHSTS: deny by default on HSTS.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Le choix se fait sur `env.IsDevelopment()`. Écrire `!env.IsProduction()` à la
-// place semble équivalent et ne l'est pas du tout : UAT et test perdraient HSTS.
-// UAT est un environnement exposé, souvent avec des données réalistes, et
-// personne n'y regarde les en-têtes de réponse.
+// The choice is made on `env.IsDevelopment()`. Writing `!env.IsProduction()`
+// instead looks equivalent and is nothing of the sort: UAT and test would lose
+// HSTS. UAT is an exposed environment, often with realistic data, and nobody
+// looks at the response headers there.
 //
-// Le test couvre aussi un environnement INCONNU — donc mal configuré. Il doit
-// recevoir le durcissement COMPLET : une configuration qu'on n'a pas su lire est
-// exactement le moment où il faut se protéger le plus, pas le moins.
+// The test also covers an UNKNOWN environment — therefore misconfigured. It
+// must receive the FULL hardening: a configuration we have not managed to read
+// is exactly the moment when one has to protect oneself the most, not the least.
 //
-// La renonciation doit se nommer. C'est pour ça que `SecurityHeaders()` protège
-// et que `SecurityHeadersWithoutHSTS()` porte son renoncement dans son nom.
+// The waiver must name itself. That is why `SecurityHeaders()` protects and why
+// `SecurityHeadersWithoutHSTS()` carries its waiver in its name.
 func TestDevelopmentIsTheOnlyEnvironmentWithoutHSTS(t *testing.T) {
 	t.Parallel()
 
 	const header = "Strict-Transport-Security"
 
-	// Le développement en clair, et lui seul, renonce à HSTS : sur
-	// `http://localhost`, HSTS inscrirait dans le navigateur une exigence de
-	// HTTPS que le poste ne peut pas satisfaire.
+	// Plain-text development, and it alone, gives up HSTS: on
+	// `http://localhost`, HSTS would write into the browser a requirement for
+	// HTTPS that the workstation cannot satisfy.
 	if got := get(t, config.EnvDevelopment, nil, "/healthz").Header().Get(header); got != "" {
-		t.Errorf("development porte HSTS (%q) — le développeur perdrait l'accès à son serveur", got)
+		t.Errorf("development carries HSTS (%q) — the developer would lose access to their server", got)
 	}
 
 	for _, env := range []config.Environment{
 		config.EnvTest,
 		config.EnvUAT,
 		config.EnvProduction,
-		"un-environnement-inconnu",
+		"an-unknown-environment",
 		"",
 	} {
 		if got := get(t, env, nil, "/healthz").Header().Get(header); got == "" {
-			t.Errorf("env=%q SANS HSTS — seul development doit y renoncer, et il doit se nommer", env)
+			t.Errorf("env=%q WITHOUT HSTS — only development may give it up, and it must name itself", env)
 		}
 	}
 }
 
-// TestHardeningHeadersAreOnEveryEnvironment : le reste du durcissement est inconditionnel.
+// TestHardeningHeadersAreOnEveryEnvironment: the rest of the hardening is unconditional.
 //
-// Seul HSTS dépend de l'environnement. Si `securityHeadersFor` se trompait de
-// constructeur, ce test verrait disparaître TOUS les en-têtes, pas seulement HSTS
-// — et c'est la panne silencieuse qu'on veut distinguer d'un simple oubli de HSTS.
+// Only HSTS depends on the environment. If `securityHeadersFor` picked the
+// wrong constructor, this test would see ALL the headers disappear, not only
+// HSTS — and that is the silent failure we want to tell apart from a mere HSTS
+// oversight.
 func TestHardeningHeadersAreOnEveryEnvironment(t *testing.T) {
 	t.Parallel()
 
@@ -68,7 +69,7 @@ func TestHardeningHeadersAreOnEveryEnvironment(t *testing.T) {
 		headers := get(t, env, nil, "/healthz").Header()
 		for name, want := range expected {
 			if got := headers.Get(name); got != want {
-				t.Errorf("env=%q: %s = %q, attendu %q", env, name, got, want)
+				t.Errorf("env=%q: %s = %q, want %q", env, name, got, want)
 			}
 		}
 	}

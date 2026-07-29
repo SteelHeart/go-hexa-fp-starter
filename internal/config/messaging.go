@@ -2,12 +2,12 @@ package config
 
 import "strings"
 
-// Relais d'événements admis.
+// Admitted event relays.
 //
-// Ces noms sont dupliqués depuis `internal/infrastructure/messaging` et NON
-// importés : messaging dépend de config, l'inverse ferait un cycle. La validation
-// est le seul point où la duplication compte, et un ajout de relais qui
-// oublierait cette liste se verrait au démarrage, pas en production.
+// These names are duplicated from `internal/infrastructure/messaging` and NOT
+// imported: messaging depends on config, and the reverse would make a cycle.
+// Validation is the only place where the duplication matters, and the addition
+// of a relay that forgot this list would show up at startup, not in production.
 const (
 	relayInproc   = "inproc"
 	relayKafka    = "kafka"
@@ -15,10 +15,10 @@ const (
 	relayNoop     = "noop"
 )
 
-// Messaging porte le relais d'événements.
+// Messaging carries the event relay.
 //
-// Le relais est INTERCHANGEABLE : l'outbox garantit la durabilité en amont, donc
-// changer de broker ne touche aucune ligne du cœur (ADR 010).
+// The relay is INTERCHANGEABLE: the outbox guarantees durability upstream, so
+// changing broker touches not one line of the core (ADR 010).
 type Messaging struct {
 	Driver         string   `yaml:"driver"`
 	TopicPrefix    string   `yaml:"topic_prefix"`
@@ -28,22 +28,22 @@ type Messaging struct {
 	RabbitMQ       RabbitMQ `yaml:"rabbitmq"`
 }
 
-// Kafka porte les paramètres du relais Kafka.
+// Kafka carries the parameters of the Kafka relay.
 type Kafka struct {
 	Brokers                []string `yaml:"brokers"`
 	AllowAutoTopicCreation bool     `yaml:"allow_auto_topic_creation"`
 }
 
-// RabbitMQ porte les paramètres du relais AMQP.
+// RabbitMQ carries the parameters of the AMQP relay.
 type RabbitMQ struct {
 	URL      string `yaml:"url"`
 	Exchange string `yaml:"exchange"`
 }
 
-// Topic dérive le nom de destination d'un type d'événement.
+// Topic derives the destination name of an event type.
 //
-// Le point devient un tiret : AMQP donne au point un sens de routage
-// hiérarchique, et Kafka le réserve à ses conventions de métriques.
+// The dot becomes a dash: AMQP gives the dot a hierarchical routing meaning,
+// and Kafka reserves it for its metrics conventions.
 func (m Messaging) Topic(eventType string) string {
 	return m.TopicPrefix + "." + strings.ReplaceAll(eventType, ".", "-")
 }

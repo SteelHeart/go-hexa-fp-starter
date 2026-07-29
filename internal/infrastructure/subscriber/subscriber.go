@@ -1,40 +1,40 @@
-// Package subscriber branche un consommateur d'événements sur les garanties du
-// noyau.
+// Package subscriber plugs an event consumer onto the guarantees of the core.
 //
-// # Pourquoi ce paquet existe, et pourquoi ICI
+// # Why this package exists, and why HERE
 //
-// Il est le pendant exact de `relay` : celui-ci relie le dépileur au transport,
-// celui-là relie le transport aux modules qui réagissent. Aucun des deux ne peut
-// vivre dans un module noyau — `idempotency` ne doit importer aucune
-// infrastructure, sous peine de ne plus pouvoir être extraite en module Go
-// indépendant (ADR 012) — ni dans `cmd/`, parce que du code dans `main` n'est
-// testable qu'à moitié.
+// It is the exact counterpart of `relay`: the latter links the dispatcher to
+// the transport, this one links the transport to the modules that react.
+// Neither of the two can live in a core module — `idempotency` must import no
+// infrastructure, on pain of no longer being extractable into an independent Go
+// module (ADR 012) — nor in `cmd/`, because code inside `main` is only half
+// testable.
 //
-// # Ce que ce paquet garde, et que personne ne remarque quand ça marche
+// # What this package guards, and what nobody notices when it works
 //
-// Trois choses que tout consommateur doit faire et que tout le monde oublie :
+// Three things every consumer must do and everybody forgets:
 //
-//  1. **Ne pas rejouer un effet.** Tous les transports d'ici sont « au moins une
-//     fois ». Un courriel de bienvenue envoyé deux fois est le symptôme visible ;
-//     un débit rejoué est le symptôme coûteux.
-//  2. **Restaurer la trace.** Sans elle, la moitié asynchrone d'une requête
-//     apparaît comme une trace orpheline, et personne ne relie jamais l'échec
-//     d'envoi à l'inscription qui l'a causé.
-//  3. **Ne pas confondre « déjà fait » et « échec ».** Le premier acquitte, le
-//     second rejoue.
+//  1. **Do not replay an effect.** Every transport here is "at least once". A
+//     welcome email sent twice is the visible symptom; a replayed debit is the
+//     costly one.
+//  2. **Restore the trace.** Without it, the asynchronous half of a request
+//     appears as an orphan trace, and nobody ever links the sending failure to
+//     the registration that caused it.
+//  3. **Do not confuse "already done" with "failure".** The first acknowledges,
+//     the second replays.
 //
-// # Carte des fichiers
+// # File map
 //
-//	subscriber.go   la carte du paquet et les erreurs
-//	once.go         l'effet n'a lieu qu'UNE fois, même sur rejeu
-//	trace.go        le contexte de trace repris de l'enveloppe
+//	subscriber.go   the map of the package and the errors
+//	once.go         the effect takes place only ONCE, even on a replay
+//	trace.go        the trace context taken back from the envelope
 package subscriber
 
 import "errors"
 
-// ErrMissingID refuse une enveloppe sans identifiant.
+// ErrMissingID refuses an envelope without an identifier.
 //
-// L'identifiant EST la clé d'idempotence : sans lui, aucun rejeu ne peut être
-// reconnu, et le décorateur laisserait passer chaque copie en croyant bien
-// faire. Un refus bruyant vaut mieux qu'une garantie silencieusement absente.
-var ErrMissingID = errors.New("enveloppe sans identifiant : idempotence impossible")
+// The identifier IS the idempotency key: without it, no replay can be
+// recognised, and the decorator would let every copy through believing it was
+// doing the right thing. A noisy refusal is worth more than a silently absent
+// guarantee.
+var ErrMissingID = errors.New("envelope without an identifier: idempotency impossible")

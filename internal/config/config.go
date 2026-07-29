@@ -1,42 +1,42 @@
-// Package config lit la configuration de démarrage depuis les fichiers de config/.
+// Package config reads the startup configuration from the files in config/.
 //
-// Quatre principes, et ils expliquent tout le paquet :
+// Four principles, and they explain the whole package:
 //
-//  1. Fichiers, pas variables d'environnement. La configuration est versionnée,
-//     groupée par domaine, relisible en revue. Les variables d'environnement ne
-//     servent QU'aux secrets, référencés par ${VAR} dans les fichiers.
-//  2. Immuable — lue UNE fois au démarrage, passée par valeur. Aucun accès à
-//     os.Getenv ailleurs dans le dépôt.
-//  3. Fail-fast — une configuration invalide refuse le démarrage. Un service qui
-//     démarre à moitié configuré échoue plus tard, ailleurs, et pour une raison
-//     qui n'aura plus rien à voir.
-//  4. Ce qui change sans redéploiement n'est PAS ici : les seuils métier et les
-//     drapeaux vivent dans le module noyau internal/core/dynconf.
+//  1. Files, not environment variables. The configuration is versioned, grouped
+//     by domain, readable in review. Environment variables serve ONLY for
+//     secrets, referenced by ${VAR} in the files.
+//  2. Immutable — read ONCE at startup, passed by value. No access to
+//     os.Getenv anywhere else in the repository.
+//  3. Fail-fast — an invalid configuration refuses to start. A service that
+//     starts half configured fails later, elsewhere, and for a reason that will
+//     no longer have anything to do with it.
+//  4. What changes without a redeployment is NOT here: business thresholds and
+//     flags live in the core module internal/core/dynconf.
 //
-// # Un fichier par groupe
+// # One file per group
 //
-// Le découpage physique suit le découpage de config/ (rules/tests.md §2) : un
-// groupe de configuration, un fichier, et il porte le type ET les méthodes qui
-// en dérivent une valeur.
+// The physical split follows the split of config/ (rules/tests.md §2): one
+// configuration group, one file, and it carries the type AND the methods that
+// derive a value from it.
 //
-//	environment.go   l'environnement d'exécution et ses prédicats
-//	http.go          serveur HTTP et limitation de débit
-//	database.go      base de données et cache
-//	messaging.go     relais d'événements
-//	security.go      clés et coût du hachage
-//	observability.go journalisation, traces et métriques
-//	groups.go        les groupes sans comportement
-//	modules.go       quels modules sont activés, et sur quel pilote
-//	catalog.go       ce qu'un module DÉCLARE — le framework ne nomme aucun module
-//	duration.go      les durées, lues en texte et validées
-//	loader.go        la fusion des couches et la substitution des secrets
-//	helpers.go       les aides communes aux fichiers ci-dessus
-//	validation.go    ce qui rend une configuration invalide, partout
-//	hardening.go     ce qui rend une configuration invalide HORS local
+//	environment.go   the runtime environment and its predicates
+//	http.go          HTTP server and rate limiting
+//	database.go      database and cache
+//	messaging.go     event relay
+//	security.go      keys and hashing cost
+//	observability.go logging, traces and metrics
+//	groups.go        the groups without behaviour
+//	modules.go       which modules are enabled, and on which driver
+//	catalog.go       what a module DECLARES — the framework names no module
+//	duration.go      durations, read as text and validated
+//	loader.go        the merge of the layers and the substitution of the secrets
+//	helpers.go       the helpers shared by the files above
+//	validation.go    what makes a configuration invalid, everywhere
+//	hardening.go     what makes a configuration invalid OUTSIDE local
 //
-// La validation reste groupée dans ses deux fichiers plutôt que dispersée dans
-// chaque groupe : c'est la seule vue d'où l'on peut répondre à « qu'est-ce qui
-// refuse le démarrage ? » sans ouvrir dix fichiers.
+// Validation stays grouped in its two files rather than scattered across each
+// group: it is the only view from which one can answer "what refuses to
+// start?" without opening ten files.
 package config
 
 import (
@@ -44,8 +44,8 @@ import (
 	"fmt"
 )
 
-// Config porte l'intégralité de la configuration de démarrage.
-// Un groupe = un fichier dans conf/.
+// Config carries the whole startup configuration.
+// One group = one file in conf/.
 type Config struct {
 	App           App           `yaml:"app"`
 	HTTP          HTTP          `yaml:"http"`
@@ -65,24 +65,24 @@ type Config struct {
 	Observability Observability `yaml:"observability"`
 }
 
-// App porte l'identité du service.
+// App carries the identity of the service.
 type App struct {
 	Env     Environment `yaml:"env"`
 	Name    string      `yaml:"name"`
 	Version string      `yaml:"version"`
 }
 
-// applyDefaults comble les valeurs que les fichiers pourraient ne pas porter.
+// applyDefaults fills in the values the files might not carry.
 //
-// Ce sont des défauts STRUCTURELS, pas des valeurs métier : ils garantissent
-// qu'un fichier de conf incomplet ne produit pas un pool à zéro connexion.
+// These are STRUCTURAL defaults, not business values: they guarantee that an
+// incomplete configuration file does not produce a pool with zero connections.
 func (c *Config) applyDefaults() {
 	if c.App.Env == "" {
 		c.App.Env = EnvDevelopment
 	}
 	if c.Database.MigrationDSN == "" {
-		// En local, les deux rôles peuvent coïncider ; validate() l'interdit
-		// ailleurs.
+		// Locally the two roles may coincide; validate() forbids it
+		// elsewhere.
 		c.Database.MigrationDSN = c.Database.DSN
 	}
 	if c.Messaging.Driver == "" {
@@ -106,8 +106,8 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// validate rassemble TOUTES les invalidités plutôt que de s'arrêter à la
-// première : corriger la configuration en six redémarrages est inacceptable.
+// validate gathers ALL the invalidities rather than stopping at the first one:
+// fixing the configuration over six restarts is unacceptable.
 func (c Config) validate(catalog ModuleCatalog) error {
 	problems := make([]error, 0, 4)
 	problems = append(problems, c.validateCore()...)
@@ -117,7 +117,7 @@ func (c Config) validate(catalog ModuleCatalog) error {
 	problems = append(problems, c.Interop.validate()...)
 
 	if len(problems) > 0 {
-		return fmt.Errorf("configuration invalide: %w", errors.Join(problems...))
+		return fmt.Errorf("invalid configuration: %w", errors.Join(problems...))
 	}
 	return nil
 }

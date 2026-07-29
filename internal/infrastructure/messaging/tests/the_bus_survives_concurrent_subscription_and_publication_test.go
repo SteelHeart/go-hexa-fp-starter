@@ -9,20 +9,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestTheBusSurvivesConcurrentSubscriptionAndPublication : abonner pendant qu'on
-// publie ne corrompt pas la table.
+// TestTheBusSurvivesConcurrentSubscriptionAndPublication: subscribing while
+// publishing does not corrupt the table.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Publier en tenant le verrou en LECTURE pendant qu'un consommateur s'abonne en
-// ÉCRITURE est le scénario réel du démarrage : les modules se montent pendant que
-// le dépileur tourne déjà. Une lecture de la carte sans copie — `handlers :=
-// b.handlers[env.Type]` au lieu d'une copie — laisse la tranche partagée avec un
-// `append` concurrent, et Go n'a alors AUCUNE garantie.
+// Publishing while holding the READ lock at the same time as a consumer
+// subscribes under the WRITE lock is the real scenario of start-up: the modules
+// mount while the dispatcher is already running. A read of the map without a
+// copy — `handlers := b.handlers[env.Type]` instead of a copy — leaves the
+// slice shared with a concurrent `append`, and Go then gives NO guarantee at
+// all.
 //
-// ⚠️ Ce test n'a toute sa force que sous `-race`, exécuté en CI (F005 : `-race`
-// exige CGO, absent de la machine de référence). Sans lui, il exerce le verrou
-// mais ne prouve pas l'absence de course.
+// ⚠️ This test only has its full force under `-race`, run in CI (F005: `-race`
+// requires CGO, absent from the reference machine). Without it, it exercises
+// the lock but does not prove the absence of a race.
 func TestTheBusSurvivesConcurrentSubscriptionAndPublication(t *testing.T) {
 	t.Parallel()
 
@@ -47,22 +48,21 @@ func TestTheBusSurvivesConcurrentSubscriptionAndPublication(t *testing.T) {
 		defer wg.Done()
 		for range rounds {
 			if err := bus.Publish(context.Background(), envelope("user.registered.v1")); err != nil {
-				t.Errorf("publication concurrente en échec: %v", err)
+				t.Errorf("concurrent publication failed: %v", err)
 			}
 		}
 	}()
 	wg.Wait()
 
-	// Le NOMBRE de livraisons dépend de l'entrelacement, donc on ne l'affirme
-	// pas : un test qui figerait ce nombre serait instable pour une bonne raison.
-	// Ce qui est affirmé, c'est qu'une fois tout le monde abonné, tout le monde
-	// reçoit.
+	// The NUMBER of deliveries depends on the interleaving, so we do not assert
+	// it: a test that froze that number would be flaky for a good reason. What
+	// is asserted is that once everybody has subscribed, everybody receives.
 	before := delivered.Load()
 	if err := bus.Publish(context.Background(), envelope("user.registered.v1")); err != nil {
-		t.Fatalf("publication finale en échec: %v", err)
+		t.Fatalf("final publication failed: %v", err)
 	}
 	if got := delivered.Load() - before; got != rounds {
-		t.Errorf("%d consommateurs servis après la course, attendu %d — "+
-			"un abonnement a été perdu", got, rounds)
+		t.Errorf("%d consumers served after the race, want %d — "+
+			"a subscription was lost", got, rounds)
 	}
 }

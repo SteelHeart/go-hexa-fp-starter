@@ -5,14 +5,14 @@ import (
 	"log/slog"
 )
 
-// noopPublisher ne publie rien, et le DIT.
+// noopPublisher publishes nothing, and SAYS SO.
 //
-// La trace en Debug est ce qui distingue « relais volontairement désactivé » de
-// « relais cassé » : un transport muet qui ne journalise rien ressemble
-// exactement à un transport en panne.
+// The Debug trace is what tells "relay deliberately disabled" apart from "relay
+// broken": a silent transport that logs nothing looks exactly like a transport
+// that has broken down.
 func noopPublisher(logger *slog.Logger) Publisher {
 	return func(ctx context.Context, env Envelope) error {
-		logger.DebugContext(ctx, "publication ignorée (relais noop)",
+		logger.DebugContext(ctx, "publication discarded (noop relay)",
 			slog.String("event_type", env.Type))
 		return nil
 	}

@@ -7,18 +7,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/modulebus"
 )
 
-// TestInprocModeCallsTheLocalImplementation : le mode par défaut n'ajoute rien.
+// TestInprocModeCallsTheLocalImplementation: the default mode adds nothing.
 //
-// # Ce que ce test verrouille
+// # What this test locks down
 //
-// `inproc` doit rendre l'implémentation locale TELLE QUELLE — pas un
-// enrobage qui sérialise puis désérialise « pour l'uniformité ». Cette
-// uniformité coûterait un aller-retour JSON à chaque appel entre deux modules du
-// même binaire, c'est-à-dire dans le cas NORMAL du monolithe modulaire, celui
-// que tout le monde exécutera.
+// `inproc` must return the local implementation AS IS — not a wrapper that
+// serialises then deserialises "for uniformity". That uniformity would cost a
+// JSON round trip on every call between two modules of the same binary, that is
+// to say in the NORMAL case of the modular monolith, the one everyone will run.
 //
-// Le test vérifie aussi qu'un mode absent VAUT inproc : `hexa new` puis `go run`
-// doit fonctionner sans qu'aucune ligne d'interopérabilité soit écrite.
+// The test also checks that an absent mode MEANS inproc: `hexa new` then
+// `go run` must work without a single line of interoperability being written.
 func TestInprocModeCallsTheLocalImplementation(t *testing.T) {
 	t.Parallel()
 
@@ -28,27 +27,27 @@ func TestInprocModeCallsTheLocalImplementation(t *testing.T) {
 
 		got, err := call(context.Background(), request{Ref: "r-1"})
 		if err != nil {
-			t.Fatalf("mode=%q: appel en échec: %v", mode, err)
+			t.Fatalf("mode=%q: call failed: %v", mode, err)
 		}
 		if localCalls != 1 {
-			t.Errorf("mode=%q: implémentation locale appelée %d fois, attendu 1", mode, localCalls)
+			t.Errorf("mode=%q: local implementation called %d times, want 1", mode, localCalls)
 		}
 		if !got.Accepted {
-			t.Errorf("mode=%q: réponse = %+v, l'implémentation locale n'a pas été jointe", mode, got)
+			t.Errorf("mode=%q: reply = %+v, the local implementation was not reached", mode, got)
 		}
 	}
 }
 
-// TestModeIsReportedForLogging : le mode retenu est lisible.
+// TestModeIsReportedForLogging: the selected mode is readable.
 //
-// Sans cela, savoir si un binaire appelle en local ou par le réseau demande de
-// relire la configuration fusionnée — au moment où l'on cherche justement
-// pourquoi un appel n'arrive pas.
+// Without it, knowing whether a binary calls locally or over the network
+// requires re-reading the merged configuration — at the very moment one is
+// looking for why a call is not arriving.
 func TestModeIsReportedForLogging(t *testing.T) {
 	t.Parallel()
 
 	bus := modulebus.New(interop("event", nil), noPublisher(t))
 	if got := bus.Mode(someModule); got != modulebus.ModeEvent {
-		t.Errorf("Mode(%q) = %q, attendu %q", someModule, got, modulebus.ModeEvent)
+		t.Errorf("Mode(%q) = %q, want %q", someModule, got, modulebus.ModeEvent)
 	}
 }

@@ -1,26 +1,26 @@
 package config
 
-// Catalogue des modules — ADR 014.
+// Module catalogue — ADR 014.
 //
-// # Ce fichier définit des TYPES, jamais du contenu
+// # This file defines TYPES, never content
 //
-// Aucun nom de module n'est écrit ici, et c'est la décision entière. Ce paquet
-// portait deux tables — `knownDrivers` et `defaultDrivers` — qui énuméraient les
-// six modules noyau. Un module absent était refusé.
+// No module name is written here, and that is the whole decision. This package
+// carried two tables — `knownDrivers` and `defaultDrivers` — which enumerated
+// the six core modules. An absent module was refused.
 //
-// Excellent deny-par-défaut. Pour le socle. Pour une application, ça voulait
-// dire : déclarer son propre module `billing` oblige à modifier un fichier du
-// framework. Mesuré, pas déduit — le binaire répondait
-// `modules.billing : module inconnu` avec un code de retour 1.
+// Excellent deny-by-default. For the starter. For an application, it meant:
+// declaring your own `billing` module forces you to modify a file of the
+// framework. Measured, not deduced — the binary answered
+// `modules.billing: unknown module` with a return code of 1.
 //
-// La règle 7 d'`arch-go` interdit déjà à ce paquet de dépendre d'un paquet
-// interne. Elle était respectée à la lettre et contournée dans l'esprit : le
-// paquet ne dépendait d'aucun module, mais il les NOMMAIT. Le catalogue est
-// désormais RECU, construit par le composition root, seul code autorisé à tout
-// connaître (ADR 004).
+// Rule 7 of `arch-go` already forbids this package from depending on an
+// internal package. It was respected to the letter and circumvented in spirit:
+// the package depended on no module, but it NAMED them. The catalogue is now
+// RECEIVED, built by the composition root, the only code allowed to know
+// everything (ADR 004).
 //
-// Un catalogue vide refuse TOUT. Le deny-par-défaut ne se relâche pas : il
-// change de source.
+// An empty catalogue refuses EVERYTHING. Deny-by-default does not loosen: it
+// changes source.
 
 import (
 	"fmt"
@@ -28,65 +28,67 @@ import (
 	"sort"
 )
 
-// Resources dit ce qu'un pilote exige du processus qui l'héberge.
+// Resources says what a driver requires of the process that hosts it.
 //
-// C'est ce qui permet à un binaire de n'ouvrir une connexion que s'il en a
-// besoin, et donc de démarrer sans base quand tous les pilotes actifs vivent en
-// mémoire ou sur fichier — la promesse de l'ADR 012.
+// This is what allows a binary to open a connection only if it needs one, and
+// therefore to start without a database when every active driver lives in
+// memory or on file — the promise of ADR 012.
 //
-// La valeur zéro n'exige RIEN, et c'est le bon défaut : un pilote qui oublie de
-// déclarer ses besoins n'ouvre aucune connexion, il échoue à sa construction.
-// L'inverse ferait ouvrir une connexion inutile, silencieusement.
+// The zero value requires NOTHING, and that is the right default: a driver that
+// forgets to declare its needs opens no connection, it fails at its
+// construction. The opposite would open a useless connection, silently.
 type Resources struct {
-	// SQL : une base relationnelle, quel que soit le MOTEUR. Aucun moteur n'est
-	// imposé par le socle (ADR 012) : `postgres` est un pilote parmi d'autres.
+	// SQL: a relational database, whatever the ENGINE. No engine is imposed by
+	// the starter (ADR 012): `postgres` is one driver among others.
 	SQL bool
-	// Cache : un cache réseau partagé entre répliques.
+	// Cache: a network cache shared between replicas.
 	Cache bool
-	// Options énumère les clés que ce pilote LIT dans `modules.<nom>.options`.
+	// Options enumerates the keys this driver READS in `modules.<name>.options`.
 	//
-	// Toute autre clé refuse le démarrage. Sans cette liste, « absente » et « mal
-	// orthographiée » sont indiscernables : les accesseurs d'options rendent la
-	// valeur par défaut dans les deux cas, et le pilote démarre avec un réglage
-	// que personne n'a demandé.
+	// Any other key refuses to start. Without this list, "absent" and
+	// "misspelt" are indistinguishable: the option accessors return the default
+	// value in both cases, and the driver starts with a setting nobody asked
+	// for.
 	//
-	// Mesuré avant d'être corrigé (#93) : `bath_size` au lieu de `batch_size`
-	// laissait le serveur démarrer, monter le module et n'en rien dire.
+	// Measured before being fixed (#93): `bath_size` instead of `batch_size`
+	// let the server start, mount the module and say nothing about it.
 	//
-	// La valeur zéro n'admet AUCUNE option, et c'est le bon défaut : un pilote
-	// qui oublie de déclarer les siennes voit sa configuration refusée, ce qui se
-	// remarque. L'inverse rouvrirait le trou pour tous les pilotes à la fois.
+	// The zero value admits NO option, and that is the right default: a driver
+	// that forgets to declare its own sees its configuration refused, which
+	// gets noticed. The opposite would reopen the hole for every driver at
+	// once.
 	Options []string
 }
 
-// DriverSet déclare les pilotes d'UN module.
+// DriverSet declares the drivers of ONE module.
 //
-// `Drivers` porte à la fois la liste des pilotes admis et ce que chacun exige :
-// une seule table, donc aucun risque de déclarer un pilote sans dire ce qu'il
-// consomme, ni l'inverse.
+// `Drivers` carries both the list of admitted drivers and what each one
+// requires: a single table, hence no risk of declaring a driver without saying
+// what it consumes, nor the other way round.
 type DriverSet struct {
-	// Default est le pilote retenu quand la configuration n'en nomme aucun.
+	// Default is the driver retained when the configuration names none.
 	//
-	// Il DOIT être celui qui n'exige rien : c'est ce qui rend vraie la promesse
-	// « `hexa new` puis `go run`, ça démarre ». Jamais le plus complet.
+	// It MUST be the one that requires nothing: this is what makes the promise
+	// "`hexa new` then `go run`, and it starts" true. Never the most complete
+	// one.
 	Default string
-	// Drivers énumère les pilotes admis et leurs besoins.
+	// Drivers enumerates the admitted drivers and their needs.
 	Drivers map[string]Resources
 }
 
-// ModuleCatalog associe un nom de module à ses pilotes.
+// ModuleCatalog associates a module name with its drivers.
 //
-// Il est construit par le composition root, qui fusionne le catalogue de chaque
-// module monté — noyau comme métier. Un module qui n'est pas monté n'y figure
-// pas, donc n'est pas configurable : on ne configure pas ce qu'on n'a pas
-// branché.
+// It is built by the composition root, which merges the catalogue of every
+// mounted module — core as well as business. A module that is not mounted does
+// not appear in it, and is therefore not configurable: one does not configure
+// what one has not plugged in.
 type ModuleCatalog map[string]DriverSet
 
-// AllowedDrivers rend les pilotes admis d'un module, triés.
+// AllowedDrivers returns the admitted drivers of a module, sorted.
 //
-// Triés parce que cette liste sert à composer un message d'erreur : un ordre de
-// map est aléatoire, et un message qui change à chaque exécution empêche de
-// comparer deux traces.
+// Sorted because this list serves to compose an error message: a map order is
+// random, and a message that changes on every run makes it impossible to
+// compare two traces.
 func (c ModuleCatalog) AllowedDrivers(module string) []string {
 	set, known := c[module]
 	if !known {
@@ -100,44 +102,44 @@ func (c ModuleCatalog) AllowedDrivers(module string) []string {
 	return names
 }
 
-// DefaultDriver rend le pilote par défaut d'un module, ou la chaîne vide.
+// DefaultDriver returns the default driver of a module, or the empty string.
 func (c ModuleCatalog) DefaultDriver(module string) string { return c[module].Default }
 
-// AllowedOptions rend les clés d'options admises par un pilote, triées.
+// AllowedOptions returns the option keys admitted by a driver, sorted.
 //
-// Triées pour la même raison qu'AllowedDrivers : cette liste compose un message
-// d'erreur, et un ordre de map change à chaque exécution — ce qui empêche de
-// comparer deux traces.
+// Sorted for the same reason as AllowedDrivers: this list composes an error
+// message, and a map order changes on every run — which makes it impossible to
+// compare two traces.
 func (c ModuleCatalog) AllowedOptions(module, driver string) []string {
-	admises := slices.Clone(c.Requires(module, driver).Options)
-	slices.Sort(admises)
-	return admises
+	allowed := slices.Clone(c.Requires(module, driver).Options)
+	slices.Sort(allowed)
+	return allowed
 }
 
-// Requires rend les besoins d'un pilote d'un module.
+// Requires returns the needs of a driver of a module.
 //
-// Un pilote inconnu n'exige rien : c'est la validation qui le refuse, pas cet
-// accesseur. Rendre `SQL: true` pour un pilote inexistant ferait ouvrir une
-// connexion au nom d'un pilote qu'on va justement refuser.
+// An unknown driver requires nothing: it is validation that refuses it, not
+// this accessor. Returning `SQL: true` for a non-existent driver would open a
+// connection in the name of a driver we are precisely about to refuse.
 func (c ModuleCatalog) Requires(module, driver string) Resources {
 	return c[module].Drivers[driver]
 }
 
-// MergeCatalogs assemble les catalogues des modules montés.
+// MergeCatalogs assembles the catalogues of the mounted modules.
 //
-// Deux modules ne peuvent pas revendiquer le même nom : ce serait une collision
-// silencieuse, où l'un des deux se retrouverait configuré par les pilotes de
-// l'autre. Refus explicite — deny par défaut.
+// Two modules cannot claim the same name: that would be a silent collision,
+// where one of the two would end up configured by the drivers of the other.
+// Explicit refusal — deny by default.
 //
-// C'est le composition root qui appelle ceci, et lui seul : c'est le seul code
-// qui connaît la liste des modules montés (ADR 004).
+// It is the composition root that calls this, and it alone: it is the only code
+// that knows the list of mounted modules (ADR 004).
 func MergeCatalogs(catalogs ...ModuleCatalog) (ModuleCatalog, error) {
 	merged := ModuleCatalog{}
 	for _, catalog := range catalogs {
 		for name, set := range catalog {
 			if _, collision := merged[name]; collision {
 				return nil, fmt.Errorf(
-					"catalogue: le module %q est déclaré deux fois — deux modules ne peuvent pas porter le même nom", name)
+					"catalogue: module %q is declared twice — two modules cannot carry the same name", name)
 			}
 			merged[name] = set
 		}

@@ -9,96 +9,95 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/subscriber"
 )
 
-// errFournisseur simule une panne du destinataire de l'effet.
-var errFournisseur = errors.New("fournisseur injoignable")
+// errProvider simulates a breakdown of the recipient of the effect.
+var errProvider = errors.New("provider unreachable")
 
-// TestAFailedHandlerIsReplayableAtOnce garde la libération de la clé.
+// TestAFailedHandlerIsReplayableAtOnce guards the release of the key.
 //
-// # Ce que l'oubli produit
+// # What the oversight produces
 //
-// La clé reste réservée. L'enveloppe devient donc INTRAITABLE jusqu'à
-// l'expiration — vingt-quatre heures avec la configuration livrée — et chaque
-// rejeu se heurte à « déjà en cours » sans que rien n'explique pourquoi.
+// The key stays reserved. The envelope therefore becomes UNHANDLEABLE until it
+// expires — twenty-four hours with the shipped configuration — and every replay
+// runs into "already in flight" without anything explaining why.
 //
-// Le remède serait alors pire que le mal : quelqu'un raccourcirait le TTL pour
-// « débloquer », et rouvrirait la fenêtre de rejeu que ce module existe pour
-// fermer.
+// The remedy would then be worse than the disease: someone would shorten the
+// TTL to "unblock", and would reopen the replay window that this module exists
+// to close.
 //
-// Le test constate la propriété qui compte : après un échec, la remise suivante
-// EXÉCUTE — elle n'est ni refusée, ni prise pour un rejeu.
+// The test observes the property that counts: after a failure, the next
+// delivery RUNS — it is neither refused, nor taken for a replay.
 func TestAFailedHandlerIsReplayableAtOnce(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	guard := newGuard(t)
-	env := envelope("evt-echec")
+	env := envelope("evt-failure")
 
-	rate := echouant(errFournisseur)
-	if err := subscriber.Once(guard, rate.handler())(ctx, env); !errors.Is(err, errFournisseur) {
-		t.Fatalf("l'échec du gestionnaire doit remonter INTACT, obtenu %v", err)
+	failed := failing(errProvider)
+	if err := subscriber.Once(guard, failed.handler())(ctx, env); !errors.Is(err, errProvider) {
+		t.Fatalf("the handler failure must go back up INTACT, got %v", err)
 	}
-	if rate.total() != 1 {
-		t.Fatalf("le gestionnaire devait être appelé une fois, obtenu %d", rate.total())
+	if failed.total() != 1 {
+		t.Fatalf("the handler was to be called once, got %d", failed.total())
 	}
 
-	// Même clé, même enveloppe, sur le MÊME garde : la seconde remise doit
-	// exécuter, pas être prise pour un rejeu.
-	reussi := &compteur{}
-	if err := subscriber.Once(guard, reussi.handler())(ctx, env); err != nil {
-		t.Fatalf("la remise après échec doit aboutir : %v", err)
+	// Same key, same envelope, on the SAME guard: the second delivery must run,
+	// not be taken for a replay.
+	succeeded := &counter{}
+	if err := subscriber.Once(guard, succeeded.handler())(ctx, env); err != nil {
+		t.Fatalf("the delivery after a failure must succeed: %v", err)
 	}
-	if reussi.total() != 1 {
-		t.Fatal("la remise après échec n'a pas exécuté : la clé est restée verrouillée")
+	if succeeded.total() != 1 {
+		t.Fatal("the delivery after a failure did not run: the key stayed locked")
 	}
 }
 
-// TestAnEnvelopeWithoutIDIsRefusedNotSilentlyLetThrough refuse bruyamment.
+// TestAnEnvelopeWithoutIDIsRefusedNotSilentlyLetThrough refuses noisily.
 //
-// L'identifiant EST la clé d'idempotence. Sans lui, aucun rejeu ne peut être
-// reconnu — et un décorateur qui laisserait passer offrirait une garantie
-// SILENCIEUSEMENT absente, ce qui est pire que pas de garde du tout : on cesse
-// de se méfier.
+// The identifier IS the idempotency key. Without it, no replay can be
+// recognised — and a decorator that let it through would offer a SILENTLY
+// absent guarantee, which is worse than no guard at all: one stops being wary.
 func TestAnEnvelopeWithoutIDIsRefusedNotSilentlyLetThrough(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	effet := &compteur{}
-	handler := subscriber.Once(newGuard(t), effet.handler())
+	effect := &counter{}
+	handler := subscriber.Once(newGuard(t), effect.handler())
 
 	env := envelope("")
 	if err := handler(ctx, env); !errors.Is(err, subscriber.ErrMissingID) {
-		t.Fatalf("attendu ErrMissingID, obtenu %v", err)
+		t.Fatalf("want ErrMissingID, got %v", err)
 	}
-	if effet.total() != 0 {
-		t.Fatal("une enveloppe sans identifiant ne doit produire aucun effet")
+	if effect.total() != 0 {
+		t.Fatal("an envelope without an identifier must produce no effect")
 	}
 }
 
-// TestTheHandlerErrorSurvivesTheDecorator garde la CAUSE de l'échec.
+// TestTheHandlerErrorSurvivesTheDecorator guards the CAUSE of the failure.
 //
-// L'erreur du gestionnaire doit remonter reconnaissable par `errors.Is`. La
-// remplacer par une erreur du décorateur ferait perdre la CAUSE — et le
-// dépileur, en amont, décide de rejouer ou d'abandonner sur cette cause.
+// The handler error must go back up recognisable by `errors.Is`. Replacing it
+// with a decorator error would lose the CAUSE — and the dispatcher, upstream,
+// decides to replay or to give up on that cause.
 //
-// Le test vérifie aussi qu'une erreur de libération ne l'écrase pas : les deux
-// sont jointes, parce qu'une clé restée verrouillée est un incident distinct qui
-// se diagnostique mal quand son message a disparu.
+// The test also checks that a release error does not overwrite it: the two are
+// joined, because a key left locked is a distinct incident which is hard to
+// diagnose when its message has disappeared.
 func TestTheHandlerErrorSurvivesTheDecorator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	errLiberation := errors.New("magasin injoignable")
+	errRelease := errors.New("store unreachable")
 
 	guard := newGuard(t)
-	guard.Release = func(context.Context, idempotencydomain.Key) error { return errLiberation }
+	guard.Release = func(context.Context, idempotencydomain.Key) error { return errRelease }
 
-	rate := echouant(errFournisseur)
-	err := subscriber.Once(guard, rate.handler())(ctx, envelope("evt-double-echec"))
+	failed := failing(errProvider)
+	err := subscriber.Once(guard, failed.handler())(ctx, envelope("evt-double-failure"))
 
-	if !errors.Is(err, errFournisseur) {
-		t.Errorf("la cause du gestionnaire doit survivre : %v", err)
+	if !errors.Is(err, errProvider) {
+		t.Errorf("the handler cause must survive: %v", err)
 	}
-	if !errors.Is(err, errLiberation) {
-		t.Errorf("l'échec de libération doit être joint, pas écrasé : %v", err)
+	if !errors.Is(err, errRelease) {
+		t.Errorf("the release failure must be joined, not overwritten: %v", err)
 	}
 }

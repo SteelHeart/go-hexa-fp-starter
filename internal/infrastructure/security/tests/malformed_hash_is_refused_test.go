@@ -9,49 +9,50 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 )
 
-// TestMalformedHashIsRefused : un condensé illisible rend une ERREUR, pas un refus.
+// TestMalformedHashIsRefused: an unreadable digest returns an ERROR, not a
+// refusal.
 //
-// Un condensé est censé venir de notre propre base — mais une reprise de données,
-// une colonne tronquée ou un magasin externe suffisent à y glisser autre chose. Le
-// traiter comme « mauvais mot de passe » masquerait une corruption de données
-// derrière des échecs de connexion que personne ne relierait entre eux.
+// A digest is supposed to come from our own database — but a data import, a
+// truncated column or an external store are enough to slip something else in.
+// Treating it as "wrong password" would hide a data corruption behind login
+// failures that nobody would ever connect to one another.
 func TestMalformedHashIsRefused(t *testing.T) {
 	t.Parallel()
 
-	valide := hash(t, "correct cheval batterie agrafe")
-	parts := strings.Split(valide, "$")
+	valid := hash(t, "correct horse battery staple")
+	parts := strings.Split(valid, "$")
 
 	cases := map[string]string{
-		"vide":                  "",
-		"sans structure":        "pas un condensé",
-		"algorithme inconnu":    strings.Replace(valide, "argon2id", "bcrypt", 1),
-		"version inattendue":    strings.Replace(valide, "v=19", "v=13", 1),
-		"paramètres illisibles": "$argon2id$v=19$memoire=beaucoup$" + parts[4] + "$" + parts[5],
-		"sel non base64":        "$argon2id$v=19$" + parts[3] + "$!!!$" + parts[5],
-		"clé non base64":        "$argon2id$v=19$" + parts[3] + "$" + parts[4] + "$!!!",
-		"segment manquant":      strings.Join(parts[:5], "$"),
+		"empty":                 "",
+		"no structure":          "not a digest",
+		"unknown algorithm":     strings.Replace(valid, "argon2id", "bcrypt", 1),
+		"unexpected version":    strings.Replace(valid, "v=19", "v=13", 1),
+		"unreadable parameters": "$argon2id$v=19$memory=lots$" + parts[4] + "$" + parts[5],
+		"salt not base64":       "$argon2id$v=19$" + parts[3] + "$!!!$" + parts[5],
+		"key not base64":        "$argon2id$v=19$" + parts[3] + "$" + parts[4] + "$!!!",
+		"missing segment":       strings.Join(parts[:5], "$"),
 	}
 
 	hasher := newHasher()
 	for name, encoded := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			ok, err := hasher.Verify("peu importe", encoded)
+			ok, err := hasher.Verify("whatever", encoded)
 			if !errors.Is(err, security.ErrInvalidHash) {
-				t.Errorf("erreur = %v, attendu ErrInvalidHash", err)
+				t.Errorf("error = %v, want ErrInvalidHash", err)
 			}
 			if ok {
-				t.Error("un condensé illisible ne doit JAMAIS valider un mot de passe")
+				t.Error("an unreadable digest must NEVER validate a password")
 			}
 		})
 	}
 
-	// Un condensé annonçant une clé absurde est refusé AVANT d'atteindre argon2.
-	// Sans cette borne, la longueur annoncée pilote directement une allocation :
-	// un « condensé » forgé ferait tomber le processus à la première vérification.
-	geante := "$argon2id$v=19$" + parts[3] + "$" + parts[4] + "$" +
+	// A digest announcing an absurd key is refused BEFORE reaching argon2.
+	// Without this bound, the announced length directly drives an allocation:
+	// a forged "digest" would bring the process down on the first verification.
+	oversized := "$argon2id$v=19$" + parts[3] + "$" + parts[4] + "$" +
 		base64.RawStdEncoding.EncodeToString(make([]byte, 1<<20))
-	if ok, err := hasher.Verify("peu importe", geante); !errors.Is(err, security.ErrInvalidHash) || ok {
-		t.Errorf("une clé démesurée doit être refusée: ok=%v err=%v", ok, err)
+	if ok, err := hasher.Verify("whatever", oversized); !errors.Is(err, security.ErrInvalidHash) || ok {
+		t.Errorf("an outsized key must be refused: ok=%v err=%v", ok, err)
 	}
 }

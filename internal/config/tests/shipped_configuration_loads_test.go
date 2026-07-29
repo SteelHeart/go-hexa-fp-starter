@@ -6,16 +6,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// TestShippedConfigurationLoads : la configuration livrée doit charger telle
-// quelle, le seul secret obligatoire étant fourni.
+// TestShippedConfigurationLoads: the shipped configuration must load as it is,
+// the only mandatory secret being supplied.
 func TestShippedConfigurationLoads(t *testing.T) {
 	withShippedConfig(t)
 
 	cfg, err := config.Load(shippedCatalog(t))
 	if err != nil {
-		t.Fatalf("la configuration livrée doit charger: %v", err)
+		t.Fatalf("the shipped configuration must load: %v", err)
 	}
 	if len(cfg.Modules) == 0 {
-		t.Error("aucun module lu : le fichier modules.yaml n'a pas été pris en compte")
+		t.Error("no module read: the modules.yaml file was not taken into account")
 	}
 }

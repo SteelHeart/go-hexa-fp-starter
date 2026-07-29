@@ -9,15 +9,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 )
 
-// TestRetryStopsAtTheFirstSuccess : un réessai réussi ne republie pas.
+// TestRetryStopsAtTheFirstSuccess: a successful retry does not republish.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Une boucle qui ne sortirait pas au succès publierait le même événement
-// plusieurs fois. Tous les transports d'ici sont « au moins une fois », donc le
-// doublon n'est pas une faute de correction — mais c'est une faute de COÛT :
-// chaque doublon force un consommateur à retrouver son enregistrement
-// d'idempotence, et le socle en produirait gratuitement, en permanence.
+// A loop that did not exit on success would publish the same event several
+// times. Every transport here is "at least once", so the duplicate is not a
+// correctness fault — but it is a COST fault: each duplicate forces a consumer
+// to look up its idempotency record, and the starter would produce them for
+// free, permanently.
 func TestRetryStopsAtTheFirstSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -25,7 +25,7 @@ func TestRetryStopsAtTheFirstSuccess(t *testing.T) {
 	flaky := func(context.Context, messaging.Envelope) error {
 		calls++
 		if calls < 2 {
-			return errors.New("coupure réseau")
+			return errors.New("network outage")
 		}
 		return nil
 	}
@@ -33,9 +33,9 @@ func TestRetryStopsAtTheFirstSuccess(t *testing.T) {
 	publish := messaging.WithRetry(flaky, 5, time.Millisecond)
 
 	if err := publish(context.Background(), envelope("user.registered.v1")); err != nil {
-		t.Fatalf("la publication devait réussir au 2e essai, rendu: %v", err)
+		t.Fatalf("the publication was to succeed on the 2nd attempt, returned: %v", err)
 	}
 	if calls != 2 {
-		t.Errorf("publieur appelé %d fois, attendu 2 — chaque essai en trop est un doublon", calls)
+		t.Errorf("publisher called %d times, want 2 — every extra attempt is a duplicate", calls)
 	}
 }

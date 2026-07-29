@@ -7,22 +7,23 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/modulebus"
 )
 
-// TestAnUnknownTransportRefusesToResolve : deny par défaut sur le transport.
+// TestAnUnknownTransportRefusesToResolve: deny by default on the transport.
 //
-// # Le défaut que ce test attrape
+// # The defect this test catches
 //
-// Un mode inconnu qui se rabattrait sur `inproc` — le mode le moins coûteux,
-// donc le repli « raisonnable » — produirait un appel LOCAL là où l'exploitant
-// a demandé un appel distant. Les deux modules sont déployés séparément, le
-// module appelant exécute silencieusement sa propre copie de la capacité, et
-// tout fonctionne : les données partent simplement dans la mauvaise base.
+// An unknown mode falling back on `inproc` — the cheapest mode, hence the
+// "reasonable" fallback — would produce a LOCAL call where the operator asked
+// for a remote one. The two modules are deployed separately, the calling module
+// silently runs its own copy of the capability, and everything works: the data
+// simply goes into the wrong database.
 //
-// C'est le pire cas d'un repli silencieux — il n'échoue pas, il se trompe.
+// This is the worst case of a silent fallback — it does not fail, it gets it
+// wrong.
 func TestAnUnknownTransportRefusesToResolve(t *testing.T) {
 	t.Parallel()
 
-	// Y compris les valeurs qui ressemblent à un mode valide : on ne devine pas
-	// une intention à partir d'une faute de frappe.
+	// Including the values that look like a valid mode: an intention is not
+	// guessed from a typing mistake.
 	for _, mode := range []string{"grpc", "HTTP", "in-proc", "events", "off"} {
 		var localCalls int
 
@@ -31,11 +32,11 @@ func TestAnUnknownTransportRefusesToResolve(t *testing.T) {
 			someModule, route(), someEvent, localCaller(&localCalls))
 
 		if err == nil {
-			t.Errorf("mode=%q accepté — un transport non prévu doit refuser la résolution", mode)
+			t.Errorf("mode=%q accepted — an unplanned transport must refuse resolution", mode)
 			continue
 		}
 		if !errors.Is(err, modulebus.ErrUnknownMode) {
-			t.Errorf("mode=%q rendu avec %v, attendu ErrUnknownMode", mode, err)
+			t.Errorf("mode=%q returned with %v, want ErrUnknownMode", mode, err)
 		}
 	}
 }
