@@ -455,13 +455,13 @@ tasks:
           # ADR 013 : le garde est livré avec le cas qui le fait échouer.
           echo "  sens échec — les témoins :"
           ./tools/verifie-mention-outillage.sh --temoin || fail=1
-          zones=$(git diff --name-only "$base" HEAD | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
-          if [ -n "$zones" ]; then
-            echo "  zones à haute inertie touchées — ADR ou label inertia:justified exigé :"
-            echo "$zones" | sed 's/^/    /'
-          else
-            echo "  aucune zone à haute inertie touchée"
-          fi
+          # Le motif d'inertie était RECOPIÉ ici en clair : une seconde source de
+          # vérité, dans le fichier même qui proclame « UNE seule définition ».
+          # Il vit désormais dans le script, comme celui des mentions.
+          echo "  zones à haute inertie :"
+          ./tools/verifie-inertie.sh "$base" HEAD | sed 's/^/    /' || fail=1
+          echo "  sens échec — le témoin du garde d'inertie :"
+          ./tools/verifie-inertie.sh --temoin | sed 's/^/    /' || fail=1
           exit "$fail"
 
   fmt:

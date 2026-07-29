@@ -113,41 +113,34 @@ jobs:
     name: Zones à haute inertie
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Moindre privilège, et surtout : la dépendance devient VISIBLE. Le garde
+    # relit l'état des labels par l'API — sans ce droit il retomberait
+    # silencieusement sur la seule exigence d'ADR, et l'échappatoire cesserait
+    # de fonctionner sans que rien ne le dise.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # UNE seule définition, comme pour les autres gardes : le script. La
+      # version en ligne lisait les labels dans la charge de l'événement, FIGÉE
+      # au déclenchement — un label posé après l'échec y était invisible, et une
+      # relance rejouait la même charge. Or poser le label après avoir vu
+      # l'échec est la seule façon dont on s'en sert.
       - name: Un changement de règle exige un ADR dans la même PR
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set -euo pipefail
-          changed=$(git diff --name-only "$BASE" "$HEAD")
-          echo "$changed" | sed 's/^/  /'
+          ./tools/verifie-inertie.sh \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
 
-          inertia=$(echo "$changed" | grep -E '^(rules/|arch-go\.yml|\.golangci\.yml|internal/pkg/|migrations/)' || true)
-          [ -z "$inertia" ] && { echo "Aucune zone à haute inertie touchée."; exit 0; }
-
-          echo ""
-          echo "Zones à haute inertie modifiées :"
-          echo "$inertia" | sed 's/^/  · /'
-
-          adr=$(echo "$changed" | grep -E '^documentation/adr/[0-9]{3}-' || true)
-          if [ -n "$adr" ]; then
-            echo "ADR présent dans la PR :"; echo "$adr" | sed 's/^/  · /'; exit 0
-          fi
-
-          # Échappatoire explicite et tracée, pas un contournement silencieux.
-          if echo '${{ toJSON(github.event.pull_request.labels.*.name) }}' | grep -q 'inertia:justified'; then
-            echo "::warning::pas d'ADR, mais le label 'inertia:justified' est posé — la justification doit être dans le corps de la PR"
-            exit 0
-          fi
-
-          echo "::error::cette PR modifie le règlement, les primitives ou les migrations sans ADR."
-          echo "Ajouter documentation/adr/{NNN}-{slug}.md, ou poser le label 'inertia:justified' en expliquant pourquoi dans le corps de la PR."
-          exit 1
+      - name: Ce garde-là sait échouer
+        run: ./tools/verifie-inertie.sh --temoin
 
       # UNE seule définition, partagée avec `task ci:inertia` : le script. Le
       # motif n'est écrit NULLE PART ici — la version précédente le portait en
