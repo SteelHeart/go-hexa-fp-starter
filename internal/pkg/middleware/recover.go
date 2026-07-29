@@ -5,15 +5,15 @@ import (
 	"net/http"
 )
 
-// Recover intercepte une panique, la journalise et répond 500 sans divulguer la
-// pile à l'appelant.
+// Recover catches a panic, logs it, and answers 500 without disclosing the
+// stack to the caller.
 func Recover(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Le contexte est capturé AVANT le defer, jamais lu dedans : un
-			// gestionnaire qui panique peut avoir remplacé `r`, et la panique serait
-			// alors journalisée avec un contexte qui n'est pas celui de la requête —
-			// donc sans son identifiant de corrélation, précisément quand il sert.
+			// The context is captured BEFORE the defer, never read inside it: a
+			// handler that panics may have replaced `r`, and the panic would then be
+			// logged with a context that is not the request's — hence without its
+			// correlation identifier, exactly when it matters.
 			ctx := r.Context()
 			method, path := r.Method, r.URL.Path
 
@@ -22,11 +22,11 @@ func Recover(logger *slog.Logger) Middleware {
 				if recovered == nil {
 					return
 				}
-				// http.ErrAbortHandler est un signal volontaire, pas un défaut.
-				if recovered == http.ErrAbortHandler { //nolint:errorlint // sentinelle levée par panic, pas enveloppée
+				// http.ErrAbortHandler is a deliberate signal, not a defect.
+				if recovered == http.ErrAbortHandler { //nolint:errorlint // sentinel raised by panic, not wrapped
 					panic(recovered)
 				}
-				logger.ErrorContext(ctx, "panique dans un gestionnaire HTTP",
+				logger.ErrorContext(ctx, "panic in an HTTP handler",
 					slog.Any("recovered", recovered),
 					slog.String("method", method),
 					slog.String("path", path),

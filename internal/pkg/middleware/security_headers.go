@@ -2,35 +2,36 @@ package middleware
 
 import "net/http"
 
-// hstsOneYear exige HTTPS pendant un an, sous-domaines compris.
+// hstsOneYear requires HTTPS for a year, subdomains included.
 //
-// Un an est la valeur qui rend un domaine éligible au préchargement des
-// navigateurs. La durée est volontairement longue : ce qu'elle protège, c'est la
-// PREMIÈRE requête d'une visite ultérieure — celle qu'un attaquant présent sur le
-// réseau détournerait avant tout échange chiffré.
+// One year is the value that makes a domain eligible for browser preloading. The
+// duration is deliberately long: what it protects is the FIRST request of a later
+// visit — the one an attacker sitting on the network would hijack before any
+// encrypted exchange.
 const hstsOneYear = "max-age=31536000; includeSubDomains"
 
-// SecurityHeaders pose les en-têtes de durcissement, HSTS compris.
+// SecurityHeaders sets the hardening headers, HSTS included.
 //
-// C'est le constructeur par DÉFAUT : obtenir la protection ne coûte rien, y
-// renoncer doit se nommer.
+// This is the DEFAULT constructor: getting the protection costs nothing, opting
+// out has to be named.
 func SecurityHeaders() Middleware {
 	return hardeningHeaders(hstsOneYear)
 }
 
-// SecurityHeadersWithoutHSTS pose les mêmes en-têtes SANS Strict-Transport-Security.
+// SecurityHeadersWithoutHSTS sets the same headers WITHOUT
+// Strict-Transport-Security.
 //
-// Réservé au développement en clair : sur `http://localhost`, HSTS inscrirait dans
-// le navigateur une exigence de HTTPS que le poste ne peut pas satisfaire, et le
-// développeur perdrait l'accès à son propre serveur jusqu'à purger le cache.
+// Reserved for cleartext development: on `http://localhost`, HSTS would record in
+// the browser an HTTPS requirement the machine cannot satisfy, and the developer
+// would lose access to their own server until clearing the cache.
 //
-// Le nom porte la renonciation. C'était autrefois `SecurityHeaders(false)`, où le
-// booléen ne disait ni ce qu'il désactivait, ni ce que ça coûtait.
+// The name carries the opt-out. It used to be `SecurityHeaders(false)`, where the
+// boolean said neither what it disabled nor what that cost.
 func SecurityHeadersWithoutHSTS() Middleware {
 	return hardeningHeaders("")
 }
 
-// hardeningHeaders reçoit la VALEUR de l'en-tête, pas un drapeau : vide = absent.
+// hardeningHeaders receives the header VALUE, not a flag: empty means absent.
 func hardeningHeaders(hsts string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +41,7 @@ func hardeningHeaders(hsts string) Middleware {
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")
 			h.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
-			// API JSON : aucune ressource active n'est servie.
+			// JSON API: no active resource is served.
 			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 			if hsts != "" {
 				h.Set("Strict-Transport-Security", hsts)

@@ -1,62 +1,61 @@
-// Package exit porte les codes de sortie d'un programme, selon `sysexits.h`.
+// Package exit holds a program's exit codes, following `sysexits.h`.
 //
-// # Pourquoi une convention plutôt que 0 et 1
+// # Why a convention rather than 0 and 1
 //
-// Un binaire de ligne de commande est appelé par d'autres programmes bien plus
-// souvent que par des humains : scripts de déploiement, `Makefile`, tâches
-// planifiées, jobs de CI. Ces appelants ne lisent pas les messages ; ils lisent
-// le code de retour, et ils en ont besoin pour décider s'il faut **réessayer**.
+// A command-line binary is called by other programs far more often than by
+// humans: deployment scripts, `Makefile`s, scheduled jobs, CI jobs. Those
+// callers do not read messages; they read the exit code, and they need it to
+// decide whether to **retry**.
 //
-// Avec `1` pour tout, un mot de passe trop court et une base injoignable sont
-// indiscernables : le script réessaie l'un — inutilement, à l'infini — ou
-// abandonne sur l'autre, alors qu'une seconde tentative aurait suffi.
+// With `1` for everything, a password that is too short and an unreachable
+// database are indistinguishable: the script retries one — pointlessly,
+// forever — or gives up on the other, when a second attempt would have done.
 //
-// # Pourquoi `sysexits.h` et pas une table maison
+// # Why `sysexits.h` rather than a homegrown table
 //
-// Parce qu'elle existe depuis 1980, qu'elle est celle de `sendmail`, de `git` et
-// de la plupart des outils Unix, et qu'un opérateur qui voit `78` sait déjà
-// qu'il s'agit d'une erreur de configuration. Une table inventée oblige à lire
-// notre documentation pour interpréter notre sortie.
+// Because it has existed since 1980, because it is the one used by `sendmail`,
+// `git` and most Unix tooling, and because an operator seeing `78` already knows
+// it means a configuration error. An invented table forces everyone to read our
+// documentation in order to interpret our output.
 //
-// # Ce paquet est sans dépendance
+// # This package has no dependencies
 //
-// Des constantes entières, rien d'autre. C'est ce qui lui permet de vivre dans
-// `internal/pkg/` et d'être utilisé par n'importe quel binaire sans rien tirer
-// derrière lui.
+// Integer constants, nothing else. That is what lets it live in `internal/pkg/`
+// and be used by any binary without dragging anything along.
 package exit
 
-// Codes de sortie, tels que définis par `sysexits.h` (BSD).
+// Exit codes, as defined by `sysexits.h` (BSD).
 //
-// Seuls ceux que ce socle sait produire sont déclarés. En ajouter « au cas où »
-// laisserait croire qu'un chemin les rend, alors que rien ne les émet — la
-// même faute que déclarer un pilote qui n'existe pas (ADR 014).
+// Only the ones this starter knows how to produce are declared. Adding more
+// "just in case" would suggest some path returns them while nothing emits them —
+// the same mistake as declaring a driver that does not exist (ADR 014).
 const (
-	// OK : tout s'est bien passé.
+	// OK: everything went fine.
 	OK = 0
 
-	// Usage : la ligne de commande est mal formée — option inconnue, argument
-	// manquant. L'appelant doit corriger sa commande, jamais réessayer.
+	// Usage: the command line is malformed — unknown option, missing argument.
+	// The caller must fix its command, never retry.
 	Usage = 64
 
-	// DataErr : les données fournies sont invalides. C'est la faute de
-	// l'utilisateur, pas du service : réessayer à l'identique échouera pareil.
+	// DataErr: the supplied data is invalid. That is the user's fault, not the
+	// service's: retrying identically will fail identically.
 	DataErr = 65
 
-	// Unavailable : un service dont on dépend est injoignable. C'est le SEUL
-	// code de cette liste qui autorise un réessai — et c'est toute son utilité.
+	// Unavailable: a service we depend on is unreachable. This is the ONLY code
+	// in this list that warrants a retry — and that is its whole point.
 	Unavailable = 69
 
-	// Software : une erreur interne. Réessayer ne coûte rien mais ne promet
-	// rien ; ce qu'il faut, c'est lire les journaux.
+	// Software: an internal error. Retrying costs nothing but promises nothing;
+	// what is needed is reading the logs.
 	Software = 70
 
-	// Config : la configuration est incohérente ou incomplète. Distinct de
-	// `Usage` : la commande était correcte, c'est l'environnement qui ne l'est
-	// pas — donc ce n'est pas à l'appelant de corriger sa ligne de commande.
+	// Config: the configuration is inconsistent or incomplete. Distinct from
+	// `Usage`: the command was correct, the environment is not — so it is not up
+	// to the caller to fix its command line.
 	Config = 78
 
-	// NoPerm : l'opération est refusée par une garde, et le refus est
-	// DÉLIBÉRÉ. Un `seed` en production le rend : ce n'est ni une panne, ni une
-	// erreur de saisie, c'est un « non » assumé.
+	// NoPerm: the operation is refused by a guard, and the refusal is
+	// DELIBERATE. A `seed` in production returns it: neither a failure nor a
+	// typo, an assumed "no".
 	NoPerm = 77
 )

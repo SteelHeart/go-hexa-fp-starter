@@ -8,28 +8,28 @@ import (
 	"github.com/google/uuid"
 )
 
-// RequestIDHeader est l'en-tête de corrélation, accepté en entrée et toujours
-// renvoyé en sortie.
+// RequestIDHeader is the correlation header, accepted on input and always
+// echoed on output.
 const RequestIDHeader = "X-Request-Id"
 
-// contextKey est un type privé : il rend toute collision de clé impossible.
+// contextKey is a private type: it makes any key collision impossible.
 type contextKey struct{ name string }
 
-// requestIDKey est une globale assumée : le type `contextKey` est privé au paquet,
-// donc aucun autre paquet ne peut fabriquer une clé égale, même en copiant le
-// littéral. C'est l'idiome Go de la clé de contexte, et il n'a pas d'équivalent
-// local.
+// requestIDKey is an assumed global: the `contextKey` type is private to the
+// package, so no other package can build an equal key, even by copying the
+// literal. This is the Go idiom for a context key, and it has no local
+// equivalent.
 //
-//nolint:gochecknoglobals // clé de contexte : le type privé au niveau paquet EST le remède aux collisions
+//nolint:gochecknoglobals // context key: the package-private type IS the cure for collisions
 var requestIDKey = &contextKey{name: "request-id"}
 
-// RequestID propage un identifiant de corrélation, en réutilisant celui fourni
-// par l'appelant s'il est plausible.
+// RequestID propagates a correlation identifier, reusing the caller's one when
+// it is plausible.
 func RequestID() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id := r.Header.Get(RequestIDHeader)
-			// Un en-tête entrant n'est pas de confiance : il finit dans les logs.
+			// An incoming header is untrusted: it ends up in the logs.
 			if id == "" || len(id) > 64 || strings.ContainsAny(id, "\r\n") {
 				id = uuid.NewString()
 			}
@@ -39,8 +39,8 @@ func RequestID() Middleware {
 	}
 }
 
-// RequestIDFrom lit l'identifiant de corrélation. Il est toujours présent si
-// RequestID est monté.
+// RequestIDFrom reads the correlation identifier. It is always present when
+// RequestID is mounted.
 func RequestIDFrom(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)
 	return id
