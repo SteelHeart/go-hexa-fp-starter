@@ -7,22 +7,21 @@ import (
 	"strings"
 )
 
-// VerifyNoTrace refuse un projet qui porte encore le chemin du socle.
+// VerifyNoTrace refuses a project still carrying the starter's path.
 //
-// # Pourquoi cette vérification est DANS la commande
+// # Why this check is INSIDE the command
 //
-// Une réécriture partielle produit un projet qui compile — Go résout l'import
-// vers le socle d'origine s'il est accessible — mais qui dépend en silence d'un
-// autre dépôt. Le symptôme arrive des semaines plus tard, sous la forme d'un
-// paquet qu'on ne trouve plus.
+// A partial rewrite produces a project that builds — Go resolves the import to
+// the original starter if it is reachable — but that silently depends on another
+// repository. The symptom arrives weeks later, as a package that can no longer
+// be found.
 //
-// C'est le sens de l'ADR 013 appliqué au générateur : il est livré avec le cas
-// qui le fait échouer, et ce cas est vérifié à CHAQUE exécution plutôt qu'une
-// fois en test.
+// This is ADR 013 applied to the generator: it ships with the case that makes it
+// fail, and that case is checked on EVERY run rather than once in a test.
 //
-// Rend la liste des fichiers fautifs plutôt que de la journaliser : c'est
-// l'appelant — la commande — qui décide comment la présenter. Un paquet de
-// bibliothèque n'écrit pas sur la sortie d'erreur de son appelant.
+// Returns the list of offending files rather than logging it: it is the caller —
+// the command — that decides how to present it. A library package does not write
+// to its caller's error output.
 func VerifyNoTrace(p ProjectPlan) ([]string, error) {
 	var remaining []string
 
@@ -32,14 +31,14 @@ func VerifyNoTrace(p ProjectPlan) ([]string, error) {
 		}
 		relative, err := filepath.Rel(p.Destination, path)
 		if err != nil {
-			return fmt.Errorf("chemin relatif de %s: %w", path, err)
+			return fmt.Errorf("relative path of %s: %w", path, err)
 		}
 		if CitesSocleByHistory(filepath.ToSlash(relative)) {
 			return nil
 		}
-		content, err := os.ReadFile(path) //nolint:gosec // chemin issu du parcours de la destination qu'on vient d'écrire
+		content, err := os.ReadFile(path) //nolint:gosec // path coming from the walk of the destination we just wrote
 		if err != nil {
-			return fmt.Errorf("relecture de %s: %w", relative, err)
+			return fmt.Errorf("re-reading %s: %w", relative, err)
 		}
 		if strings.Contains(string(content), p.SocleModule) {
 			remaining = append(remaining, filepath.ToSlash(relative))
@@ -47,7 +46,7 @@ func VerifyNoTrace(p ProjectPlan) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("vérification du projet généré: %w", err)
+		return nil, fmt.Errorf("verifying the generated project: %w", err)
 	}
 	return remaining, nil
 }

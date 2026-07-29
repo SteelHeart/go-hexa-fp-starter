@@ -1,60 +1,60 @@
-// Package userregistration est le LANGAGE PUBLIÉ du module d'inscription.
+// Package userregistration is the PUBLISHED LANGUAGE of the registration module.
 //
-// # Pourquoi ce paquet existe hors des features
+// # Why this package lives outside the business modules
 //
-// Une feature n'importe JAMAIS une autre feature (ADR 001) : cette règle est
-// absolue et vérifiée par arch-go. Mais un module a parfois besoin d'une
-// capacité d'un autre. Le contrat publié résout la contradiction : il est
-// physiquement séparé des features, ne contient que des types primitifs, et
-// n'expose RIEN du domaine interne.
+// A business module NEVER imports another business module (ADR 001): that rule
+// is absolute and enforced by arch-go. Yet a module sometimes needs a capability
+// of another one. The published contract resolves the contradiction: it is
+// physically separate from the modules, holds only primitive types, and exposes
+// NOTHING of the internal domain.
 //
-// Ce que ce paquet peut contenir : des noms d'événements, des charges utiles
-// sérialisables, des formes de commande et de réponse.
+// What this package may hold: event names, serialisable payloads, command and
+// response shapes.
 //
-// Ce qu'il ne contiendra jamais : un type du domaine, une règle métier, un accès
-// aux données. Le module producteur reste seul propriétaire de ses tables.
+// What it will never hold: a domain type, a business rule, a data access. The
+// producing module remains the sole owner of its tables.
 //
-// # Versionnement
+// # Versioning
 //
-// Un contrat est immuable. Une évolution cassante crée un `V2` à côté du `V1` :
-// les consommateurs sont déployés indépendamment et lisent encore le `V1`.
+// A contract is immutable. A breaking change creates a `V2` beside the `V1`:
+// consumers are deployed independently and still read the `V1`.
 package userregistration
 
 import "time"
 
-// ModuleName identifie le module propriétaire. Sert de clé de configuration du
-// transport et de nom de schéma Postgres.
+// ModuleName identifies the owning module. Serves as the transport
+// configuration key and as the Postgres schema name.
 const ModuleName = "user_registration"
 
-// SchemaName est le schéma Postgres exclusif du module.
+// SchemaName is the module's exclusive Postgres schema.
 //
-// Aucun autre module n'a le droit d'y accéder, ni en lecture. C'est vérifié par
-// la garde CI `isolation` (ADR 011).
+// No other module may access it, not even for reading. The CI `isolation` guard
+// enforces it (ADR 011).
 const SchemaName = "user_registration"
 
-// EventUserRegisteredV1 nomme l'événement d'inscription publié.
+// EventUserRegisteredV1 names the published registration event.
 const EventUserRegisteredV1 = "user.registered.v1"
 
-// UserRegisteredV1 est la charge utile publiée à l'inscription d'un utilisateur.
+// UserRegisteredV1 is the payload published when a user registers.
 //
-// Types primitifs uniquement : un consommateur écrit dans un autre langage, ou
-// déployé séparément, doit pouvoir la lire.
+// Primitive types only: a consumer written in another language, or deployed
+// separately, must be able to read it.
 type UserRegisteredV1 struct {
 	UserID       string    `json:"user_id"`
 	Email        string    `json:"email"`
 	RegisteredAt time.Time `json:"registered_at"`
 }
 
-// RegisterRequest est la forme publiée de la commande d'inscription.
+// RegisterRequest is the published shape of the registration command.
 type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// RegisterResponse est la forme publiée du résultat d'inscription.
+// RegisterResponse is the published shape of the registration result.
 //
-// Ni condensé de mot de passe, ni champ interne : ce qui sort du module est ce
-// qu'un autre module a le droit de connaître, rien de plus.
+// No password digest, no internal field: what leaves the module is what another
+// module is entitled to know, nothing more.
 type RegisterResponse struct {
 	UserID    string    `json:"user_id"`
 	Email     string    `json:"email"`
@@ -62,15 +62,16 @@ type RegisterResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// RegisterRoute est la route HTTP qui expose la capacité, utilisée quand le
-// module est appelé à distance.
+// RegisterRoute is the HTTP route exposing the capability, used when the module
+// is called remotely.
 //
-// Globale assumée : c'est une CONSTANTE du langage publié, au même titre que les
-// types ci-dessus. Go n'a pas de constante structurée ; la rendre fonction
-// (`func RegisterRoute() ...`) déguiserait une donnée en calcul sans rien protéger,
-// puisque la valeur rendue serait de toute façon copiable et modifiable.
+// Assumed global: it is a CONSTANT of the published language, just like the types
+// above. Go has no structured constant; turning it into a function
+// (`func RegisterRoute() ...`) would disguise data as computation without
+// protecting anything, since the returned value would be copyable and mutable
+// anyway.
 //
-//nolint:gochecknoglobals // constante du langage publié : Go n'a pas de constante structurée
+//nolint:gochecknoglobals // published-language constant: Go has no structured constant
 var RegisterRoute = struct {
 	Method string
 	Path   string

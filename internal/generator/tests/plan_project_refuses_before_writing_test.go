@@ -36,19 +36,19 @@ func TestPlanProjectRefusesBeforeWriting(t *testing.T) {
 			destination: filepath.Join(t.TempDir(), "new"),
 			module:      "",
 			source:      socle,
-			reason:      "obligatoire",
+			reason:      "mandatory",
 		},
 		"module without a slash": {
 			destination: filepath.Join(t.TempDir(), "new"),
 			module:      "billing",
 			source:      socle,
-			reason:      "chemin de module",
+			reason:      "module path",
 		},
 		"module identical to the socle": {
 			destination: filepath.Join(t.TempDir(), "new"),
 			module:      "github.com/example/socle",
 			source:      socle,
-			reason:      "déjà le module du socle",
+			reason:      "already the starter's module",
 		},
 		"socle without go.mod": {
 			destination: filepath.Join(t.TempDir(), "new"),
@@ -60,7 +60,7 @@ func TestPlanProjectRefusesBeforeWriting(t *testing.T) {
 			destination: busy,
 			module:      "github.com/example/target",
 			source:      socle,
-			reason:      "n'est pas vide",
+			reason:      "is not empty",
 		},
 	}
 

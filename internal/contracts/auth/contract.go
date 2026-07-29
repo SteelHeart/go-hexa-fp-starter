@@ -1,73 +1,71 @@
-// Package auth est le LANGAGE PUBLIÉ du module d'authentification.
+// Package auth is the PUBLISHED LANGUAGE of the authentication module.
 //
-// # Ce que ce paquet contient, et ce qu'il ne contiendra jamais
+// # What this package holds, and what it will never hold
 //
-// Des types primitifs sérialisables et des routes. Jamais un type du domaine,
-// jamais une règle, jamais un accès aux données. `domain.Token`, `domain.Subject`
-// et `domain.Permission` ont tous un champ PRIVÉ : les publier ici les rendrait
-// fabricables de l'extérieur, et la normalisation qu'ils garantissent cesserait
-// d'être une garantie.
+// Serialisable primitive types and routes. Never a domain type, never a rule,
+// never a data access. `domain.Token`, `domain.Subject` and `domain.Permission`
+// all have a PRIVATE field: publishing them here would make them forgeable from
+// the outside, and the normalisation they guarantee would stop being a
+// guarantee.
 //
-// # Ce qui n'y figure pas, délibérément
+// # What is deliberately absent
 //
-// Aucune forme ne transporte de PERMISSION. C'est la décision 1 de l'ADR 017 vue
-// depuis le contrat : le jeton authentifie, il n'autorise pas. Publier une
-// réponse de connexion qui énumère les droits inviterait tout consommateur à les
-// mettre en cache, et la révocation cesserait d'être immédiate sans qu'aucune
-// ligne de ce dépôt n'ait changé.
+// No shape carries a PERMISSION. That is decision 1 of ADR 017 seen from the
+// contract: the token authenticates, it does not authorise. Publishing a session
+// response listing the rights would invite every consumer to cache them, and
+// revocation would stop being immediate without a single line of this repository
+// changing.
 //
-// # Versionnement
+// # Versioning
 //
-// Un contrat est immuable. Une évolution cassante crée un `V2` à côté du `V1`.
+// A contract is immutable. A breaking change creates a `V2` beside the `V1`.
 package auth
 
 import "time"
 
-// ModuleName identifie le module propriétaire.
+// ModuleName identifies the owning module.
 const ModuleName = "auth"
 
-// SchemaName est le schéma Postgres du module.
+// SchemaName is the module's Postgres schema.
 //
-// `platform` et non un schéma dédié : `auth` est un module NOYAU, et les modules
-// noyau partagent le schéma de plateforme (ADR 011). Un schéma par module noyau
-// multiplierait les rôles sans rien isoler de plus — ils appartiennent tous au
-// socle.
+// `platform` rather than a dedicated schema: `auth` is a CORE module, and core
+// modules share the platform schema (ADR 011). One schema per core module would
+// multiply roles without isolating anything more — they all belong to the
+// starter.
 const SchemaName = "platform"
 
-// SessionRequest est la forme publiée d'une demande de connexion.
+// SessionRequest is the published shape of a session request.
 //
-// `subject` et non `email` : le module ne présume pas de ce qui désigne un
-// compte. Une adresse aujourd'hui, un identifiant externe demain, sans changer
-// le contrat.
+// `subject` rather than `email`: the module makes no assumption about what
+// designates an account. An address today, an external identifier tomorrow,
+// without changing the contract.
 type SessionRequest struct {
 	Subject string `json:"subject"`
 	Secret  string `json:"secret"`
 }
 
-// SessionResponse est la forme publiée d'une session ouverte.
+// SessionResponse is the published shape of an open session.
 //
-// # Trois champs, et pas un de plus
+// # Three fields, and not one more
 //
-// Ni rôles, ni permissions, ni condensé. Un client reçoit de quoi s'authentifier
-// et de quoi savoir quand recommencer — rien qui l'invite à décider lui-même de
-// ce qu'il a le droit de faire.
+// No roles, no permissions, no digest. A client gets what it needs to
+// authenticate and what it needs to know when to start over — nothing inviting
+// it to decide for itself what it is allowed to do.
 //
-// `expires_at` est une INFORMATION, pas une garantie : la session peut cesser de
-// valoir avant, par révocation ou par fermeture du compte. Un client qui s'y
-// fierait pour éviter de gérer un 401 se tromperait exactement le jour où ça
-// compte.
+// `expires_at` is INFORMATION, not a guarantee: the session may stop being valid
+// earlier, through revocation or account closure. A client relying on it to
+// avoid handling a 401 would be wrong exactly when it matters.
 type SessionResponse struct {
 	Token      string    `json:"token"`
 	IdentityID string    `json:"identity_id"`
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
-// IdentityResponse est la forme publiée d'une identité résolue.
+// IdentityResponse is the published shape of a resolved identity.
 //
-// Les RÔLES y figurent, les permissions non. Un rôle est une étiquette
-// d'administration — utile pour afficher « comptable » dans une interface — alors
-// qu'une permission est une décision, et une décision se demande, elle ne se lit
-// pas dans une réponse mise en cache.
+// ROLES appear, permissions do not. A role is an administrative label — useful
+// to display "accountant" in a user interface — whereas a permission is a
+// decision, and a decision is asked for, not read from a cached response.
 type IdentityResponse struct {
 	IdentityID string    `json:"identity_id"`
 	Subject    string    `json:"subject"`
@@ -75,111 +73,111 @@ type IdentityResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// Permissions que la surface d'administration exige.
+// Permissions the administration surface requires.
 //
-// # Pourquoi elles sont PUBLIÉES et non privées au module
+// # Why they are PUBLISHED rather than private to the module
 //
-// Une permission est une DONNÉE : elle s'accorde dans un rôle, en base, sans
-// déploiement (ADR 017 §4). Une application qui monte ce socle doit donc pouvoir
-// les nommer pour composer ses propres rôles — sans quoi elle serait obligée de
-// recopier des chaînes littérales, et une faute de frappe n'accorderait
-// silencieusement rien.
+// A permission is DATA: it is granted inside a role, in the database, without a
+// deployment (ADR 017 §4). An application mounting this starter must therefore
+// be able to name them to compose its own roles — otherwise it would have to
+// copy string literals, and a typo would silently grant nothing.
 //
-// La forme est celle qu'impose le domaine : `domaine.ressource.action`, en
-// minuscules, trois segments exactement.
+// The shape is the one the domain imposes: `domain.resource.action`, lowercase,
+// exactly three segments.
 const (
-	// PermissionIdentityCreate autorise la création d'une identité.
+	// PermissionIdentityCreate allows creating an identity.
 	PermissionIdentityCreate = "auth.identity.create"
 
-	// PermissionIdentityRoles autorise l'affectation de rôles.
+	// PermissionIdentityRoles allows assigning roles.
 	PermissionIdentityRoles = "auth.identity.roles"
 
-	// PermissionIdentityClose autorise la fermeture et la réouverture d'un
-	// compte. UNE permission pour les deux sens : qui peut fermer peut rouvrir,
-	// et séparer les deux produirait un état où l'on ferme sans pouvoir défaire.
+	// PermissionIdentityClose allows closing and reopening an account. ONE
+	// permission for both directions: whoever can close can reopen, and
+	// separating them would produce a state where one closes without being able
+	// to undo.
 	PermissionIdentityClose = "auth.identity.close"
 
-	// PermissionRoleWrite autorise la définition d'un rôle et de ses
-	// permissions.
+	// PermissionRoleWrite allows defining a role and its permissions.
 	//
-	// ⚠️ C'est la permission la plus puissante du module : qui la détient peut
-	// s'accorder toutes les autres. Elle est nommée à part pour que ce fait soit
-	// visible au moment de composer un rôle, et non découvert en audit.
+	// ⚠️ This is the most powerful permission of the module: whoever holds it can
+	// grant themselves all the others. It is named apart so that this fact is
+	// visible when composing a role, rather than discovered during an audit.
 	PermissionRoleWrite = "auth.role.write"
 )
 
-// Formes publiées de l'administration.
+// Published administration shapes.
 type (
-	// CreateIdentityRequest crée un compte.
+	// CreateIdentityRequest creates an account.
 	CreateIdentityRequest struct {
 		Subject string `json:"subject"`
 		Secret  string `json:"secret"`
 	}
 
-	// DefineRoleRequest remplace un rôle et ses permissions.
+	// DefineRoleRequest replaces a role and its permissions.
 	//
-	// REMPLACE plutôt qu'ajoute : retirer une permission doit être aussi simple
-	// que d'en ajouter une. Une API qui n'offrirait que l'ajout ferait écrire le
-	// retrait à la main, donc mal.
+	// REPLACES rather than adds: removing a permission must be as simple as
+	// adding one. An API offering only addition would have removal written by
+	// hand, hence badly.
 	DefineRoleRequest struct {
 		Permissions []string `json:"permissions"`
 	}
 
-	// AssignRolesRequest remplace les rôles d'une identité.
+	// AssignRolesRequest replaces an identity's roles.
 	AssignRolesRequest struct {
 		Roles []string `json:"roles"`
 	}
 )
 
-// Routes exposées par la surface HTTP du module.
+// Routes exposed by the module's HTTP surface.
 //
-// Globales assumées : ce sont des constantes du langage publié, et Go n'a pas de
-// constante structurée. Les rendre fonctions déguiserait une donnée en calcul
-// sans rien protéger, puisque la valeur rendue serait de toute façon copiable.
+// Assumed globals: these are constants of the published language, and Go has no
+// structured constant. Turning them into functions would disguise data as
+// computation without protecting anything, since the returned value would be
+// copyable anyway.
 //
-//nolint:gochecknoglobals // constantes du langage publié : Go n'a pas de constante structurée
+//nolint:gochecknoglobals // published-language constants: Go has no structured constant
 var (
-	// OpenSessionRoute échange un secret contre un jeton.
+	// OpenSessionRoute exchanges a secret for a token.
 	//
-	// `POST /v1/auth/sessions` et non `/login` : la ressource est la SESSION, et
-	// la créer est un POST. C'est ce qui rend la fermeture naturelle — un DELETE
-	// sur la même ressource — au lieu d'un second verbe inventé.
+	// `POST /v1/auth/sessions` rather than `/login`: the resource is the SESSION,
+	// and creating it is a POST. That is what makes closing natural — a DELETE on
+	// the same resource — instead of a second invented verb.
 	OpenSessionRoute = struct {
 		Method string
 		Path   string
 	}{Method: "POST", Path: "/v1/auth/sessions"}
 
-	// CloseSessionRoute révoque le jeton présenté.
+	// CloseSessionRoute revokes the presented token.
 	CloseSessionRoute = struct {
 		Method string
 		Path   string
 	}{Method: "DELETE", Path: "/v1/auth/sessions/current"}
 
-	// IdentityRoute résout le jeton présenté en identité.
+	// IdentityRoute resolves the presented token into an identity.
 	IdentityRoute = struct {
 		Method string
 		Path   string
 	}{Method: "GET", Path: "/v1/auth/identity"}
 
-	// CreateIdentityRoute crée un compte. PROTÉGÉE.
+	// CreateIdentityRoute creates an account. PROTECTED.
 	CreateIdentityRoute = struct {
 		Method string
 		Path   string
 	}{Method: "POST", Path: "/v1/auth/identities"}
 
-	// DefineRoleRoute définit un rôle. PROTÉGÉE.
+	// DefineRoleRoute defines a role. PROTECTED.
 	DefineRoleRoute = struct {
 		Method string
 		Path   string
 	}{Method: "PUT", Path: "/v1/auth/roles/{name}"}
 
-	// AssignRolesRoute affecte des rôles à une identité. PROTÉGÉE.
+	// AssignRolesRoute assigns roles to an identity. PROTECTED.
 	AssignRolesRoute = struct {
 		Method string
 		Path   string
 	}{Method: "PUT", Path: "/v1/auth/identities/{id}/roles"}
 
-	// CloseIdentityRoute ferme un compte, IMMÉDIATEMENT. PROTÉGÉE.
+	// CloseIdentityRoute closes an account, IMMEDIATELY. PROTECTED.
 	CloseIdentityRoute = struct {
 		Method string
 		Path   string
