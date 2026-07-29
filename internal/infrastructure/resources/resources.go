@@ -51,7 +51,7 @@ import (
 //
 // A struct rather than three returns: `Open` would return
 // `(*pgxpool.Pool, *goredis.Client, error)`, and the architecture rule refuses
-// it. It is right here for a reason proper to the subject — this is the SIXTH
+// it. It is right here for a reason proper to the subject — this is the FIFTH
 // occurrence of the same lesson in this repository, after `election`,
 // `decodedHash`, `RetryPolicy`, `messaging.Broker` and `worker`.
 //

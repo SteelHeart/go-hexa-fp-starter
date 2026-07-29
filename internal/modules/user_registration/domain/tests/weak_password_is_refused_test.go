@@ -23,13 +23,13 @@ func TestWeakPasswordIsRefused(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"empty":                    "",
-		"too short":                "short123",
-		"eleven characters":        "elevenchar1",
-		"whitespace only":          strings.Repeat(" ", 20),
-		"too repetitive":           "aaaaaaaaaaaaaa",
-		"four distinct characters": "abcabcabcabcabc",
-		"too long":                 strings.Repeat("passphrase-word-", 20),
+		"empty":                     "",
+		"too short":                 "short123",
+		"eleven characters":         "elevenchar1",
+		"whitespace only":           strings.Repeat(" ", 20),
+		"too repetitive":            "aaaaaaaaaaaaaa",
+		"three distinct characters": "abcabcabcabcabc",
+		"too long":                  strings.Repeat("passphrase-word-", 20),
 	}
 
 	for name, raw := range cases {

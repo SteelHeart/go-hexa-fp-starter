@@ -217,9 +217,14 @@ func randomToken() (domain.Token, error) {
 
 // randomIdentityID produces an opaque identifier.
 //
-// Falling back on an empty string when entropy fails is IMPOSSIBLE here:
-// `domain.NewIdentity` refuses an empty identifier, so the failure surfaces as
-// a creation error rather than as an anonymous identity.
+// The empty string IS returned when entropy fails — the body says so, three
+// lines below. What is impossible is that this empty string becomes an
+// identity: `domain.NewIdentity` refuses an empty identifier, so the failure
+// surfaces as a creation error rather than as an anonymous identity.
+//
+// ⚠️ This comment used to state the fallback was "IMPOSSIBLE here", which the
+// code contradicts on sight. The intent was about the consequence; the sentence
+// denied the code.
 func randomIdentityID() domain.IdentityID {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {

@@ -21,9 +21,15 @@
 //
 // # Status
 //
-// Written, NEVER run against a database: the migration of
-// `platform.idempotency_keys` does not exist yet (issue #2). Do not present it
-// as exercised.
+// EXERCISED against a real Postgres since #37: `tests/integration` covers the
+// exclusivity of a reservation under concurrency, the refusal of a reused key
+// with another payload, and expiry. The CI job of the same name runs it on
+// every pull request.
+//
+// ⚠️ This block used to say "NEVER run against a database, the migration does
+// not exist yet (issue #2)". Both halves stopped being true with #5, #84 and
+// #37 — and the sentence asking not to present the driver as exercised was the
+// one presenting it as untested.
 package postgres
 
 import (

@@ -48,9 +48,13 @@ const apiTag = "auth"
 // Receives the Module, never a driver nor a store: a surface cannot bypass a
 // use case, even by accident.
 //
-// The three operations are mounted together, deliberately. Mounting sign-in
+// The session operations are mounted together, deliberately. Mounting sign-in
 // without revocation would ship a service you can get into without being able
 // to get out — and revocation is the property ADR 017 buys.
+//
+// ⚠️ Said "the three operations" while four routes are mounted since the
+// administration surface arrived. A count in a comment ages the day a route is
+// added, and nothing says so.
 func Mount(api huma.API, mod auth.Module) {
 	mountOpenSession(api, mod)
 	mountCloseSession(api, mod)

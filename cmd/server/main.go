@@ -166,8 +166,9 @@ func serve(ctx context.Context, cfg config.Config, conn resources.Connections, l
 // assembled gathers the mounted modules.
 //
 // A named struct rather than multiple return values: at the third module a
-// function would return four values, and "more than three returns = a missing
-// type" is a lesson already paid for three times in this repository.
+// function would return four values, and "more than TWO returns = a missing
+// type" is a lesson already paid for FIVE times in this repository —
+// `election`, `decodedHash`, `RetryPolicy`, `messaging.Broker`, `worker`.
 type assembled struct {
 	outbox outbox.Module
 	auth   auth.Module

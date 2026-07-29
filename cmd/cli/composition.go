@@ -23,7 +23,13 @@ import (
 // mounted carries what the CLI has assembled, and what is needed to release it.
 //
 // A type rather than three return values: the architecture rule allows two,
-// and this is the SEVENTH time this repository pays the same lesson.
+// and this is the FIFTH time this repository pays the same lesson.
+//
+// ⚠️ The count is FIVE, and it is the same everywhere. It read SEVENTH here,
+// SIXTH in internal/infrastructure/resources and FIFTH in cmd/worker — three
+// values for one fact, found while translating (#127). This number is used as
+// an ARGUMENT — "watching it with a tool costs less than relearning it" — and
+// an argument whose value changes per file convinces nobody.
 type mounted struct {
 	cfg   config.Config
 	users userregistration.Module

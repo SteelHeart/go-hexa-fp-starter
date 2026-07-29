@@ -11,7 +11,8 @@ import (
 //
 // # What this type finally makes reachable
 //
-// `Authorize` was proven by 39 tests and exposed by no surface: nobody could
+// `Authorize` was proven by the module's tests and exposed by no surface:
+// nobody could
 // use it from the outside. It was not written earlier deliberately — a guard
 // with no route to protect is dead code, and this repository has just closed
 // three of those. It arrives with its first routes.
