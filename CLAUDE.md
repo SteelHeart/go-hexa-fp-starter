@@ -108,7 +108,7 @@ documentation/produit/        personas, périmètre, matrice par version — le 
 documentation/process/        nomenclature, labels, templates
 documentation/securite/       registre de failles, matrice d'accès
 cmd/{server,worker}           composition root — le seul code qui connaît tout
-cmd/cli                       ⟨absent⟩
+cmd/cli                       register · seed · health — MÊME port que HTTP (#8)
 config/*.yaml                 configuration par groupes, secrets par ${VAR} uniquement
 internal/config/              lecture, fusion, validation — refuse le démarrage sur incohérence
 internal/pkg/                 primitives sans dépendance : result, fp, pagination, middleware
@@ -145,9 +145,16 @@ plus 4 tests de module en boîte noire et **une surface HTTP** de 3 tests. La ph
 affirmait qu'« il n'a encore aucun adaptateur, donc aucune surface ne l'appelle » — faux depuis la
 tranche verticale : `POST /v1/users` répond.
 
-⚠️ Mais **une seule** surface existe. `cmd/cli` (#8) et le consommateur d'événements (#9) sont
-absents, donc la promesse « le nombre de frontends est un non-sujet » n'a **qu'une instance** — elle
-est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
+✅ **La promesse « le nombre de frontends est un non-sujet » est désormais DÉMONTRÉE.** Trois
+adaptateurs primaires — `user_registration/adapters/primary/{http,cli}` et
+`auth/adapters/primary/http` — plus un consommateur d'événements dont la chaîne complète a tourné.
+
+Ce qui la démontre n'est pas leur nombre mais la **carte d'impact** de #8 : HTTP et CLI appellent le
+même port sur le même module, et l'ajout de la seconde surface n'a touché ni `domain/`, ni `ports/`,
+ni `application/`.
+
+⚠️ Le consommateur d'événements reste câblé dans `cmd/worker` et non monté en
+`adapters/primary/events/` : la doctrine tient, cet adaptateur-là n'existe pas encore.
 
 ## État réel du dépôt — vérifié le 2026-07-25
 
@@ -197,7 +204,7 @@ est énoncée, pas démontrée. Et personne ne s'abonne à `user.registered.v1`.
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **393 tests de premier niveau**. La table ci-dessous en détaille
+- `go test -shuffle=on ./...` vert — **404 tests de premier niveau**. La table ci-dessous en détaille
   227 ; les 58 suivants sont dans `internal/pkg/middleware/tests` (12),
   `internal/infrastructure/messaging/tests` (13), `internal/infrastructure/modulebus/tests` (10),
   `internal/infrastructure/httpserver` (3 internes) + `…/httpserver/tests` (11), et
@@ -322,9 +329,9 @@ ils ne peuvent plus diverger. Mesuré le 2026-07-28 :
 
 | Cliquet | Valeur | Seuil | État |
 |---|---|---|---|
-| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **77,3 %** | 70 % | ✅ |
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **77,6 %** | 70 % | ✅ |
 | **Cœur** `domain/` + `application/`, pondéré par instruction | **92,4 %** | 90 % | ✅ |
-| **Code produit** — tout, pilotes compris | **62,5 %** | cliquet 59 % | ✅ |
+| **Code produit** — tout, pilotes compris | **61,7 %** | cliquet 59 % | ✅ |
 
 **Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
 tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
@@ -510,16 +517,20 @@ est écrite à côté :
 **Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
 #93, et la campagne de signalements. F001, F005, F006, F007 sont **résolues**.
 
-1. **#8 — la surface CLI**, dernière ligne v0.1 des personas. C'est aussi ce qui rend vraie la
-   promesse « le nombre de frontends est un non-sujet » : avec une seule surface HTTP, elle est
-   énoncée, pas démontrée. Le consommateur d'événements (#9) en est déjà la deuxième instance —
-   mais un adaptateur primaire *interactif* reste à écrire
-2. **Le garde d'autorisation** : `Authorize` n'est exposé par aucune surface. Il est prouvé par 39
-   tests et inutilisable depuis l'extérieur. Volontairement non écrit — un garde sans route à
-   protéger serait du code mort, la faute que ce lot vient justement de fermer trois fois. Il vient
-   avec la première route protégée
-3. **Tag `v0.1.0`** : la barrière est verte, l'amorçage de la base fonctionne sur un volume neuf
-   (#84), et la chaîne asynchrone a enfin tourné (#103). Restent #72 et #8
+> ✅ **LA LIGNE v0.1 EST LIVRÉE EN ENTIER** : #47, #37, #13, #9, #11 et #8. Ce qui reste avant le tag
+> ne dépend plus du code.
+
+1. **#107 — l'audit de conformité**, exigé avant tout transfert vers une organisation. Arborescence
+   contre la carte, conventions de fichiers, ADR tenus par le code, véracité de la documentation,
+   hygiène de publication sur TOUT l'historique, et — leçon de ce lot — vérifier que chaque garde
+   sait **échouer**
+2. **#72 et #89 — deux rouges d'ENVIRONNEMENT.** CodeQL est indisponible en dépôt privé, et poser le
+   tag déclencherait un déploiement impossible. Aucun des deux ne se corrige par du code : le
+   premier dépend de la VISIBILITÉ du dépôt, pas de son propriétaire
+3. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
+   charge, tous rouges depuis le début. Une suite de lots individuellement justifiés a composé un
+   ordre de priorité que personne n'a choisi
+4. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
 4. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
