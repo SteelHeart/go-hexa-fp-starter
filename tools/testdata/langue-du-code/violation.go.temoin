@@ -1,0 +1,8 @@
+package temoin
+
+// Cette fonction rend une valeur normalisée — commentaire en français, refusé.
+func depilerLaFile() error {
+	nombreDEssais := 0
+	_ = nombreDEssais
+	return nil
+}

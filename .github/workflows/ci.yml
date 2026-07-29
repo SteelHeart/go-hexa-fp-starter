@@ -159,6 +159,19 @@ jobs:
       - name: Ce garde-là sait échouer
         run: ./tools/verifie-mention-outillage.sh --temoin
 
+      # ADR 018 : la langue du CODE est l'anglais, celle du règlement le
+      # français. Le garde ne regarde que les lignes AJOUTÉES — la traduction se
+      # livre en tranches, et un garde rouge jusqu'à la dernière serait ignoré,
+      # donc désarmé. Il empêche la dette de croître pendant qu'on la résorbe.
+      - name: La langue du code est l'anglais
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ./tools/verifie-langue-du-code.sh "$BASE" "$HEAD"
+
+      - name: Celui-là aussi sait échouer
+        run: ./tools/verifie-langue-du-code.sh --temoin
+
       - name: Aucune dette dissimulée
         env:
           BASE: ${{ github.event.pull_request.base.sha }}

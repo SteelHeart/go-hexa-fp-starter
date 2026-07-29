@@ -462,6 +462,13 @@ tasks:
           ./tools/verifie-inertie.sh "$base" HEAD | sed 's/^/    /' || fail=1
           echo "  sens échec — le témoin du garde d'inertie :"
           ./tools/verifie-inertie.sh --temoin | sed 's/^/    /' || fail=1
+          # ADR 018 : la langue du CODE est l'anglais. Le garde ne regarde que
+          # les lignes AJOUTÉES — la traduction se livre en tranches, et un
+          # garde rouge jusqu'à la dernière serait ignoré, donc désarmé.
+          echo "  langue du code (ADR 018) :"
+          ./tools/verifie-langue-du-code.sh "$base" HEAD | sed 's/^/    /' || fail=1
+          echo "  sens échec — le témoin du garde de langue :"
+          ./tools/verifie-langue-du-code.sh --temoin | sed 's/^/    /' || fail=1
           exit "$fail"
 
   fmt:
