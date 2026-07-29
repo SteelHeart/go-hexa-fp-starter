@@ -6,39 +6,39 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestTraverseStopsAtFirstError : Traverse applique une fonction faillible à chaque
-// élément et s'arrête à la première erreur — SANS appeler la fonction sur les
-// éléments suivants.
+// TestTraverseStopsAtFirstError: Traverse applies a fallible function to every
+// item and stops at the first error — WITHOUT calling the function on the
+// remaining items.
 //
-// L'arrêt effectif compte autant que le résultat : si la fonction produit un effet
-// — écrire en base, appeler un service — continuer après une erreur laisserait un
-// état partiel que personne n'a demandé.
+// Actually stopping matters as much as the result: if the function produces an
+// effect — writing to a database, calling a service — carrying on after an error
+// would leave a partial state nobody asked for.
 func TestTraverseStopsAtFirstError(t *testing.T) {
 	t.Parallel()
 
-	var vus []int
-	valide := func(n int) result.Result[string, erreur] {
-		vus = append(vus, n)
+	var seen []int
+	validate := func(n int) result.Result[string, failure] {
+		seen = append(seen, n)
 		if n < 0 {
-			return result.Err[string, erreur]("valeur négative")
+			return result.Err[string, failure]("negative value")
 		}
-		return result.Ok[string, erreur](versTexte(n))
+		return result.Ok[string, failure](toText(n))
 	}
 
-	tous := result.Traverse([]int{1, 2, 3}, valide)
-	if !tous.IsOk() {
-		t.Fatalf("aucune erreur attendue, reçu %q", cause(tous))
+	all := result.Traverse([]int{1, 2, 3}, validate)
+	if !all.IsOk() {
+		t.Fatalf("no error expected, got %q", causeOf(all))
 	}
-	if got := valeur(tous); len(got) != 3 || got[2] != "3" {
-		t.Errorf("valeurs = %v, attendu [1 2 3] en texte", got)
+	if got := valueOf(all); len(got) != 3 || got[2] != "3" {
+		t.Errorf("values = %v, want [1 2 3] as text", got)
 	}
 
-	vus = nil
-	partiel := result.Traverse([]int{1, -2, 3}, valide)
-	if partiel.IsOk() {
-		t.Fatal("un élément invalide doit faire échouer tout le parcours")
+	seen = nil
+	partial := result.Traverse([]int{1, -2, 3}, validate)
+	if partial.IsOk() {
+		t.Fatal("an invalid item must fail the whole traversal")
 	}
-	if len(vus) != 2 {
-		t.Errorf("éléments parcourus = %v, attendu l'arrêt au deuxième", vus)
+	if len(seen) != 2 {
+		t.Errorf("items traversed = %v, want the stop at the second", seen)
 	}
 }

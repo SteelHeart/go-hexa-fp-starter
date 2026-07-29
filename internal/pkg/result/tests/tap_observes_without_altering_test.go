@@ -6,33 +6,33 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestTapObservesWithoutAltering : Tap et TapErr produisent un effet et rendent le
-// Result INCHANGÉ.
+// TestTapObservesWithoutAltering: Tap and TapErr produce an effect and return
+// the Result UNCHANGED.
 //
-// Elles sont réservées aux décorateurs — tracer, journaliser, compter. Si elles
-// pouvaient modifier le Result, un décorateur d'observabilité changerait le
-// comportement de l'application qu'il observe, et le défaut serait indétectable :
-// personne ne soupçonne le traceur.
+// They are reserved for decorators — tracing, logging, counting. Could they
+// modify the Result, an observability decorator would change the behaviour of
+// the application it observes, and the defect would be undetectable: nobody
+// suspects the tracer.
 func TestTapObservesWithoutAltering(t *testing.T) {
 	t.Parallel()
 
-	var vues []string
+	var seen []string
 
-	succes := result.Tap(okInt(7), func(n int) { vues = append(vues, "ok:"+versTexte(n)) })
-	succes = result.TapErr(succes, func(erreur) { vues = append(vues, "err") })
+	succeeded := result.Tap(okInt(7), func(n int) { seen = append(seen, "ok:"+toText(n)) })
+	succeeded = result.TapErr(succeeded, func(failure) { seen = append(seen, "err") })
 
-	if valeur(succes) != 7 || !succes.IsOk() {
-		t.Error("Tap ne doit pas altérer un succès")
+	if valueOf(succeeded) != 7 || !succeeded.IsOk() {
+		t.Error("Tap must not alter a success")
 	}
 
-	echec := result.Tap(errInt("refusé"), func(int) { vues = append(vues, "ok") })
-	echec = result.TapErr(echec, func(e erreur) { vues = append(vues, "err:"+string(e)) })
+	failed := result.Tap(errInt("refused"), func(int) { seen = append(seen, "ok") })
+	failed = result.TapErr(failed, func(e failure) { seen = append(seen, "err:"+string(e)) })
 
-	if echec.IsOk() || cause(echec) != "refusé" {
-		t.Error("TapErr ne doit pas altérer une erreur")
+	if failed.IsOk() || causeOf(failed) != "refused" {
+		t.Error("TapErr must not alter an error")
 	}
 
-	if len(vues) != 2 || vues[0] != "ok:7" || vues[1] != "err:refusé" {
-		t.Errorf("effets observés = %v, attendu un par branche", vues)
+	if len(seen) != 2 || seen[0] != "ok:7" || seen[1] != "err:refused" {
+		t.Errorf("observed effects = %v, want one per branch", seen)
 	}
 }

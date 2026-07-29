@@ -6,32 +6,32 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestFoldReducesBothBranches : Fold est la sortie canonique d'un Result dans un
-// adaptateur primaire.
+// TestFoldReducesBothBranches: Fold is the canonical way out of a Result inside
+// a primary adapter.
 //
-// Elle oblige à traiter les DEUX branches : impossible de rendre une réponse HTTP
-// en ayant oublié le cas d'erreur, puisque les deux fonctions sont exigées à
-// l'appel. Une seule branche doit être empruntée, jamais les deux.
+// It forces BOTH branches to be handled: returning an HTTP response having
+// forgotten the error case is impossible, since both functions are required at
+// the call site. Exactly one branch must be taken, never both.
 func TestFoldReducesBothBranches(t *testing.T) {
 	t.Parallel()
 
-	var empruntees []string
+	var taken []string
 	onOk := func(n int) string {
-		empruntees = append(empruntees, "ok")
-		return "succès:" + versTexte(n)
+		taken = append(taken, "ok")
+		return "success:" + toText(n)
 	}
-	onErr := func(e erreur) string {
-		empruntees = append(empruntees, "err")
-		return "échec:" + string(e)
+	onErr := func(e failure) string {
+		taken = append(taken, "err")
+		return "failure:" + string(e)
 	}
 
-	if got := result.Fold(okInt(7), onOk, onErr); got != "succès:7" {
-		t.Errorf("Fold sur un succès = %q", got)
+	if got := result.Fold(okInt(7), onOk, onErr); got != "success:7" {
+		t.Errorf("Fold on a success = %q", got)
 	}
-	if got := result.Fold(errInt("refusé"), onOk, onErr); got != "échec:refusé" {
-		t.Errorf("Fold sur une erreur = %q", got)
+	if got := result.Fold(errInt("refused"), onOk, onErr); got != "failure:refused" {
+		t.Errorf("Fold on an error = %q", got)
 	}
-	if len(empruntees) != 2 {
-		t.Errorf("branches empruntées = %v, attendu exactement une par appel", empruntees)
+	if len(taken) != 2 {
+		t.Errorf("branches taken = %v, want exactly one per call", taken)
 	}
 }

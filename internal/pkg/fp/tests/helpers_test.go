@@ -1,17 +1,17 @@
-// Package tests contient les tests en BOÎTE NOIRE des primitives fonctionnelles :
-// ils n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the functional primitives: they
+// only use the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import "strconv"
 
-// Trois fonctions pures, pour composer.
-func double(n int) int       { return n * 2 }
-func incremente(n int) int   { return n + 1 }
-func versTexte(n int) string { return strconv.Itoa(n) }
+// Three pure functions, to compose with.
+func double(n int) int    { return n * 2 }
+func increment(n int) int { return n + 1 }
+func toText(n int) string { return strconv.Itoa(n) }
 
-// pair est le prédicat de référence des tests sur les tranches.
-func pair(n int) bool { return n%2 == 0 }
+// even is the reference predicate of the slice tests.
+func even(n int) bool { return n%2 == 0 }

@@ -6,37 +6,36 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestMapErrTranslatesBoundaries : MapErr est la fonction de traduction des
-// frontières.
+// TestMapErrTranslatesBoundaries: MapErr is the boundary translation function.
 //
-// Un adaptateur secondaire s'en sert pour convertir une erreur technique — une
-// violation de contrainte SQL — en erreur de domaine — « cette adresse est déjà
-// prise ». Sans elle, soit le domaine connaîtrait les codes SQLSTATE, soit
-// l'appelant recevrait une erreur qu'il ne peut pas interpréter.
+// A secondary adapter uses it to convert a technical error — an SQL constraint
+// violation — into a domain error — "this address is already taken". Without it,
+// either the domain would know SQLSTATE codes, or the caller would receive an
+// error it cannot interpret.
 //
-// Symétrie exigée : elle ne doit PAS toucher un succès.
+// Required symmetry: it must NOT touch a success.
 func TestMapErrTranslatesBoundaries(t *testing.T) {
 	t.Parallel()
 
-	traduit := func(e erreur) string { return "domaine: " + string(e) }
+	translate := func(e failure) string { return "domain: " + string(e) }
 
-	echec := result.MapErr(errInt("23505"), traduit)
-	if echec.IsOk() {
-		t.Fatal("MapErr sur une erreur doit rendre une erreur")
+	failed := result.MapErr(errInt("23505"), translate)
+	if failed.IsOk() {
+		t.Fatal("MapErr on an error must return an error")
 	}
-	if cause(echec) != "domaine: 23505" {
-		t.Errorf("erreur traduite = %q", cause(echec))
+	if causeOf(failed) != "domain: 23505" {
+		t.Errorf("translated error = %q", causeOf(failed))
 	}
 
-	appelee := false
-	succes := result.MapErr(okInt(7), func(e erreur) string {
-		appelee = true
+	called := false
+	succeeded := result.MapErr(okInt(7), func(e failure) string {
+		called = true
 		return string(e)
 	})
-	if appelee {
-		t.Error("la traduction ne doit PAS être appelée sur un succès")
+	if called {
+		t.Error("the translation must NOT be called on a success")
 	}
-	if valeur(succes) != 7 {
-		t.Errorf("la valeur doit traverser inchangée, reçu %d", valeur(succes))
+	if valueOf(succeeded) != 7 {
+		t.Errorf("the value must pass through unchanged, got %d", valueOf(succeeded))
 	}
 }

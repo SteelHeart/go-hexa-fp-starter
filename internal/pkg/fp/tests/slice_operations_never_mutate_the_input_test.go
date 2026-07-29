@@ -6,27 +6,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestSliceOperationsNeverMutateTheInput est la garantie centrale de ces trois
-// fonctions.
+// TestSliceOperationsNeverMutateTheInput is the central guarantee of these three
+// functions.
 //
-// En Go, une tranche partage son tableau sous-jacent : une implémentation qui
-// écrirait dans `items` modifierait la tranche de l'APPELANT, à distance et sans
-// trace. C'est la classe de défauts la plus pénible à diagnostiquer, parce que le
-// coupable est une fonction qui a l'air pure.
+// In Go, a slice shares its backing array: an implementation writing into
+// `items` would modify the CALLER's slice, at a distance and without a trace.
+// That is the most painful class of defects to diagnose, because the culprit is
+// a function that looks pure.
 func TestSliceOperationsNeverMutateTheInput(t *testing.T) {
 	t.Parallel()
 
 	source := []int{1, 2, 3, 4}
-	temoin := []int{1, 2, 3, 4}
+	witness := []int{1, 2, 3, 4}
 
 	_ = fp.Map(source, double)
-	_ = fp.Filter(source, pair)
+	_ = fp.Filter(source, even)
 	_ = fp.Reduce(source, 0, func(acc, n int) int { return acc + n })
-	_ = fp.Find(source, pair)
+	_ = fp.Find(source, even)
 
-	for i := range temoin {
-		if source[i] != temoin[i] {
-			t.Fatalf("l'entrée a été modifiée: %v, attendu %v", source, temoin)
+	for i := range witness {
+		if source[i] != witness[i] {
+			t.Fatalf("the input was modified: %v, want %v", source, witness)
 		}
 	}
 }

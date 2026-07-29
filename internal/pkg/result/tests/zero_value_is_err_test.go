@@ -6,30 +6,30 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestZeroValueIsErr est le test le plus important de la primitive.
+// TestZeroValueIsErr is the most important test of the primitive.
 //
-// La valeur zéro d'un Result est un Err. C'est « deny par défaut » jusque dans le
-// typage : un Result oublié — champ non initialisé, retour d'une branche qu'on
-// croyait inatteignable — ÉCHOUE, au lieu de réussir silencieusement en portant la
-// valeur zéro de T.
+// The zero value of a Result is an Err. That is "deny by default", all the way
+// into the type system: a forgotten Result — an uninitialised field, the return
+// of a branch believed unreachable — FAILS, instead of silently succeeding while
+// carrying the zero value of T.
 //
-// Si cette propriété tombait, un `var r Result[User, Error]` non affecté
-// ressemblerait à une inscription réussie portant un utilisateur vide.
+// Were that property to fall, an unassigned `var r Result[User, Error]` would
+// look like a successful registration carrying an empty user.
 func TestZeroValueIsErr(t *testing.T) {
 	t.Parallel()
 
-	var oublie result.Result[int, erreur]
+	var forgotten result.Result[int, failure]
 
-	if oublie.IsOk() {
-		t.Fatal("la valeur zéro d'un Result doit être une erreur, jamais un succès")
+	if forgotten.IsOk() {
+		t.Fatal("the zero value of a Result must be an error, never a success")
 	}
-	if !oublie.IsErr() {
-		t.Error("IsErr doit être vrai sur la valeur zéro")
+	if !forgotten.IsErr() {
+		t.Error("IsErr must be true on the zero value")
 	}
-	if _, _, ok := oublie.Get(); ok {
-		t.Error("Get doit rendre ok=false sur la valeur zéro")
+	if _, _, ok := forgotten.Get(); ok {
+		t.Error("Get must return ok=false on the zero value")
 	}
-	if got := oublie.ValueOr(42); got != 42 {
-		t.Errorf("ValueOr = %d, attendu le repli 42", got)
+	if got := forgotten.ValueOr(42); got != 42 {
+		t.Errorf("ValueOr = %d, want the fallback 42", got)
 	}
 }

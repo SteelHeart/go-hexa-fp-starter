@@ -6,39 +6,38 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestChainShortCircuitsAtFirstError : Chain s'arrête à la PREMIÈRE erreur et
-// n'exécute aucune étape suivante.
+// TestChainShortCircuitsAtFirstError: Chain stops at the FIRST error and runs no
+// later step.
 //
-// C'est le patron imposé pour écrire un cas d'usage. Le court-circuit n'est pas une
-// optimisation : les étapes d'un pipeline supposent que les précédentes ont réussi.
-// Une étape « valider l'adresse » qui tournerait après l'échec de « analyser la
-// requête » travaillerait sur une valeur zéro, et produirait une seconde erreur qui
-// masquerait la vraie.
+// This is the mandated shape for writing a use case. The short circuit is not an
+// optimisation: the steps of a pipeline assume the previous ones succeeded. A
+// "validate the address" step running after "parse the request" failed would
+// work on a zero value, and produce a second error masking the real one.
 func TestChainShortCircuitsAtFirstError(t *testing.T) {
 	t.Parallel()
 
-	var executees []string
+	var executed []string
 
-	etape := func(nom string, sortie result.Result[int, erreur]) func(int) result.Result[int, erreur] {
-		return func(int) result.Result[int, erreur] {
-			executees = append(executees, nom)
-			return sortie
+	step := func(name string, out result.Result[int, failure]) func(int) result.Result[int, failure] {
+		return func(int) result.Result[int, failure] {
+			executed = append(executed, name)
+			return out
 		}
 	}
 
-	sortie := result.Chain(okInt(1),
-		etape("première", okInt(2)),
-		etape("deuxième", errInt("refusé")),
-		etape("troisième", okInt(4)),
+	out := result.Chain(okInt(1),
+		step("first", okInt(2)),
+		step("second", errInt("refused")),
+		step("third", okInt(4)),
 	)
 
-	if sortie.IsOk() {
-		t.Fatal("une étape en échec doit faire échouer toute la chaîne")
+	if out.IsOk() {
+		t.Fatal("a failing step must fail the whole chain")
 	}
-	if cause(sortie) != "refusé" {
-		t.Errorf("erreur = %q, attendu celle de l'étape fautive", cause(sortie))
+	if causeOf(out) != "refused" {
+		t.Errorf("error = %q, want the failing step's one", causeOf(out))
 	}
-	if len(executees) != 2 {
-		t.Errorf("étapes exécutées = %v, attendu les deux premières seulement", executees)
+	if len(executed) != 2 {
+		t.Errorf("executed steps = %v, want only the first two", executed)
 	}
 }

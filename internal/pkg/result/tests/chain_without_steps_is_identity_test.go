@@ -6,21 +6,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestChainWithoutStepsIsIdentity : une chaîne sans étape rend son entrée telle
-// quelle, sur les deux branches.
+// TestChainWithoutStepsIsIdentity: a chain with no step returns its input as is,
+// on both branches.
 //
-// Cas limite qui a l'air théorique et ne l'est pas : une liste d'étapes construite
-// dynamiquement — filtrée par un drapeau de fonctionnalité, par exemple — peut être
-// vide. Elle doit alors être neutre, pas transformer un succès en autre chose.
+// An edge case that looks theoretical and is not: a step list built dynamically
+// — filtered by a feature flag, say — may be empty. It must then be neutral, not
+// turn a success into something else.
 func TestChainWithoutStepsIsIdentity(t *testing.T) {
 	t.Parallel()
 
-	for _, depart := range []result.Result[int, erreur]{okInt(7), errInt("refusé")} {
-		sortie := result.Chain(depart)
-		if sortie.IsOk() != depart.IsOk() ||
-			valeur(sortie) != valeur(depart) ||
-			cause(sortie) != cause(depart) {
-			t.Error("une chaîne vide doit être neutre")
+	for _, start := range []result.Result[int, failure]{okInt(7), errInt("refused")} {
+		out := result.Chain(start)
+		if out.IsOk() != start.IsOk() ||
+			valueOf(out) != valueOf(start) ||
+			causeOf(out) != causeOf(start) {
+			t.Error("an empty chain must be neutral")
 		}
 	}
 }

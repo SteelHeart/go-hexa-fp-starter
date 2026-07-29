@@ -6,25 +6,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// TestCollectOfEmptyIsOk : une liste vide rassemble en un SUCCÈS portant une liste
-// vide.
+// TestCollectOfEmptyIsOk: an empty list collects into a SUCCESS carrying an
+// empty list.
 //
-// Ce n'est pas une évidence : la valeur zéro d'un Result étant un Err, il serait
-// facile de rendre une erreur par accident. Or « rien à traiter » n'est pas un
-// échec, et une page de résultats vide n'est pas une panne.
+// Not obvious: since the zero value of a Result is an Err, returning an error by
+// accident would be easy. Yet "nothing to process" is not a failure, and an
+// empty page of results is not an outage.
 func TestCollectOfEmptyIsOk(t *testing.T) {
 	t.Parallel()
 
-	vide := result.Collect([]result.Result[int, erreur]{})
-	if !vide.IsOk() {
-		t.Fatalf("une liste vide doit rendre un succès, reçu %q", cause(vide))
+	empty := result.Collect([]result.Result[int, failure]{})
+	if !empty.IsOk() {
+		t.Fatalf("an empty list must return a success, got %q", causeOf(empty))
 	}
-	if got := valeur(vide); len(got) != 0 {
-		t.Errorf("valeurs = %v, attendu une liste vide", got)
+	if got := valueOf(empty); len(got) != 0 {
+		t.Errorf("values = %v, want an empty list", got)
 	}
 
-	absente := result.Collect[int, erreur](nil)
-	if !absente.IsOk() {
-		t.Error("une liste nil doit se comporter comme une liste vide")
+	missing := result.Collect[int, failure](nil)
+	if !missing.IsOk() {
+		t.Error("a nil list must behave like an empty list")
 	}
 }

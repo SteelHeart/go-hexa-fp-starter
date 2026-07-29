@@ -6,21 +6,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/fp"
 )
 
-// TestReduceFoldsInOrder : Reduce replie de gauche à droite.
+// TestReduceFoldsInOrder: Reduce folds left to right.
 //
-// L'ordre est invisible sur une addition et décisif sur tout le reste. Une
-// concaténation repliée à l'envers rend une chaîne inversée — un résultat qui a
-// l'air correct jusqu'à ce qu'on le lise.
+// The order is invisible on an addition and decisive on everything else. A
+// concatenation folded backwards returns a reversed string — a result that looks
+// correct until someone reads it.
 func TestReduceFoldsInOrder(t *testing.T) {
 	t.Parallel()
 
-	somme := fp.Reduce([]int{1, 2, 3, 4}, 0, func(acc, n int) int { return acc + n })
-	if somme != 10 {
-		t.Errorf("somme = %d, attendu 10", somme)
+	sum := fp.Reduce([]int{1, 2, 3, 4}, 0, func(acc, n int) int { return acc + n })
+	if sum != 10 {
+		t.Errorf("sum = %d, want 10", sum)
 	}
 
 	concat := fp.Reduce([]string{"a", "b", "c"}, "", func(acc, s string) string { return acc + s })
 	if concat != "abc" {
-		t.Errorf("concaténation = %q, attendu \"abc\" — le repli va de gauche à droite", concat)
+		t.Errorf("concatenation = %q, want \"abc\" — the fold goes left to right", concat)
 	}
 }
