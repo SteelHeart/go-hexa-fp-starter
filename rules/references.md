@@ -70,8 +70,16 @@ publié avec le code et ce qui ne l'est pas.
 | Messages d'erreur internes (`fmt.Errorf`, sentinelles) et messages de journal | **anglais** |
 | Contenu des tests — noms de fichiers, identifiants, commentaires, `t.Errorf` | **anglais** |
 | Clés de configuration, noms d'événements | **anglais** |
+| **`README.md`** | **anglais** |
 | `rules/`, `documentation/`, ADR | **français** |
 | Messages de commit, titres et corps de PR, issues | **français** |
+
+Le `README` n'était **pas nommé** par l'ADR 018 : ce n'était pas une contradiction, c'était un vide.
+La ligne de partage de l'ADR — *ce qui est publié avec le code* — le tranche, et il le tranche vers
+l'anglais : le `README` est la **première page** d'un dépôt public, lue avant la première ligne de
+code, par des gens qui n'ouvriront jamais `rules/`.
+
+Décision du 2026-07-29, écrite ici plutôt que laissée tacite.
 
 ### La seule exception, et elle n'en est pas une
 

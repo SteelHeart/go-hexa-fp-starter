@@ -1,33 +1,33 @@
-# go-hexa — socle Go hexagonal, modulaire, fonctionnel, multi-frontend
+# go-hexa — a modular, functional, multi-frontend Go starter
 
-Un **socle Go réutilisable** en cours de construction : architecture hexagonale modulaire,
-programmation fonctionnelle, exposé à **N frontends simultanés** (web, mobile, CLI, événements).
+A **reusable Go foundation** under construction: modular hexagonal architecture, functional
+programming, exposed to **N simultaneous frontends** (web, mobile, CLI, events).
 
-Ce n'est pas une application, et ce n'est pas non plus un modèle de projet à copier une fois. La
-cible est un **framework** : un noyau de modules réutilisables, un générateur (`hexa new`), et un
-règlement outillé qui empêche la forme de se dégrader. Le chemin y menant est décrit dans
+This is not an application, and not a project template you copy once either. The target is a
+**framework**: a core of reusable modules, a generator (`hexa new`), and a *tooled* rulebook that
+stops the shape from degrading. The path there is described in
 [`documentation/technique/parite-frameworks.md`](documentation/technique/parite-frameworks.md).
 
-> **⚠️ Lisible, pas réutilisable.** Ce dépôt est **public en lecture** et reste sous
-> [`LICENSE`](LICENSE) **tous droits réservés** : aucun droit d'usage, de copie, de modification ni
-> de redistribution n'est accordé. Le publier sert la transparence et l'analyse de sécurité, pas
-> l'adoption. **Ne le forkez pas, ne l'intégrez pas** — ni dans un produit, ni dans un jeu de
-> données d'entraînement. Une ouverture est envisagée, sans date et sans engagement.
+> **⚠️ Readable, not reusable.** This repository is **public to read** and stays under
+> [`LICENSE`](LICENSE) **all rights reserved**: no right of use, copying, modification or
+> redistribution is granted. Publishing it serves transparency and security review, not adoption.
+> **Do not fork it, do not integrate it** — neither into a product, nor into a training set. Opening
+> up is considered, with no date and no commitment.
 >
-> C'est une décision, pas un oubli. Elle est prise et tracée en
+> This is a decision, not an oversight. It is taken and recorded in
 > [#113](https://github.com/SteelHeart/go-hexa-fp-starter/issues/113).
 
-> **État d'avancement.** Le serveur HTTP, la ligne de commande et le dépileur d'événements existent
-> et tournent — la chaîne complète `inscription → outbox → dépileur → relais → garde d'idempotence
-> → notification` a été exercée sur les binaires réels. **`auth` et `notification` existent
-> désormais** ; il manque le **multi-locataire**, le **paiement** et la **limitation de débit**,
-> décrits sans aucun code. Le relevé factuel, daté et sans complaisance, est dans
-> [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) § « État réel du dépôt ». Il fait foi sur les faits — pas ce README.
+> **State of play.** The HTTP server, the command line and the event dispatcher exist and run — the
+> full chain `registration → outbox → dispatcher → relay → idempotency guard → notification` has
+> been exercised on the real binaries. **`auth` and `notification` now exist**; what is missing is
+> **multi-tenancy**, **payment** and **rate limiting**, described with no code at all.
 >
-> Les écarts connus entre ce qui est écrit et ce qui est sont listés dans
-> [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md).
+> The factual record — dated, and without indulgence — is in
+> [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) § *État réel du dépôt*. **It, not this
+> README, is authoritative on facts.** The known gaps between what is written and what is are listed
+> in [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md).
 
-## En trente secondes, sans rien installer
+## In thirty seconds, with nothing installed
 
 ```bash
 export SECURITY_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
@@ -49,42 +49,44 @@ curl -s -X POST localhost:8080/v1/users \
 }
 ```
 
-Ni base, ni Redis, ni Docker. Trois choses se lisent dans cette réponse :
-l'identifiant est un **UUID v7** — ordonné dans le temps, donc utilisable en clé primaire sans
-fragmenter l'index ; l'adresse est **normalisée** par le domaine, espace et casse compris ; et le
-compte naît **`pending`**, jamais actif, parce que l'adresse n'est pas encore prouvée.
+No database, no Redis, no Docker. Three things are readable in that reply: the identifier is a
+**UUID v7** — time-ordered, therefore usable as a primary key without fragmenting the index; the
+address is **normalised by the domain**, spaces and case included; and the account is born
+**`pending`**, never active, because the address has not been proven yet.
 
-La documentation interactive est sur `/docs`, le contrat sur `/openapi.json` et `/openapi.yaml`.
+Interactive documentation is on `/docs`, the contract on `/openapi.json` and `/openapi.yaml`.
 
-## Deux propriétés, et tout le reste en découle
+## Two properties, and everything else follows
 
-**1. Le cœur ne connaît rien.** Ni HTTP, ni SQL, ni cache, ni horloge, ni logger. Il reçoit des
-fonctions, il retourne des valeurs. Il se teste en microsecondes, sans conteneur.
+**1. The core knows nothing.** Not HTTP, not SQL, not a cache, not a clock, not a logger. It
+receives functions, it returns values. It is tested in microseconds, without a container.
 
-**2. Le nombre de frontends est un non-sujet.** Une surface est un adaptateur primaire branché sur
-les mêmes cas d'usage. En ajouter une ne modifie aucun fichier du cœur.
+**2. The number of frontends is a non-subject.** A surface is a primary adapter plugged into the
+same use cases. Adding one changes no file of the core.
 
-## Le vocabulaire, en quatre mots
+## The vocabulary, in four words
 
-Le sens de ces mots est fixé par l'[ADR 012](documentation/adr/012-anatomie-d-un-module-et-pilotes.md)
-et par [`rules/references.md`](rules/references.md). Le mot **service** est proscrit : il désigne
-trois choses différentes selon l'interlocuteur.
+Their meaning is fixed by
+[ADR 012](documentation/adr/012-anatomie-d-un-module-et-pilotes.md),
+[ADR 019](documentation/adr/019-l-anatomie-nomme-ses-adaptateurs.md) and
+[`rules/references.md`](rules/references.md). The word **service** is proscribed: it means three
+different things depending on who says it.
 
-| Mot | Sens | Où |
+| Word | Meaning | Where |
 |---|---|---|
-| **module noyau** | capacité technique réutilisable, fournie par le socle | `internal/core/{nom}/` |
-| **module métier** | bounded context d'une application | `internal/modules/{nom}/` |
-| **pilote** | une implémentation interchangeable d'un module | `.../drivers/{nom}/` |
-| **surface** | un frontend servi — web, mobile, CLI, événements | `.../adapters/primary/{nom}/` |
+| **core module** | reusable technical capability, shipped by the starter | `internal/core/{name}/` |
+| **business module** | a bounded context of an application | `internal/modules/{name}/` |
+| **driver** | one interchangeable implementation of a module | `.../drivers/{name}/` |
+| **surface** | a served frontend — web, mobile, CLI, events | `.../adapters/primary/{name}/` |
 
-Les deux sortes de modules ont **la même anatomie**. Un module métier ne connaît aucun autre module
-métier ; il consomme les ports du noyau.
+Both kinds of module have **the same anatomy**. A business module knows no other business module; it
+consumes the core's ports.
 
-## Zéro prérequis d'infrastructure
+## Zero infrastructure prerequisite
 
-Chaque module a un pilote **sans aucune dépendance externe**, choisi par défaut :
+Every module has a driver with **no external dependency**, chosen by default:
 
-| Module noyau | Défaut | Aussi disponible |
+| Core module | Default | Also available |
 |---|---|---|
 | `outbox` | `memory` | `postgres` |
 | `idempotency` | `memory` | `postgres` · `redis` |
@@ -92,215 +94,231 @@ Chaque module a un pilote **sans aucune dépendance externe**, choisi par défau
 | `audit` | `log` | `postgres` |
 | `storage` | `disk` | — |
 | `scheduler` | `cron-inproc` | `advisory-lock` |
+| `auth` | `memory` | — |
+| `notification` | `log` | — |
 
-La règle vaut aussi pour les modules **métier** : `user_registration` a son pilote `memory`, et c'est
-lui le défaut. Un module métier dont le seul pilote exigerait PostgreSQL briserait cette promesse au
-premier module écrit — c'est-à-dire au moment exact où on l'éprouve.
+The rule holds for **business** modules too: `user_registration` has its `memory` driver, and that
+one is the default. A business module whose only driver required PostgreSQL would break the promise
+at the very first module written — that is, exactly when it gets tested.
 
-Avec cette configuration, rien n'est requis : ni base, ni Redis, ni Docker. Un test verrouille cette
-promesse — tous les modules actifs, tous sur leur pilote par défaut, ne doivent exiger aucun service.
+With this configuration nothing is required: no database, no Redis, no Docker. A test locks the
+promise down — every active module, every one on its default driver, must require no service.
 
-**Chaque pilote documente ses NON-garanties** en tête de paquet. Un pilote en mémoire ne survit pas à
-un redémarrage et ne partage rien entre répliques : c'est écrit, en majuscules, là où on le branche.
+**Every driver documents its NON-guarantees** at the top of its package. An in-memory driver does not
+survive a restart and shares nothing between replicas: it is written, in capitals, right where it
+gets wired.
 
-La promesse porte sur l'**infrastructure**, pas sur les secrets. Une variable reste obligatoire,
-`SECURITY_ENCRYPTION_KEY`, et elle n'aura jamais de valeur par défaut — une clé de chiffrement par
-défaut chiffrerait les données de tout le monde avec une valeur publiquement connue.
+The promise covers **infrastructure**, not secrets. One variable stays mandatory,
+`SECURITY_ENCRYPTION_KEY`, and it will never have a default value — a default encryption key would
+encrypt everyone's data with a publicly known one.
 
-## Démarrage
+## Getting started
 
 ```bash
-git config core.hooksPath .githooks   # garde-fou anti-push direct sur le tronc
-task init                             # .env + outillage
+git config core.hooksPath .githooks   # guard rail against pushing straight to the trunk
+task init                             # .env + tooling
 task check                            # fmt · vet · lint · arch · test · vuln
 ```
 
-**Docker n'est pas requis** pour développer : `go test ./...` sans tag n'exige aucun service. Les
-niveaux qui en ont besoin (`-tags=integration`, `-tags=e2e`) sont fournis par la CI.
+**Docker is not required** to develop: `go test ./...` without a tag needs no service. The levels
+that do (`-tags=integration`, `-tags=e2e`) are provided by CI.
 
-Deux binaires :
+Three binaries:
 
-| Commande | Rôle | Prérequis |
+| Command | Role | Prerequisite |
 |---|---|---|
-| `go run ./cmd/server` | surfaces HTTP | aucun |
-| `go run ./cmd/worker` | dépilage de l'outbox vers le courtier | une outbox **partagée entre processus** |
+| `go run ./cmd/server` | HTTP surfaces | none |
+| `go run ./cmd/cli` | `register` · `seed` · `health` — the **same port** as HTTP | none |
+| `go run ./cmd/worker` | dispatching the outbox towards the broker | an outbox **shared across processes** |
 
-> ⚠️ Le dépileur **refuse de démarrer** sur le pilote `outbox: memory`, et c'est voulu : ce pilote
-> vit dans le processus, donc un worker lancé séparément dépilerait son propre magasin — vide —
-> pendant que les événements du serveur resteraient dans la mémoire du serveur. Il tournerait sans
-> rien publier **et sans aucune erreur**. Un composant silencieusement inerte est le seul défaut qui
-> ne se signale jamais.
+> ⚠️ The dispatcher **refuses to start** on the `outbox: memory` driver, and that is intended: that
+> driver lives inside the process, so a separately launched worker would dispatch its own store —
+> empty — while the server's events stayed in the server's memory. It would run publishing nothing
+> **and reporting no error at all**. A silently inert component is the only defect that never
+> announces itself.
 
-## Repartir de ce socle
+## Starting your own project from this one
 
 ```bash
-task rename -- github.com/{org}/{projet}
+task rename -- github.com/{org}/{project}
+hexa new ./my-project --module github.com/{org}/{project} --from .
+hexa make:feature order_tracking --into ./my-project
 ```
 
-Le chemin de module est la **seule** valeur nominative du dépôt. Aucun pseudo, aucune équipe, aucun
-`CODEOWNERS` : les contraintes portent sur des **règles** vérifiées par la CI, pas sur des personnes.
-Le socle fonctionne à un contributeur comme à vingt.
+The module path is the **only** naming value in the repository. No handle, no team, no `CODEOWNERS`:
+the constraints bear on **rules** checked by CI, not on people. The starter works with one
+contributor as well as with twenty.
 
-Ensuite : supprimer `internal/modules/user_registration/` et créer son propre module métier sur le
-même patron. **Un seul fichier du socle le nomme** — `cmd/server/main.go`, qui le monte et l'expose.
-C'est le composition root, et c'est précisément son rôle de connaître les modules ; aucun autre code
-ne le mentionne.
+`hexa make:feature` writes the whole anatomy — domain, ports, use case, dependency-free driver,
+catalogue, local composition root, **HTTP surface** and tests at four levels — then **exercises the
+entire project** before handing back. It also writes the new module's `arch-go` sealing rule: a
+module no rule guards is indistinguishable from a guarded one.
 
-`user_registration` est la **tranche de référence**, pas l'application. Elle existe pour montrer la
-forme complète — domaine pur, ports en types fonction, pipeline composé, pilotes interchangeables,
-adaptateurs par surface — parce que c'est cette forme qui sera copiée pour écrire `billing` ou
-`crm`. Tout dossier qui lui manquerait serait reproduit comme « pas nécessaire ».
+**Measured on 2026-07-29**: clone → two live business modules, `task check` green inside the
+generated project, in **6 seconds**. See
+[`documentation/produit/preuves/`](documentation/produit/preuves/).
 
-## Structure
+`user_registration` is the **reference slice**, not the application. It exists to show the complete
+shape — pure domain, ports as function types, composed pipeline, interchangeable drivers, adapters
+per surface — because that shape is what will be copied to write `billing` or `crm`. **Any folder
+missing from it would be reproduced as "not necessary."**
+
+## Layout
 
 ```
-rules/                       règlement d'ingénierie — FAIT FOI
-documentation/adr/           décisions d'architecture — FONT FOI
-documentation/AMORCAGE.md                    amorçage et état réel : à lire en premier
-
-config/*.yaml                configuration par groupes, secrets par ${VAR} uniquement
-cmd/{server,worker}          composition root — le seul code qui connaît tout
-cmd/cli                      ⟨absent⟩
-internal/pkg/                primitives sans dépendance : result · fp · pagination · middleware
-internal/infrastructure/      socle technique sans métier : db · cache · http · telemetry · security
-internal/contracts/           langage publié : ce que les modules s'échangent, sans s'importer
-internal/core/{nom}/          MODULE NOYAU — fourni par le socle
-internal/modules/{nom}/       MODULE MÉTIER — écrit par l'application
-  ├── domain/                 PUR — objets valeur, règles, erreurs, événements
-  ├── ports/                  types fonction UNIQUEMENT
-  ├── application/            pipeline de cas d'usage + décorateurs, sans I/O
-  ├── drivers/{nom}/          une implémentation interchangeable du module
-  ├── adapters/primary/       http · cli · events — une surface par dossier
-  ├── adapters/secondary/     postgres · mailer
-  ├── tests/                  boîte noire, un fichier par test
-  └── module.go               composition root local — le SEUL à connaître les pilotes
-migrations/{moteur}/         SQL versionné, rétro-compatible N-1 · `postgres/` seul aujourd'hui
-deploy/postgres/             provision.sql — les RÔLES, exécuté une fois, hors goose
-api/openapi.yaml             ⟨absent — le contrat est SERVI, pas encore versionné⟩
-tests/{e2e,perf}             tags `e2e` — hors du `go test ./...` par défaut
+rules/                        engineering rulebook — AUTHORITATIVE
+documentation/adr/            architecture decisions — AUTHORITATIVE
+documentation/AMORCAGE.md     bootstrap and factual record — read this first
+documentation/produit/        personas, scope, per-version matrix, per-persona proofs
+config/*.yaml                 configuration by group, secrets through ${VAR} only
+cmd/{server,worker,cli}       composition roots — the only code allowed to know everything
+cmd/hexa                      the generator — a shell over internal/generator (ADR 016)
+internal/pkg/                 dependency-free primitives: result · fp · pagination · middleware
+internal/infrastructure/      technical foundation without business: db · cache · http · telemetry
+internal/contracts/           published language: what modules exchange without importing each other
+internal/core/{name}/         CORE MODULE — shipped by the starter
+internal/modules/{name}/      BUSINESS MODULE — written by the application
+  ├── domain/                 PURE — value objects, rules, errors, events
+  ├── ports/                  function types ONLY
+  ├── application/            use-case pipeline + decorators, no I/O
+  ├── drivers/{name}/         one interchangeable implementation of the module
+  ├── adapters/primary/       http · cli · events — one surface per folder
+  ├── adapters/secondary/     hashing · outboxpub · postgres · mailer
+  ├── tests/                  black box, one file per test
+  ├── catalog.go              DECLARABLE drivers — shares its constants with New (ADR 014)
+  └── module.go               local composition root — the ONLY file that knows the drivers
+migrations/{engine}/          versioned SQL, backward compatible N-1 · `postgres/` only, so far
+deploy/postgres/              provision.sql — the ROLES, run once, outside goose
+deploy/toolbox/               the tooling AS AN IMAGE — nothing installed on the machine
+tests/{e2e,integration,perf}  build tags — outside the default `go test ./...`
+tools/*.sh                    the guards, ONE definition called by CI and by `task`
 ```
 
-## Ce qui rend le cadre tenable
+## What makes the framing hold
 
-Une règle non outillée n'existe pas. Chaque contrainte a son garde — et la colonne « éprouvé » dit
-si le garde a **déjà tourné** sur ce dépôt, parce qu'un garde jamais exécuté ne garde rien.
+**A rule that is not tooled does not exist.** Every constraint has its guard — and the *proven*
+column says whether that guard has **already run** on this repository, because a guard that never
+ran guards nothing.
 
-| Contrainte | Garde | Éprouvé |
+| Constraint | Guard | Proven |
 |---|---|---|
-| Le cœur n'importe ni transport, ni persistance, ni logger | `arch-go` · `depguard` | **oui** |
-| Un module métier n'importe pas un autre module métier | `arch-go` | **oui** |
-| Un module noyau ne connaît aucun module métier | `arch-go` | **oui** |
-| Un port est un type fonction, pas une interface | `arch-go` | **oui** |
-| Un binaire n'exporte que `main` | `arch-go` | **oui** |
-| Fonctions courtes, peu de paramètres, complexité bornée | `funlen` · `cyclop` · `arch-go` | **oui** |
-| Aucune erreur ignorée, aucun `switch` non exhaustif | `errcheck` · `exhaustive` | **oui** |
-| Aucun état global, aucune `func init()` | `gochecknoglobals` · `gochecknoinits` | **oui** |
-| Aucun ORM | `depguard` | **oui** |
-| Le code compile, `go vet` passe, les tests passent | `go build` · `go vet` · `go test` | **oui** |
-| La configuration livrée charge et n'exige aucun service | tests de `internal/config/tests/` | **oui** |
-| Aucun commit direct sur le tronc | crochet `pre-push` | **oui** |
-| Un module n'atteint pas le schéma SQL d'un autre | `deploy/postgres/verify.sql` | CI seulement |
-| Le journal d'audit refuse `UPDATE` et `DELETE` | job CI `migrations` | CI seulement |
-| Le retour arrière d'une migration fonctionne | job CI `migrations` (il le **rejoue**) | CI seulement |
-| Aucun secret dans l'historique | `gitleaks` | CI seulement |
-| Couverture ≥ 70 % global, ≥ 90 % sur le cœur | CI, cliquets | **NON — 52,4 % mesurés** |
-| Toucher au règlement exige un ADR | CI, job `inertia` | CI seulement |
-| Aucune dette dissimulée en `TODO` | CI, job `inertia` | CI seulement |
-| Aucune vulnérabilité connue | `govulncheck` · CodeQL | **oui** |
+| The core imports neither transport, nor persistence, nor a logger | `arch-go` · `depguard` | **yes** |
+| A business module does not import another business module | `arch-go` | **yes** |
+| A core module knows no business module | `arch-go` | **yes** |
+| A port is a function type, not an interface | `arch-go` | **yes** |
+| A binary exports nothing but `main` | `arch-go` | **yes** |
+| Short functions, few parameters, bounded complexity | `funlen` · `cyclop` · `arch-go` | **yes** |
+| No ignored error, no non-exhaustive `switch` | `errcheck` · `exhaustive` | **yes** |
+| No global state, no `func init()` | `gochecknoglobals` · `gochecknoinits` | **yes** |
+| No ORM | `depguard` | **yes** |
+| The shipped configuration loads and requires no service | `internal/config/tests/` | **yes** |
+| No commit straight to the trunk | server ruleset + `pre-push` hook | **yes** — proven by a real `GH013` refusal |
+| Coverage ≥ 70 % unit scope, ≥ 90 % core | `tools/covergate`, ratchets | **yes** — 79.4 % · 92.4 % · 62.8 % |
+| The code language is English | `tools/verifie-langue-du-code.sh` | **yes** (ADR 018) |
+| No debt hidden as a code marker | `tools/verifie-dette.sh` | **yes** |
+| The documentation tells the truth about what can be checked | `tools/verifie-veracite-doc.sh` | **yes** (#118) |
+| A module does not reach another one's SQL schema | `deploy/postgres/verify.sql` | CI only |
+| The audit log refuses `UPDATE` and `DELETE` | CI job `migrations` | CI only |
+| A migration's rollback works | CI job `migrations` (it **replays** it) | CI only |
+| No secret in the history | `gitleaks` | **yes** — 32 commits, no leak |
+| Touching the rulebook requires an ADR | CI job `inertia` | **yes** |
+| No known vulnerability | `govulncheck` · CodeQL | **yes** — 0 and 0 |
 
-**`golangci-lint` rend 0 signalement** (~50 analyseurs, parti de 239), **`arch-go` 18 règles sur 18
-avec 100 % de couverture**, et **`govulncheck` 0 vulnérabilité**. Tous ont réellement tourné, dans
-l'enchaînement `task check`, et le code de retour a été vérifié — pas seulement la sortie.
+**Measured on 2026-07-29**: `golangci-lint` returns **0 findings** (~50 analysers, down from 239),
+`arch-go` **21 rules out of 21** with **100 % coverage** — 14 of them dependency rules —, and
+`govulncheck` **0 vulnerabilities**. All of them actually ran, inside the `task check` chain, and
+**the exit code was checked** — not just the output.
 
-Le dépôt épingle **`go 1.25.12`** dans `go.mod`. Avec `GOTOOLCHAIN=auto` — le défaut — Go télécharge
-la chaîne demandée : aucune installation système n'est nécessaire, et la correction vaut pour tout
-le monde, CI comprise. C'est ce qui a fermé les 20 vulnérabilités de la bibliothèque standard que
-portait la chaîne précédente.
+### Every guard ships with the case that makes it fail
 
-⚠️ **La couverture réelle est de 52,4 %, sous le seuil de 70 % que ce tableau annonce.** Elle était
-mesurée à **3,6 %** jusqu'au 2026-07-26 : les tests étant en boîte noire dans `{paquet}/tests/`, le
-profil n'attribuait la couverture qu'au paquet de test. `-coverpkg=./...` corrige la mesure — pas le
-manque. `messaging`, `modulebus`, `httpserver`, `telemetry` et `cache` compilent sans aucun test.
-Le seuil reste à 70 % : on couvre, on ne baisse pas la barre.
+That is [ADR 013](documentation/adr/013-un-garde-doit-savoir-echouer.md), and it was written because
+**eleven guards of this repository guarded nothing**. The shape is always the same: a guard that
+finds nothing looks exactly like a satisfied guard.
 
-> ⚠️ **`task check` ne peut pas être vert depuis `C:\xampp\htdocs\`.** Sur cette machine, aucun
-> binaire Go n'y a le droit de créer un fichier — le shell si. `go test -coverprofile` échoue donc,
-> et l'étape `test` avec lui. Ce n'est pas un défaut du dépôt : `go test ./...` sans couverture est
-> vert, et les cinq autres étapes passent. Sortir le dépôt du répertoire web de XAMPP, ou travailler
-> sous WSL. Voir friction **F008**.
+Each `tools/verifie-*.sh` therefore carries a `--temoin` mode proving it still refuses **and** that
+it can still be satisfied. Without the second half, a broken guard and a strict guard are
+indistinguishable — a lesson learned from a guard that passed its refusal case *because its control
+function did not exist*.
 
 ## Stack
 
-| Couche | Choix | Pourquoi |
+| Layer | Choice | Why |
 |---|---|---|
-| Routage | `chi` | 100 % `http.Handler` — réversible en une journée ([ADR 008](documentation/adr/008-chi-huma-plutot-qu-un-framework.md)) |
-| Contrat | `huma` v2, *code-first* | Servi sur `/openapi.{json,yaml}` ; les SDK clients en découlent |
-| Persistance | `pgx` v5, SQL explicite | Aucun ORM : ils fuient dans le domaine ([ADR 009](documentation/adr/009-strategie-d-acces-aux-donnees.md)) |
-| Moteur de base | **aucun imposé** | `postgres` est un pilote parmi d'autres (issue #36) |
-| Asynchrone | outbox transactionnel | Ni perte, ni fantôme ([ADR 006](documentation/adr/006-outbox-transactionnel.md)) |
-| Câblage | composition manuelle | Vérifiée par le compilateur ([ADR 004](documentation/adr/004-composition-manuelle-sans-conteneur-di.md)) |
-| Observabilité | OpenTelemetry + `slog` | Traces, métriques et logs reliés par `trace_id` |
+| Routing | `chi` | 100 % `http.Handler` — reversible in a day ([ADR 008](documentation/adr/008-chi-huma-plutot-qu-un-framework.md)) |
+| Contract | `huma` v2, code-first | Served on `/openapi.{json,yaml}`; client SDKs derive from it |
+| Persistence | `pgx` v5, explicit SQL | No ORM: they leak into the domain ([ADR 009](documentation/adr/009-strategie-d-acces-aux-donnees.md)) |
+| Database engine | **none imposed** | `postgres` is one driver among others (issue #36) |
+| Asynchronous | transactional outbox | Neither loss nor phantom ([ADR 006](documentation/adr/006-outbox-transactionnel.md)) |
+| Wiring | manual composition | Checked by the compiler ([ADR 004](documentation/adr/004-composition-manuelle-sans-conteneur-di.md)) |
+| Observability | OpenTelemetry + `slog` | Traces, metrics and logs tied by `trace_id` |
 
-## La doc ne mente jamais sur l'état réel
+## The documentation never lies about the real state
 
-C'est une règle d'or, pas une intention. Trois niveaux, jamais confondus :
+That is a golden rule, not an intention. Three levels, never conflated:
 
-- **prouvé localement** — la commande a tourné sur la machine de référence et son code de retour a
-  été vérifié ;
-- **écrit, non prouvé** — le code existe et compile ; rien ne l'a exécuté ;
-- **jamais déployé** — `deploy-uat.yml` et `deploy-production.yml` n'ont jamais tourné.
+- **proven locally** — the command ran on the reference machine and its **exit code** was checked;
+- **written, not proven** — the code exists and compiles; nothing has run it;
+- **never deployed** — `deploy-uat.yml` and `deploy-production.yml` have never run.
 
-Un document qui coche « ✅ testé » sans test est pire qu'aucun document. Le relevé complet, avec sa
-date, est dans [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md).
+A document that ticks "✅ tested" without a test is worse than no document. The complete record, with
+its date, is in [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md).
 
-Ces trois avertissements étaient tous devenus **faux** avant d'être corrigés — c'est ce que l'audit
-[#107](https://github.com/SteelHeart/go-hexa-fp-starter/issues/107) est venu chercher. Leur version
-à jour, et ce qu'ils cachaient :
+Three caveats worth keeping, all of them measured:
 
-- ~~« aucune authentification ni autorisation »~~ — **`auth` existe**, avec sa surface HTTP et son
-  garde d'autorisation ; l'[ADR 017](documentation/adr/017-authentification-et-autorisation.md)
-  tranche que *le jeton authentifie, il n'autorise pas*, donc un droit révoqué est refusé à l'appel
-  suivant. ⚠️ **Ne pas en conclure « zéro faille »** : ce module est neuf, il n'a jamais été éprouvé
-  ailleurs qu'ici, et rien n'a été audité par un tiers. `GET /v1/users/availability` permet toujours
-  d'**énumérer** les adresses enregistrées — acceptable derrière une limitation de débit, et le
-  module `ratelimit` **n'existe pas**.
-- ~~« personne ne consomme les événements »~~ — la chaîne `inscription → outbox → dépileur → relais
-  → garde d'idempotence → notification` a **tourné sur les binaires réels**, en local puis en CI,
-  avec l'adresse masquée et le corps non journalisé. ⚠️ Le consommateur est câblé dans `cmd/worker`
-  et **non monté en `adapters/primary/events/`** : le troisième adaptateur primaire n'existe pas
-  encore ([#9](https://github.com/SteelHeart/go-hexa-fp-starter/issues/9)). Et `notification` n'a
-  qu'un pilote `log` — **aucun courriel n'est parti nulle part**
+- **`auth` exists, and that does not mean "no vulnerabilities."** The module is new, it has never
+  been exercised anywhere but here, and nothing has been audited by a third party.
+  `GET /v1/users/availability` still allows **enumerating** registered addresses — acceptable behind
+  rate limiting, and the `ratelimit` module **does not exist**.
+- **The event consumer works, but is not mounted as a surface.** It is wired inside `cmd/worker`
+  rather than in `adapters/primary/events/`: the third primary adapter does not exist yet
+  ([#9](https://github.com/SteelHeart/go-hexa-fp-starter/issues/9)). And `notification` only has a
+  `log` driver — **no email has been sent anywhere**
   ([#27](https://github.com/SteelHeart/go-hexa-fp-starter/issues/27)).
-- ~~« les pilotes `postgres` n'ont jamais tourné ici »~~ — le niveau `integration` les exerce contre
-  un vrai Postgres et un vrai Redis, et le job CI du même nom l'exécute à chaque PR.
+- **This repository cannot yet be depended upon.** Measured for persona P3: the five packages outside
+  `internal/` are all `package main`, so the number of packages a third party can actually import is
+  **zero**. See
+  [`documentation/produit/preuves/p3-adoption-externe.md`](documentation/produit/preuves/p3-adoption-externe.md).
+
+## A note on language
+
+The **code** is in English — identifiers, godoc, internal error messages, tests
+([ADR 018](documentation/adr/018-la-langue-du-code-est-l-anglais.md)). The **rulebook**, the ADRs and
+the process documents are in **French**: they are the working language, and they are not published
+with the code.
+
+The dividing line is *what ships with the code*. This README ships with it, so it is in English.
+
+⚠️ Messages meant for the **end user** — the ones that leave in a `422` response body — are still in
+French. They are product content, not code language, and they are waiting for internationalisation
+([#12](https://github.com/SteelHeart/go-hexa-fp-starter/issues/12)). That is written down so nobody
+translates them "along the way" and makes it look like the question is settled.
 
 ## Documentation
 
-| Je cherche | C'est ici |
+| I am looking for | It is here |
 |---|---|
-| Par où commencer, et l'état réel | [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) |
-| Le règlement | [`rules/README.md`](rules/README.md) |
-| Ce qui est interdit | [`rules/interdictions.md`](rules/interdictions.md) |
-| La barre pour livrer | [`rules/definition-of-done.md`](rules/definition-of-done.md) |
-| Pourquoi telle décision | [`documentation/adr/`](documentation/adr/README.md) |
-| L'anatomie d'un module | [`ADR 012`](documentation/adr/012-anatomie-d-un-module-et-pilotes.md) |
-| Les modules noyau prévus | [`documentation/technique/modules-noyau.md`](documentation/technique/modules-noyau.md) |
-| Le catalogue des pilotes | [`documentation/technique/pilotes.md`](documentation/technique/pilotes.md) |
-| Ce qu'un framework mûr offre | [`documentation/technique/parite-frameworks.md`](documentation/technique/parite-frameworks.md) |
-| Nommer branche, commit, fichier | [`documentation/process/NOMENCLATURE.md`](documentation/process/NOMENCLATURE.md) |
-| Contribuer | [`rules/workflow-git.md`](rules/workflow-git.md) |
-| Signaler une faille | [`SECURITY.md`](SECURITY.md) |
-| Les écarts connus entre l'écrit et le réel | [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md) |
+| Where to start, and the real state | [`documentation/AMORCAGE.md`](documentation/AMORCAGE.md) |
+| The rulebook | [`rules/README.md`](rules/README.md) |
+| What is forbidden | [`rules/interdictions.md`](rules/interdictions.md) |
+| The bar to ship | [`rules/definition-of-done.md`](rules/definition-of-done.md) |
+| Why a given decision | [`documentation/adr/`](documentation/adr/README.md) |
+| A module's anatomy | [ADR 012](documentation/adr/012-anatomie-d-un-module-et-pilotes.md) · [ADR 019](documentation/adr/019-l-anatomie-nomme-ses-adaptateurs.md) |
+| Who this is for, and the proofs | [`documentation/produit/personas.md`](documentation/produit/personas.md) · [`preuves/`](documentation/produit/preuves/) |
+| The planned core modules | [`documentation/technique/modules-noyau.md`](documentation/technique/modules-noyau.md) |
+| The driver catalogue | [`documentation/technique/pilotes.md`](documentation/technique/pilotes.md) |
+| Known gaps between written and real | [`documentation/process/AUDIT_CONFORMITE.md`](documentation/process/AUDIT_CONFORMITE.md) |
+| Naming a branch, a commit, a file | [`documentation/process/NOMENCLATURE.md`](documentation/process/NOMENCLATURE.md) |
+| Contributing | [`rules/workflow-git.md`](rules/workflow-git.md) |
+| Reporting a vulnerability | [`SECURITY.md`](SECURITY.md) |
 
 ## Licence
 
-[`LICENSE`](LICENSE) — **tous droits réservés**. Le dépôt est **public en lecture** : consultable,
-analysable, citable. **Aucun droit d'usage, de copie, de modification ni de redistribution n'est
-accordé**, y compris pour l'entraînement de modèles.
+[`LICENSE`](LICENSE) — **all rights reserved**. The repository is **public to read**: consultable,
+analysable, quotable. **No right of use, copying, modification or redistribution is granted**,
+including for model training.
 
-C'est un état *source-available*, **choisi** — pas une licence ouverte qu'on aurait oublié de poser.
-La transparence sert la revue de sécurité et l'évaluation ; l'adoption n'est pas l'objectif
-aujourd'hui. Une ouverture est envisagée, **sans date et sans engagement**, et sera annoncée ici
-avant de l'être ailleurs.
+This is a *source-available* state, **chosen** — not an open licence somebody forgot to add.
+Transparency serves security review and evaluation; adoption is not the goal today. Opening up is
+considered, **with no date and no commitment**, and will be announced here before anywhere else.
 
-Pour un usage nécessitant des droits, ouvrir une issue.
+For a use that needs rights, open an issue.
