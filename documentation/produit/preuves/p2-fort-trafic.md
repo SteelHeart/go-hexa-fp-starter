@@ -90,8 +90,33 @@ Les seuls mouvements de cette persona depuis le premier relevé sont : un critè
 un lot qui la visait indirectement (#91), et un rouge dont on comprend **enfin la vraie cause**
 (#141).
 
-Une suite de lots individuellement justifiés a composé un ordre de priorité que personne n'a choisi.
-Ce document existe pour que ce constat cesse d'être une note de bas de page.
+### Pourquoi, et ce n'est pas ce que je croyais en écrivant la ligne précédente
+
+Ce document a d'abord conclu : *« une suite de lots individuellement justifiés a composé un ordre de
+priorité que personne n'a choisi. »* La formulation est fausse, et flatteuse.
+
+Vérifié le **2026-07-29**, sur les 23 issues ouvertes et sur l'ensemble des issues fermées :
+
+```
+stream · SSE · Flusher · temps reel     → 0
+queue · file de travaux                  → 0
+benchmark                                → 0
+pprof · GOMEMLIMIT · memoire             → 0
+configuration fermee · extension         → 0
+```
+
+**Aucun des cinq critères de P2 n'avait d'issue. Pas une seule.** Une seule issue de tout le dépôt
+citait P2 avant ce jour, et elle est fermée (#91).
+
+Il n'y avait donc **pas d'ordre de priorité**, choisi ou non : il n'y avait **rien à prioriser**. Un
+lot dépriorisé figure dans une liste, se voit et se discute ; un lot qui n'existe pas ne figure
+nulle part. C'est pour cela que cinq relevés ont pu constater le même rouge sans que rien ne bouge —
+et c'est la famille de défaut que ce dépôt traque partout ailleurs : **une absence qui ne produit
+aucun symptôme**.
+
+Les cinq lots ont été ouverts le 2026-07-29 : **#143** (flux), **#144** (file de travaux), **#145**
+(benchmarks), **#146** (mémoire et profilage), **#147** (point d'extension de la configuration).
+#144 et #147 portent `needs-decision` : ils engagent l'architecture et attendent un arbitrage.
 
 **Ce que P2 tue** : *« la configuration fermée et les délais HTTP en dur. Les deux sont
 rédhibitoires pour elle, pas gênants. »* Les deux tiennent toujours.

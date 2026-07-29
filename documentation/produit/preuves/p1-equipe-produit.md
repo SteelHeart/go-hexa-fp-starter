@@ -112,6 +112,15 @@ Cette preuve mesure **la création**, pas la vie du module. Elle ne dit rien de 
 troisième mois — quand `task_list` a besoin d'un champ que `reminder` veut lire, quand la
 configuration doit accueillir un groupe nouveau, quand une migration doit être rétro-compatible.
 
-**Le blocage connu de P1 est là et n'a pas bougé** : `Config` reste une **struct fermée**, 19 champs,
-sans point d'extension (critère 8 de la grille, 🔴, ligne `v1.0`). Une liste de tâches n'en a pas
-besoin. Un vrai produit, si.
+**Le blocage connu de P1 est là et n'a pas bougé** : `Config` reste une **struct fermée**, **16
+champs**, sans point d'extension (critère 8 de la grille, 🔴, ligne `v1.0` — lot #147). Une liste de
+tâches n'en a pas besoin. Un vrai produit, si.
+
+> ⚠️ **Cette ligne annonçait « 19 champs », et c'est la preuve qui avait tort.** Le chiffre venait de
+> la grille des personas, où il était déjà faux ; il a été **recopié**, pas mesuré. Recompté le
+> 2026-07-29 : `internal/config/config.go` a **16** champs, et n'en a jamais eu 19.
+>
+> C'est le défaut le plus embarrassant de ce dossier. `preuves/` existe **précisément** pour que la
+> grille cesse d'être crue sur parole — *« ce document affirme, les preuves mesurent »*. Une preuve
+> qui recopie le chiffre qu'elle est censée vérifier ne corrige pas la dérive : **elle la
+> certifie**. Corrigé en #148, avec le rappel qu'une mesure non exécutée n'est pas une mesure.

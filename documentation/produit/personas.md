@@ -10,8 +10,14 @@
 > une **comparaison** avec Spring, Laravel et Symfony. Une comparaison dit quoi *avoir* ; elle ne dit
 > jamais quoi refuser, ni pour qui. C'est ce document-ci qui définit le périmètre.
 >
-> État constaté le **2026-07-28**. Chaque verdict est **sourcé** — commande ou fichier. Aucun n'est
-> écrit de mémoire, et chacun a été **remesuré** à cette date plutôt que recopié.
+> État constaté le **2026-07-28**, **corrigé le 2026-07-29** sur les points listés en #148. Chaque
+> verdict est **sourcé** — commande ou fichier. Aucun n'est écrit de mémoire.
+>
+> ⚠️ **Ce document a affirmé trois faits faux**, trouvés en cherchant de quels lots P2 attendait :
+> un compte de champs qui n'a jamais existé, un dossier déclaré absent le jour où il a été créé, et
+> une phrase se disant « revérifiée » alors qu'elle ne l'était plus. Les trois dérivaient dans le
+> sens qui renforçait le propos. Ce qui suit vaut donc pour ce document lui-même : **remesurer, pas
+> recopier** — et une phrase qui annonce avoir été vérifiée n'est pas une phrase vérifiée.
 
 ## Comment recompter, plutôt que relire
 
@@ -56,8 +62,9 @@ tâches construit avec `hexa new`, puis mesuré contre le tableau de critères d
 | [P5](preuves/p5-decideur.md) | ⚠️ trois sur quatre |
 
 ⚠️ **Ce document affirme, les preuves mesurent.** Quand les deux divergent, c'est la preuve qui a
-raison — et deux critères de cette grille ont déjà été corrigés par elles : celui de P1 sur les
-fichiers du framework, et celui de P2 sur la taille d'ingestion.
+raison — et **cinq** critères de cette grille ont déjà été corrigés par elles : P1 sur les fichiers
+du framework, P2 sur la taille d'ingestion, puis les trois faits faux relevés en #148 (le compte de
+champs de `Config`, l'existence de `tests/perf/`, et « aucun lot n'a touché P2 »).
 
 ## Les personas
 
@@ -80,8 +87,14 @@ la forme du socle se dégrade au bout de trois mois.
 
 > **Un blocage sur trois subsiste.** P1 était bloquée sur *créer*, *brancher*, *configurer* un
 > module. **Brancher** est levé (ADR 014), **créer** l'est par `hexa make:feature` (#17).
-> **Configurer** ne l'est pas : `Config` reste une struct fermée, de 16 champs à l'origine,
-> **19 aujourd'hui** — elle s'est refermée un peu plus.
+> **Configurer** ne l'est pas : `Config` reste une **struct fermée**, sans aucun point d'extension
+> (#147). **16 champs**, recomptés le 2026-07-29 — autant qu'au premier relevé.
+>
+> ⚠️ Ce paragraphe a longtemps annoncé « **19 aujourd'hui** contre 16 à l'origine — elle s'est
+> refermée un peu plus ». `Config` n'a **jamais** eu 19 champs : 15 le 2026-07-25, 16 depuis. Le
+> critère reste rouge, mais l'aggravation était inventée — et elle l'était dans le sens qui
+> renforçait le propos, seule direction où une dérive ne se fait pas remarquer. Corrigé le
+> 2026-07-29 (#148).
 >
 > Reste, hors de cette liste, le blocage qui n'est pas technique : **`auth` n'existe pas**, et il
 > attend des arbitrages produit, pas du code.
@@ -105,22 +118,30 @@ tenue, plusieurs frontends simultanés, configuration modifiable à volonté.
 
 **Critères mesurables** :
 
-| Critère | Cible | Aujourd'hui |
-|---|---|---|
-| Réponse en flux possible | oui | **non** — `write_timeout: 10s` la tue |
-| Taille d'ingestion | configurable | **non** — `max_body_bytes` existe, est validée, et **ne produit aucun effet** : `huma.DefaultConfig` porte sa propre borne, non reliée (#141, mesuré sur la preuve P2) |
-| File de travaux longs | oui | **aucune** — `cmd/worker` ne dépile que l'outbox |
-| Benchmarks de non-régression | ≥ 1 | **0** — `grep -rl "func Benchmark"` ne rend aucun fichier |
-| Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`** |
+| Critère | Cible | Aujourd'hui | Lot |
+|---|---|---|---|
+| Réponse en flux possible | oui | **non** — `write_timeout: 10s` la tue | #143 |
+| Taille d'ingestion | configurable | **non** — `max_body_bytes` existe, est validée, et **ne produit aucun effet** : `huma.DefaultConfig` porte sa propre borne, non reliée (mesuré sur la preuve P2) | #141 |
+| File de travaux longs | oui | **aucune** — `cmd/worker` ne dépile que l'outbox | #144 |
+| Benchmarks de non-régression | ≥ 1 | **0 `func Benchmark`** — `tests/perf/` existe et tourne depuis le 2026-07-29 (#91), mais un scénario k6 exige une API démarrée et ne dit pas **quelle** fonction a régressé | #145 |
+| Profilage mémoire sous charge | possible | **aucun `pprof`, aucun `GOMEMLIMIT`, aucun `GOMAXPROCS`** | #146 |
 
 **Ce qu'elle tue** : la configuration fermée et les délais HTTP en dur. Les deux sont **rédhibitoires**
 pour elle, pas gênants.
 
-> 🔴 **Cinq critères sur cinq, inchangés depuis le premier relevé.** Aucun des lots livrés depuis
-> n'a touché cette persona. Et il y a pire que « zéro benchmark » : `task test:perf` lance
-> `k6 run tests/perf/registration.js`, or **`tests/perf/` n'existe pas** — `ls tests/` ne rend que
-> `e2e` et `integration`. C'est une **commande morte**, de la même famille que les gardes qui ne
-> gardaient rien : elle a l'air d'un dispositif de mesure et n'en est pas un.
+> 🔴 **Quatre critères sur cinq rouges**, le cinquième en demi-teinte. Un seul lot a touché cette
+> persona depuis le premier relevé : #91, qui a rendu `task test:perf` réel — la commande lançait
+> `k6 run tests/perf/registration.js` sur un dossier absent, et le scénario mesure désormais pour de
+> bon (3 483 inscriptions, p95 à 288 ms).
+>
+> ⚠️ **Ce constat a longtemps dit « cinq sur cinq, aucun lot n'a touché cette persona ». C'était
+> faux dans les deux moitiés** : #91 avait touché le critère n°4, et la même phrase affirmait que
+> `tests/perf/` n'existait pas le jour où il existait. Corrigé le 2026-07-29 (#148).
+>
+> **Ce qui reste vrai, et qui est le vrai constat** : jusqu'au 2026-07-29, **aucun des cinq critères
+> de P2 n'avait d'issue**. Pas une issue dépriorisée — **aucune issue du tout**. Un lot non priorisé
+> apparaît dans une liste et se discute ; un lot inexistant n'apparaît nulle part, et six relevés
+> peuvent le constater sans que rien ne bouge. Les cinq lots ci-dessus ont été ouverts ce jour-là.
 
 ### P3 — L'équipe qui adopte de l'extérieur
 
@@ -195,7 +216,8 @@ est désormais **testable** : toute demande qui ne sert que P0 est hors périmè
 ## La grille — 15 questions, 7 axes
 
 Verdicts **remesurés le 2026-07-28**, sur `main`, après `auth` (#11), `notification` et le
-consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du dépôt :
+consommateur d'événements (#9), et l'ouverture du pool (#103). Les critères **7, 8, 11, 12 et 13**
+ont été **recorrigés le 2026-07-29** (#148). Vocabulaire du dépôt :
 **✅ prouvé** · **⚠️ écrit non prouvé** · **🔴 absent** · **⛔ refusé assumé**.
 
 | # | Question | État | Source | Persona la plus touchée |
@@ -209,22 +231,23 @@ consommateur d'événements (#9), et l'ouverture du pool (#103). Vocabulaire du 
 | 5 | Comment mon module se branche-t-il ? | ✅ | ADR 014 — chaque module déclare ses pilotes dans son propre `catalog.go`, le catalogue est **passé** au chargeur. Les trois tables globales de `internal/config` ont disparu | P1 |
 | **Surfaces** ||||
 | 6 | Plusieurs frontends simultanés ? | ✅ | **trois** adaptateurs primaires — `user_registration/adapters/primary/{http,cli}` et `auth/adapters/primary/http` — plus un **consommateur d'événements** dont la chaîne complète a tourné (#9, #103). La démonstration tient parce que HTTP et CLI appellent le **même port** sur le **même module** : la carte d'impact de #8 ne touche ni `domain/`, ni `ports/`, ni `application/`. ⚠️ Le consommateur reste câblé dans `cmd/worker` et non monté en `adapters/primary/events/` — la doctrine est démontrée, cet adaptateur-là ne l'est pas | P2 |
-| 7 | Streaming et temps réel ? | 🔴 | aucun SSE, aucun WebSocket, aucun `Flusher` ; `write_timeout: 10s` ; `max_body_bytes: 1 MiB` | P2 |
+| 7 | Streaming et temps réel ? | 🔴 | aucun SSE, aucun WebSocket, aucun `Flusher` ; `write_timeout: 10s` borne le temps **total** d'écriture, donc coupe toute réponse en flux (#143). La borne d'ingestion effective est **1 MiB**, et ce n'est **pas** `max_body_bytes` qui la fixe : cette clé est validée puis ignorée (#141) | P2 |
 | **Configuration** ||||
-| 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée**, **19 champs** aujourd'hui contre 16 au premier relevé (`internal/config/config.go`) — aucun point d'extension, et elle se referme | **P1 · P2** |
+| 8 | Ajouter mon groupe de configuration ? | 🔴 | `Config` est une **struct fermée**, **16 champs** (`internal/config/config.go`, recomptés le 2026-07-29) — aucun point d'extension : un groupe `billing:` exige de modifier un fichier du framework, alors que **brancher** un module n'exige plus rien (ADR 014). Lot #147 | **P1 · P2** |
 | 9 | Changer de configuration à chaud ? | ⚠️ | `dynconf` existe ; pilote par défaut `file`, donc **pas à chaud** ; pilote `postgres` jamais exécuté | P1 |
 | 10 | Secrets et environnements ? | ✅ | feuilletage `config/*.yaml` → `env/{env}.yaml` → `local.yaml` → `${VAR}`, 36 tests | P1 · P4 |
 | **Charge** ||||
-| 11 | Où passent mes travaux longs ? | 🔴 | `cmd/worker` **ne dépile que l'outbox** — aucune file généraliste | P2 |
-| 12 | Comment je maîtrise la mémoire ? | 🔴 | aucun `GOMEMLIMIT`, `GOMAXPROCS`, pool ni borne de goroutines ; `limits` ne couvre que le débit | P2 |
-| 13 | Comment je vérifie que ça tient ? | 🔴 | **0 benchmark** ; `tests/perf/` **n'existe toujours pas** alors que `task test:perf` lance `k6 run tests/perf/registration.js` — commande morte, revérifiée le 2026-07-28 | P2 · P5 |
+| 11 | Où passent mes travaux longs ? | 🔴 | `cmd/worker` **ne dépile que l'outbox** — aucune file généraliste. L'outbox n'en tient pas lieu : son contrat est *au moins une fois* sur un événement, sans résultat à rendre ni état à consulter. Lot #144 | P2 |
+| 12 | Comment je maîtrise la mémoire ? | 🔴 | aucun `GOMEMLIMIT`, `GOMAXPROCS`, pool ni borne de goroutines ; `limits` ne couvre que le débit. En conteneur, le ramasse-miettes ignore donc la limite mémoire et se fait tuer sans trace applicative. Lot #146 | P2 · P4 |
+| 13 | Comment je vérifie que ça tient ? | ⚠️ | `tests/perf/` **existe et tourne** depuis le 2026-07-29 (#91) — 3 483 inscriptions, p95 à 288 ms. Mais **0 `func Benchmark`** : k6 exige une API démarrée, ne tourne pas sur une PR, et ne dit pas **quelle** fonction a régressé. Lot #145 | P2 · P5 |
 | **Exploitation** ||||
 | 14 | Comment j'authentifie ? | ✅ | `auth` livré : jeton **opaque**, session ouverte/résolue/révoquée, compte d'amorçage à secret engendré (ADR 017). **Prouvé sur le binaire réel** — 201 → 200 → 204 → 401 après révocation. ⚠️ L'**autorisation** est prouvée par 39 tests et son garde est en revue (#109) : tant qu'il n'est pas fusionné, `Authorize` n'est joignable par aucune surface | P1 · P4 |
 | 15 | Où est passé le temps ? Comment je reprends ? | ✅ | traces ✅ depuis #13 — `trace_id` et `span_id` dans chaque ligne de journal, `/metrics` servi, trace reçue par le collecteur · outbox, idempotence, audit, isolation SQL ✅, désormais **éprouvés contre de vrais services** (#37) | P4 |
 | **Durée** ||||
 | 16 | Comment je monte de version ? | 🔴 | tout sous `internal/` → **rien n'est importable** ; ni versions, ni frontière API. L'ADR 015 en fixe la **méthode**, pas encore le résultat | P3 |
 
-**Lecture d'ensemble** : **6 verdicts 🔴 sur 16**, 9 ✅ et 1 ⚠️.
+**Lecture d'ensemble** : **5 verdicts 🔴 sur 16**, 9 ✅ et 2 ⚠️ — compté par la commande `awk`
+ci-dessus, le 2026-07-29, pas relu.
 
 > 🔴 **Le relevé précédent annonçait « 6 rouges » alors que sa propre grille en portait 7.** L'écart
 > a été trouvé en recomptant la colonne, pas en la relisant. C'est exactement ce que la règle d'or
@@ -240,8 +263,8 @@ trois relevés.
 
 Le socle reste excellent sur l'axe **correction** (conventions, fiabilité, isolation) et **quasi vide
 sur l'axe débit et flux**. **P1**, la primaire, était bloquée sur trois points : **brancher**,
-**créer** et **authentifier** sont levés ; **configurer** ne l'est pas — et c'est désormais son
-DERNIER blocage.
+**créer** et **authentifier** sont levés ; **configurer** ne l'est pas (#147) — et c'est désormais
+son DERNIER blocage.
 
 > ⚠️ **Ce que ce relevé dit du séquencement, et qui n'est pas confortable.** Les premiers lots
 > livrés après le 2026-07-27 — niveau `integration`, amorçage réparé, gardes de déploiement —
@@ -249,11 +272,25 @@ DERNIER blocage.
 > levait aucun blocage de la persona primaire. Le constat a été écrit ici avant d'être corrigé, et
 > c'est à ça que sert ce document.
 >
-> **P2 reste presque intouchée.** Sur ses cinq critères, un seul a bougé — et seulement en nuance
-> (critère 6). Les quatre autres — streaming, file de travaux, mémoire, mesure de charge — sont
-> rouges depuis le premier relevé. Une suite de lots individuellement justifiés peut composer un
-> ordre de priorité que personne n'a choisi, et c'est le cas ici : trois relevés successifs, aucun
-> gain pour P2.
+> **P2 reste presque intouchée.** Sur ses cinq critères, un seul a bougé, et seulement en nuance :
+> le critère 13, par #91. Les quatre autres — streaming, file de travaux, mémoire, point d'extension
+> de la configuration — sont rouges depuis le premier relevé.
+>
+> 🔴 **Et la cause n'est pas un ordre de priorité.** En cherchant *de quels lots P2 attend-elle*, la
+> réponse mesurée le 2026-07-29 est : **aucun. Il n'en existait pas un seul.** Recherche sur
+> `stream`, `SSE`, `Flusher`, `queue`, `benchmark`, `pprof`, `GOMEMLIMIT`, `extension`, dans les
+> issues ouvertes **et** fermées : zéro résultat. Une seule issue de tout le dépôt citait P2 avant
+> ce jour-là, et elle est fermée (#91).
+>
+> **La nuance n'est pas de vocabulaire.** Un lot dépriorisé figure dans une liste : on le voit, on
+> le discute, on assume de ne pas le prendre. Un lot **inexistant** ne figure nulle part — et six
+> relevés successifs peuvent constater le même rouge sans que rien ne se passe, parce qu'il n'y a
+> rien à prendre. C'est la même famille de défaut que les gardes qui ne gardaient rien : **une
+> absence qui ne produit aucun symptôme**.
+>
+> Les cinq lots manquants ont été ouverts le 2026-07-29 : #143, #144, #145, #146, #147. Deux d'entre
+> eux — la file de travaux et le point d'extension de configuration — engagent l'architecture et
+> portent `needs-decision` : ils attendent un arbitrage, pas du code.
 
 ---
 
