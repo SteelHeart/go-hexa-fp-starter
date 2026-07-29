@@ -100,6 +100,15 @@ la détecte : c'est une faiblesse connue, pas une tolérance.
 
   > *Un contournement ne supprime pas le problème : il supprime le signal.*
 
+  **Pourquoi la PR et pas le code.** Un marqueur est lu par la personne qui ouvre le fichier —
+  c'est-à-dire par personne. Un hors-périmètre écrit dans le corps d'une PR est lu par celle qui
+  relit, **au moment où elle peut encore dire non**.
+
+  Garde : `tools/verifie-dette.sh`, sur les lignes **ajoutées** d'une PR, avec son `--temoin`
+  (ADR 013). Il balaie **tout le dépôt** : la version précédente, écrite en YAML dans `ci.yml`,
+  ne filtrait que quatre extensions, donc un marqueur posé dans `tools/`, dans `rules/` ou dans un
+  ADR passait sans bruit (audit #107, écarts É-03 et É-11).
+
 - Écrire qu'une étape est validée alors qu'elle ne l'a été qu'**à blanc**. La documentation
   distingue **écrit** / **prouvé localement** / **déployé pour de vrai**.
 

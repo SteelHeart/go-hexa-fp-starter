@@ -172,21 +172,24 @@ jobs:
       - name: Celui-là aussi sait échouer
         run: ./tools/verifie-langue-du-code.sh --temoin
 
+      # UNE seule définition, partagée avec `task ci:inertia` : le script. Il
+      # était le DERNIER garde encore écrit ici en YAML — audit #107, É-03 —
+      # donc le seul qu'on ne pouvait ni lancer en local, ni éprouver.
+      #
+      # Il balaie désormais TOUT le dépôt, et plus seulement quatre extensions :
+      # un marqueur posé dans `tools/`, dans `rules/` ou dans un ADR passait
+      # sans bruit (É-11).
       - name: Aucune dette dissimulée
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          # rules/interdictions.md § Dette : ce qui n'est pas fait s'annonce
-          # hors périmètre dans la PR, pas en marqueur dans le code.
-          added=$(git diff "$BASE" "$HEAD" -- '*.go' '*.sql' '*.yml' '*.yaml' | grep -E '^\+' || true)
-          if echo "$added" | grep -Enq '(TODO|FIXME|XXX|HACK)'; then
-            echo "$added" | grep -En '(TODO|FIXME|XXX|HACK)' | sed 's/^/  /'
-            echo "::error::marqueur de dette introduit — annoncer le hors périmètre dans le corps de la PR"
-            exit 1
-          fi
-          echo "Aucun marqueur de dette."
+        run: ./tools/verifie-dette.sh "$BASE" "$HEAD"
+
+      # ADR 013 : un garde est livré avec le cas qui le fait échouer. Sans cette
+      # moitié, « aucun marqueur » et « le motif ne reconnaît plus rien » rendent
+      # exactement la même sortie.
+      - name: Celui-là aussi sait échouer
+        run: ./tools/verifie-dette.sh --temoin
 
   # ───────────────────────────────────────────────────────────────────────────
   # 4. Guardrails d'architecture — le job le plus important du pipeline.
