@@ -1,11 +1,11 @@
-// Package application compose les cas d'usage de la notification.
+// Package application composes the notification use cases.
 //
-// Il ne journalise pas et ne lit pas l'horloge : il rend compte par ses retours.
-// C'est ce qui le garde testable sans analyser de journaux.
+// It does not log and does not read the clock: it reports through its return
+// values. That is what keeps it testable without parsing logs.
 //
-// # Carte des fichiers
+// # File map
 //
-//	send.go   acheminer un message déjà rendu
+//	send.go   convey an already rendered message
 package application
 
 import (
@@ -16,28 +16,27 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification/ports"
 )
 
-// Deps porte les ports dont les cas d'usage ont besoin.
+// Deps carries the ports the use cases need.
 //
-// Tous sont des types fonction : en test, chacun est une closure de trois
-// lignes, et aucune bibliothèque de simulacre n'est nécessaire — donc aucune
-// n'est autorisée (rules/dependances.md).
+// All are function types: in a test, each is a three-line closure, and no
+// mocking library is necessary — hence none is allowed
+// (rules/dependances.md).
 type Deps struct {
 	Deliver ports.Deliver
 }
 
-// NewSend compose l'acheminement d'un message.
+// NewSend composes the conveyance of a message.
 //
-// # Deux lignes utiles, et c'est le point
+// # Two useful lines, and that is the point
 //
-// Valider, remettre. Il n'y a nulle part où glisser un gabarit, une traduction,
-// ou une politique de réessai — les trois sont des décisions d'application, pas
-// de socle, et les enfouir ici les imposerait à tout le monde.
+// Validate, deliver. There is nowhere to slip in a template, a translation, or a
+// retry policy — all three are application decisions, not starter ones, and
+// burying them here would impose them on everyone.
 //
-// La revalidation n'est pas de la paranoïa : `domain.Message` a des champs
-// exportés, donc un appelant peut en fabriquer un sans passer par `NewMessage`.
-// Le cas d'usage est le dernier endroit où l'on peut encore refuser avant qu'une
-// adresse vide n'atteigne un fournisseur — où elle deviendrait un rejet facturé
-// et journalisé chez un tiers.
+// The revalidation is not paranoia: `domain.Message` has exported fields, so a
+// caller can build one without going through `NewMessage`. The use case is the
+// last place where one can still refuse before an empty address reaches a
+// provider — where it would become a billed rejection logged at a third party.
 func NewSend(deps Deps) ports.Send {
 	return func(ctx context.Context, message domain.Message) error {
 		validated, err := domain.NewMessage(
@@ -46,7 +45,7 @@ func NewSend(deps Deps) ports.Send {
 			return fmt.Errorf("message: %w", err)
 		}
 		if err := deps.Deliver(ctx, validated); err != nil {
-			return fmt.Errorf("remise au fournisseur: %w", err)
+			return fmt.Errorf("delivery to the provider: %w", err)
 		}
 		return nil
 	}

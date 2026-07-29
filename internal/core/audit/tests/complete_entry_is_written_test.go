@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestCompleteEntryIsWritten : le pilote log écrit les quatre champs qui
-// répondent à « qui a fait quoi, quand, sur quoi ».
+// TestCompleteEntryIsWritten: the log driver writes the four fields that answer
+// "who did what, when, on what".
 func TestCompleteEntryIsWritten(t *testing.T) {
 	t.Parallel()
 
@@ -15,7 +15,7 @@ func TestCompleteEntryIsWritten(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	line := decodeJournal(t, buf)
+	line := decodeLogLine(t, buf)
 	expected := map[string]string{
 		"actor":       "user-42",
 		"action":      "user.registered",
@@ -24,7 +24,7 @@ func TestCompleteEntryIsWritten(t *testing.T) {
 	}
 	for field, want := range expected {
 		if got, _ := line[field].(string); got != want {
-			t.Errorf("%s = %v, attendu %q", field, line[field], want)
+			t.Errorf("%s = %v, want %q", field, line[field], want)
 		}
 	}
 }

@@ -9,12 +9,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestLockIsReleasedEvenWhenTheJobFails : un travail en échec libère quand même
-// l'élection.
+// TestLockIsReleasedEvenWhenTheJobFails: work that fails still releases the
+// election.
 //
-// Sans cette libération, la première erreur d'une tâche la gèlerait jusqu'à la mort
-// de la réplique. Le remède serait pire que le mal : une tâche qui échoue une fois
-// doit réessayer au tick suivant, pas disparaître.
+// Without that release, the first error of a task would freeze it until the
+// replica died. The remedy would be worse than the disease: a task that fails
+// once must retry on the next tick, not disappear.
 func TestLockIsReleasedEvenWhenTheJobFails(t *testing.T) {
 	t.Parallel()
 
@@ -22,25 +22,25 @@ func TestLockIsReleasedEvenWhenTheJobFails(t *testing.T) {
 	acquire := func(context.Context, domain.TaskName) (bool, error) { return true, nil }
 	release := func(context.Context, domain.TaskName) error { released = true; return nil }
 
-	log := &journal{}
+	log := &reportLog{}
 	runner := newRunner(t, acquire, release, log)
-	panne := errors.New("travail en échec")
+	outage := errors.New("work failed")
 	runner.RunOnce(context.Background(), application.Scheduled{
 		Task: task("purge"),
-		Job:  func(context.Context) error { return panne },
+		Job:  func(context.Context) error { return outage },
 	})
 
 	if !released {
-		t.Error("l'élection doit être libérée même après un échec du travail")
+		t.Error("the election must be released even after a failure of the work")
 	}
 	outcome, found := log.last()
 	if !found {
-		t.Fatal("aucun compte rendu")
+		t.Fatal("no report")
 	}
 	if outcome.Event != domain.EventFailed {
-		t.Errorf("événement = %q, attendu %q", outcome.Event, domain.EventFailed)
+		t.Errorf("event = %q, want %q", outcome.Event, domain.EventFailed)
 	}
-	if !errors.Is(outcome.Err, panne) {
-		t.Errorf("cause = %v, attendu la panne d'origine", outcome.Err)
+	if !errors.Is(outcome.Err, outage) {
+		t.Errorf("cause = %v, want the original outage", outcome.Err)
 	}
 }

@@ -7,16 +7,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 )
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique.
+// TestUnknownDriverRefusesStartup: deny by default, right down to the factory.
 //
-// La validation de configuration a déjà rejeté le pilote inconnu ; ce second refus
-// garantit qu'aucun chemin — un appelant qui construit le module à la main, par
-// exemple — ne contourne le premier.
+// Configuration validation has already rejected the unknown driver; this second
+// refusal guarantees that no path — a caller that builds the module by hand,
+// for instance — bypasses the first.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	_, err := dynconf.New(config.Module{Enabled: true, Driver: "consul"}, dynconf.Deps{})
 	if err == nil {
-		t.Fatal("un pilote inconnu doit refuser le démarrage")
+		t.Fatal("an unknown driver must refuse to start")
 	}
 }

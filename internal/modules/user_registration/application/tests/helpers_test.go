@@ -1,18 +1,16 @@
-// Package tests contient les tests en BOÎTE NOIRE des cas d'usage de
-// l'inscription : ils n'utilisent que l'API publique, exactement comme le ferait
-// un adaptateur primaire.
+// Package tests holds the BLACK BOX tests of the registration use cases: they
+// only use the public API, exactly like a primary adapter would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 //
-// # Aucune bibliothèque de mock, et ce n'est pas une privation
+// # No mocking library, and that is not a deprivation
 //
-// Chaque port est un type FONCTION : un double de test est une closure de trois
-// lignes. Pas de génération de code, pas d'assertions d'appel magiques, pas de
-// `.On("Method").Return(...)` qui casse au premier changement de signature. Le
-// compilateur vérifie les doubles comme il vérifie le reste
-// (rules/dependances.md).
+// Every port is a FUNCTION type: a test double is a three-line closure. No code
+// generation, no magic call assertions, no `.On("Method").Return(...)` that
+// breaks at the first signature change. The compiler checks the doubles the way
+// it checks the rest (rules/dependances.md).
 package tests
 
 import (
@@ -25,51 +23,53 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Constantes de scénario, pour que les tests se lisent comme des phrases.
+// Scenario constants, so that the tests read like sentences.
 const (
-	adresseValide  = "alice@example.com"
-	motDePasseFort = "correct cheval batterie agrafe"
-	condense       = "$argon2id$v=19$m=65536,t=3,p=2$c2Vs$Y29uZGVuc2U"
-	identifiant    = domain.UserID("user-42")
+	validAddress   = "alice@example.com"
+	strongPassword = "correct horse battery staple"
+	digest         = "$argon2id$v=19$m=65536,t=3,p=2$c2Vs$Y29uZGVuc2U"
+	identifier     = domain.UserID("user-42")
 )
 
-// instantFixe est l'horloge des tests : aucun test ne lit l'heure réelle.
-func instantFixe() time.Time { return time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC) }
+// fixedInstant is the clock of the tests: no test reads the real time.
+func fixedInstant() time.Time { return time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC) }
 
-// journal enregistre ce que le pipeline a réellement appelé, et dans quel ordre.
+// callLog records what the pipeline actually called, and in which order.
 //
-// L'ordre compte autant que le contenu : hacher avant de vérifier la disponibilité
-// de l'adresse serait correct fonctionnellement et coûteux en pratique.
-type journal struct {
-	appels     []string
-	sauvegarde domain.User
-	evenement  any
-	typeEvent  string
-	agregat    string
-	hache      string
+// The order matters as much as the content: hashing before checking the
+// availability of the address would be functionally correct and costly in
+// practice.
+type callLog struct {
+	calls     []string
+	saved     domain.User
+	event     any
+	eventType string
+	aggregate string
+	hashed    string
 }
 
-func (j *journal) note(nom string) { j.appels = append(j.appels, nom) }
+func (j *callLog) note(name string) { j.calls = append(j.calls, name) }
 
-func (j *journal) aAppele(nom string) bool {
-	for _, appel := range j.appels {
-		if appel == nom {
+func (j *callLog) called(name string) bool {
+	for _, call := range j.calls {
+		if call == name {
 			return true
 		}
 	}
 	return false
 }
 
-// commande forge une intention d'inscription valide.
-func commande() domain.RegistrationCommand {
-	return domain.RegistrationCommand{Email: adresseValide, Password: motDePasseFort}
+// command forges a valid registration intent.
+func command() domain.RegistrationCommand {
+	return domain.RegistrationCommand{Email: validAddress, Password: strongPassword}
 }
 
-// depsNominales construit un jeu de ports où tout réussit, et qui note ses appels.
+// nominalDeps builds a set of ports where everything succeeds, and which records
+// its calls.
 //
-// Chaque test part de là et ne remplace QUE le port qui l'intéresse : ce qui
-// change dans le test est exactement ce que le test vérifie.
-func depsNominales(j *journal) application.Deps {
+// Every test starts from there and replaces ONLY the port it cares about: what
+// changes in the test is exactly what the test verifies.
+func nominalDeps(j *callLog) application.Deps {
 	return application.Deps{
 		EmailIsTaken: func(context.Context, domain.Email) result.Result[bool, domain.Error] {
 			j.note("EmailIsTaken")
@@ -77,52 +77,52 @@ func depsNominales(j *journal) application.Deps {
 		},
 		HashPassword: func(p domain.RawPassword) result.Result[domain.PasswordHash, domain.Error] {
 			j.note("HashPassword")
-			j.hache = p.Expose()
-			return result.Ok[domain.PasswordHash, domain.Error](domain.NewPasswordHash(condense))
+			j.hashed = p.Expose()
+			return result.Ok[domain.PasswordHash, domain.Error](domain.NewPasswordHash(digest))
 		},
 		SaveUser: func(_ context.Context, u domain.User) result.Result[domain.User, domain.Error] {
 			j.note("SaveUser")
-			j.sauvegarde = u
+			j.saved = u
 			return result.Ok[domain.User, domain.Error](u)
 		},
 		PublishEvent: func(
 			_ context.Context, eventType, aggregateID string, payload any,
 		) result.Result[domain.Ack, domain.Error] {
 			j.note("PublishEvent")
-			j.typeEvent, j.agregat, j.evenement = eventType, aggregateID, payload
+			j.eventType, j.aggregate, j.event = eventType, aggregateID, payload
 			return result.Ok[domain.Ack, domain.Error](domain.Ack{})
 		},
-		GenerateID: func() domain.UserID { j.note("GenerateID"); return identifiant },
-		Now:        func() time.Time { j.note("Now"); return instantFixe() },
+		GenerateID: func() domain.UserID { j.note("GenerateID"); return identifier },
+		Now:        func() time.Time { j.note("Now"); return fixedInstant() },
 	}
 }
 
-// echoue fabrique un port en erreur, pour n'importe quel type de succès.
-func echoue[T any](code domain.ErrorCode, message string) result.Result[T, domain.Error] {
+// failing fabricates a port in error, for any success type.
+func failing[T any](code domain.ErrorCode, message string) result.Result[T, domain.Error] {
 	return result.Err[T, domain.Error](domain.NewError(code, message))
 }
 
-// inscrit exécute le cas d'usage et rend son Result.
-func inscrit(deps application.Deps) result.Result[domain.User, domain.Error] {
-	return application.NewRegisterUser(deps)(context.Background(), commande())
+// register runs the use case and returns its Result.
+func register(deps application.Deps) result.Result[domain.User, domain.Error] {
+	return application.NewRegisterUser(deps)(context.Background(), command())
 }
 
-// utilisateurDe extrait l'utilisateur d'un Result attendu en succès.
-func utilisateurDe(t *testing.T, r result.Result[domain.User, domain.Error]) domain.User {
+// userOf extracts the user of a Result expected to be a success.
+func userOf(t *testing.T, r result.Result[domain.User, domain.Error]) domain.User {
 	t.Helper()
 	user, err, ok := r.Get()
 	if !ok {
-		t.Fatalf("inscription refusée alors qu'elle devait réussir: %v", err)
+		t.Fatalf("registration refused although it should have succeeded: %v", err)
 	}
 	return user
 }
 
-// codeDe extrait le code d'erreur d'un Result attendu en échec.
-func codeDe(t *testing.T, r result.Result[domain.User, domain.Error]) domain.ErrorCode {
+// codeOf extracts the error code of a Result expected to be a failure.
+func codeOf(t *testing.T, r result.Result[domain.User, domain.Error]) domain.ErrorCode {
 	t.Helper()
 	_, err, ok := r.Get()
 	if ok {
-		t.Fatal("un échec était attendu, reçu un succès")
+		t.Fatal("a failure was expected, got a success")
 	}
 	return err.Code
 }

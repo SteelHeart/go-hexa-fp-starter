@@ -2,50 +2,51 @@ package outbox
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares this module's drivers — ADR 014.
 //
-// # Pourquoi ici, et pas dans internal/config
+// # Why here, and not in internal/config
 //
-// Cette table vivait dans `internal/config/modules.go`, à deux paquets de la
-// fabrique qui construit réellement les pilotes. Le commentaire qui
-// l'accompagnait avouait déjà craindre la divergence : « une faute de frappe
-// dans l'une des deux rendrait un module inactivable, avec un message qui
-// accuse la configuration de l'utilisateur ».
+// This table used to live in `internal/config/modules.go`, two packages away
+// from the factory that actually builds the drivers. The comment that came with
+// it already confessed to fearing divergence: « a typo in either of the two
+// would make a module unactivatable, with a message that blames the user's
+// configuration ».
 //
-// Elle est désormais dans le MÊME paquet que le `switch` de `New`, souvent sur
-// le même écran. La divergence ne devient pas impossible — rien ne la vérifie
-// mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
-// devient improbable.
+// It is now in the SAME package as the `switch` of `New`, often on the same
+// screen. Divergence does not become impossible — nothing checks it
+// mechanically, and ADR 014 notes this as its weakness [humain] — but it
+// becomes improbable.
 //
-// optionsDuDepileur énumère les clés lues par `policyFrom`.
+// dispatcherOptions enumerates the keys read by `policyFrom`.
 //
-// Une fonction plutôt qu'une variable de paquet : `gochecknoglobals` refuse un
-// état global, et il a raison — une tranche partagée est modifiable par
-// n'importe quel appelant, y compris par accident.
-func optionsDuDepileur() []string {
+// A function rather than a package variable: `gochecknoglobals` refuses global
+// state, and it is right — a shared slice is modifiable by any caller,
+// including by accident.
+func dispatcherOptions() []string {
 	return []string{OptionBatchSize, OptionMaxAttempts, OptionBaseBackoff, OptionInterval}
 }
 
-// Publication garantie d’événements.
+// Guaranteed publication of events.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vrai « `go run` démarre »
-			// sans base, sans cache, sans conteneur (ADR 012).
+			// The default requires NOTHING: this is what makes « `go run` starts »
+			// true without a database, without a cache, without a container
+			// (ADR 012).
 			Default: driverMemory,
 			Drivers: map[string]config.Resources{
-				// Les deux pilotes lisent la MÊME politique de dépilage : elle
-				// décrit le comportement du dépileur, pas le stockage.
+				// Both drivers read the SAME dispatching policy: it describes the
+				// behaviour of the dispatcher, not the storage.
 				//
-				// Les clés sont référencées, jamais réécrites. Une clé admise que
-				// personne ne lit — ou lue sans être admise — serait une
-				// divergence entre deux listes ; le partage de constante la rend
+				// The keys are referenced, never rewritten. An admitted key that
+				// nobody reads — or one read without being admitted — would be a
+				// divergence between two lists; sharing the constant makes it
 				// impossible (#93).
 				//
-				// Perdu au redémarrage : le processus EST le stockage.
-				driverMemory: {Options: optionsDuDepileur()},
-				// Durable et transactionnel — la seule forme qui tient la promesse de l’ADR 006.
-				driverPostgres: {SQL: true, Options: optionsDuDepileur()},
+				// Lost on restart: the process IS the storage.
+				driverMemory: {Options: dispatcherOptions()},
+				// Durable and transactional — the only form that keeps the promise of ADR 006.
+				driverPostgres: {SQL: true, Options: dispatcherOptions()},
 			},
 		},
 	}

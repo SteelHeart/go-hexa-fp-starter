@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-// TestOpeningASessionReturns201AndLeaksNothing éprouve le chemin heureux ET la
-// discrétion de la réponse.
+// TestOpeningASessionReturns201AndLeaksNothing exercises the happy path AND the
+// discretion of the response.
 //
-// # Ce que le corps BRUT ajoute
+// # What the RAW body adds
 //
-// L'inspection champ par champ passerait à côté d'un secret transporté sous un
-// nom anodin. La recherche dans le texte, elle, ne dépend d'aucune supposition
-// sur la forme de la fuite.
+// A field-by-field inspection would miss a secret carried under an innocuous
+// name. Searching in the text, on the other hand, depends on no assumption
+// about the shape of the leak.
 func TestOpeningASessionReturns201AndLeaksNothing(t *testing.T) {
 	t.Parallel()
 
@@ -21,42 +21,43 @@ func TestOpeningASessionReturns201AndLeaksNothing(t *testing.T) {
 	resp := openSession(t, server, subject, secret)
 
 	if resp.status != http.StatusCreated {
-		t.Fatalf("attendu 201, obtenu %d — corps %s", resp.status, resp.raw)
+		t.Fatalf("want 201, got %d — body %s", resp.status, resp.raw)
 	}
 
 	token := tokenOf(t, resp)
 	if len(token) < 43 {
-		t.Fatalf("le jeton doit porter au moins 256 bits d'aléa, obtenu %d caractères", len(token))
+		t.Fatalf("the token must carry at least 256 bits of randomness, got %d characters", len(token))
 	}
 	if _, ok := resp.body["identity_id"].(string); !ok {
-		t.Fatalf("la réponse doit porter l'identifiant : %s", resp.raw)
+		t.Fatalf("the response must carry the identifier: %s", resp.raw)
 	}
 	if _, ok := resp.body["expires_at"].(string); !ok {
-		t.Fatalf("la réponse doit borner la session dans le temps : %s", resp.raw)
+		t.Fatalf("the response must bound the session in time: %s", resp.raw)
 	}
 
 	if strings.Contains(resp.raw, secret) {
-		t.Fatalf("le secret EN CLAIR fuite dans la réponse : %s", resp.raw)
+		t.Fatalf("the PLAIN secret leaks in the response: %s", resp.raw)
 	}
-	if strings.Contains(resp.raw, "condensé") {
-		t.Fatalf("le condensé fuite dans la réponse : %s", resp.raw)
+	if strings.Contains(resp.raw, "digest") {
+		t.Fatalf("the digest leaks in the response: %s", resp.raw)
 	}
 
-	// Aucune permission, aucun rôle : le jeton authentifie, il n'autorise pas.
-	// Les y publier inviterait tout client à les mettre en cache, et la
-	// révocation cesserait d'être immédiate sans qu'une ligne de ce dépôt change.
+	// No permission, no role: the token authenticates, it does not authorise.
+	// Publishing them there would invite every client to cache them, and
+	// revocation would stop being immediate without a single line of this
+	// repository changing.
 	for _, forbidden := range []string{"permission", "permissions", "roles", "scope", "scopes"} {
 		if _, present := resp.body[forbidden]; present {
-			t.Fatalf("la réponse de connexion porte %q : %s", forbidden, resp.raw)
+			t.Fatalf("the sign-in response carries %q: %s", forbidden, resp.raw)
 		}
 	}
 }
 
-// TestTwoSessionsGetTwoDistinctTokens garde l'aléa du jeton.
+// TestTwoSessionsGetTwoDistinctTokens guards the token's randomness.
 //
-// Deux connexions du même compte doivent produire deux jetons différents. Un
-// jeton dérivé du sujet — ou pire, constant — serait devinable, et une
-// authentification devinable n'en est pas une.
+// Two sign-ins of the same account must produce two different tokens. A token
+// derived from the subject — or worse, constant — would be guessable, and a
+// guessable authentication is not one.
 func TestTwoSessionsGetTwoDistinctTokens(t *testing.T) {
 	t.Parallel()
 
@@ -65,9 +66,9 @@ func TestTwoSessionsGetTwoDistinctTokens(t *testing.T) {
 	second := tokenOf(t, openSession(t, server, subject, secret))
 
 	if first == second {
-		t.Fatal("deux connexions ont produit le même jeton")
+		t.Fatal("two sign-ins produced the same token")
 	}
 	if strings.Contains(first, subject) {
-		t.Fatalf("le jeton dérive du sujet : %q", first)
+		t.Fatalf("the token is derived from the subject: %q", first)
 	}
 }

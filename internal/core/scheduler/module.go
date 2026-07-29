@@ -1,16 +1,16 @@
-// Package scheduler est le module noyau des tâches périodiques.
+// Package scheduler is the core module of periodic tasks.
 //
-// Composition root du module : le seul endroit qui connaît les pilotes.
+// Composition root of the module: the only place that knows the drivers.
 //
-// # Pourquoi l'élection est un port et la boucle une orchestration
+// # Why the election is a port and the loop an orchestration
 //
-// La version précédente de cette brique fondait le minuteur, l'élection par verrou
-// consultatif et la journalisation dans un seul type. Conséquence : elle exigeait
-// PostgreSQL pour répéter une tâche, y compris dans un binaire mono-instance qui
-// n'a personne avec qui s'accorder. C'est exactement ce que l'ADR 012 interdit.
+// The previous version of this building block merged the timer, the election by
+// advisory lock and the logging into a single type. Consequence: it required
+// PostgreSQL in order to repeat a task, including in a single-instance binary
+// which has nobody to agree with. That is exactly what ADR 012 forbids.
 //
-// Séparées, la boucle se teste sans base et le pilote par défaut n'a plus aucune
-// dépendance.
+// Separated, the loop can be tested without a database and the default driver
+// no longer has any dependency.
 package scheduler
 
 import (
@@ -30,63 +30,63 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the name of the module in config/modules.yaml.
 const Name = "scheduler"
 
-// Noms des pilotes de ce module.
+// Names of the drivers of this module.
 //
-// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
-// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
-// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
-// une constante qui n'existe pas, un littéral mal orthographié passe.
+// They exist so that `Catalog` and the `switch` of `New` share the SAME
+// identifier. This is what makes divergence between the two IMPOSSIBLE, where
+// ADR 014 only promised to make it improbable — the compiler refuses a
+// constant that does not exist, a misspelt literal goes through.
 //
-// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
-// Il avait raison, et pour une raison plus forte que la sienne.
+// The `goconst` linter reported the repetition as soon as the catalogue
+// arrived. It was right, and for a stronger reason than its own.
 const (
 	driverCronInproc   = "cron-inproc"
 	driverAdvisoryLock = "advisory-lock"
 )
 
-// Run lance l'ordonnanceur jusqu'à l'annulation du contexte.
+// Run launches the scheduler until the context is cancelled.
 //
-// Déclaré ici et non dans `ports/` parce qu'il nomme `application.Scheduled` : les
-// ports d'un module noyau ne dépendent que de leur domaine (arch-go.yml §4e).
+// Declared here and not in `ports/` because it names `application.Scheduled`:
+// the ports of a core module depend only on their domain (arch-go.yml §4e).
 type Run = func(ctx context.Context, scheduled []application.Scheduled) error
 
-// Module expose les ports de l'ordonnanceur.
+// Module exposes the ports of the scheduler.
 type Module struct {
-	// Run exécute les tâches. C'est l'entrée normale du module.
+	// Run runs the tasks. This is the normal entry point of the module.
 	Run Run
-	// Acquire et Release sont exposés pour un déclencheur EXTERNE — tâche planifiée
-	// d'un orchestrateur, minuteur du système — qui veut la même élection sans la
-	// boucle.
+	// Acquire and Release are exposed for an EXTERNAL trigger — the scheduled
+	// task of an orchestrator, the system timer — that wants the same election
+	// without the loop.
 	Acquire ports.Acquire
 	Release ports.Release
 }
 
-// Deps porte les dépendances que les pilotes peuvent réclamer.
+// Deps carries the dependencies the drivers may claim.
 type Deps struct {
 	Pool   *pgxpool.Pool
 	Logger *slog.Logger
 	Now    func() time.Time
 }
 
-// ErrDisabled signale un appel à un module désactivé.
-var ErrDisabled = errors.New("module scheduler désactivé dans config/modules.yaml")
+// ErrDisabled signals a call to a disabled module.
+var ErrDisabled = errors.New("scheduler module disabled in config/modules.yaml")
 
-// ErrPoolRequired signale un pilote qui exige une base absente.
-var ErrPoolRequired = errors.New("le pilote advisory-lock exige une connexion à la base")
+// ErrPoolRequired signals a driver that requires an absent database.
+var ErrPoolRequired = errors.New("the advisory-lock driver requires a database connection")
 
-// ErrLoggerRequired signale l'absence de journal.
+// ErrLoggerRequired signals the absence of a logger.
 //
-// L'orchestration ne journalise pas : elle rend compte (ports.Report). Le compte
-// rendu doit bien aboutir quelque part, sinon une tâche en échec échouerait en
-// silence — le pire défaut possible pour un travail qui tourne sans témoin.
-var ErrLoggerRequired = errors.New("le module scheduler exige un journal pour rendre compte")
+// The orchestration does not log: it reports (ports.Report). The report must
+// end up somewhere, otherwise a failing task would fail in silence — the worst
+// possible defect for work that runs with no witness.
+var ErrLoggerRequired = errors.New("the scheduler module requires a logger to report to")
 
-var errUnknownDriver = errors.New("pilote scheduler inconnu")
+var errUnknownDriver = errors.New("unknown scheduler driver")
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return disabled(), nil
@@ -116,18 +116,18 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	return Module{Run: runner.Run, Acquire: elected.acquire, Release: elected.release}, nil
 }
 
-// election porte le couple indissociable acquisition / libération.
+// election carries the inseparable acquisition / release pair.
 //
-// Regroupé en type plutôt qu'en deux valeurs de retour : les deux fonctions n'ont
-// aucun sens séparées — acquérir sans pouvoir libérer gèle une tâche pour toujours.
-// Le regroupement rend aussi impossible d'inverser deux retours que le compilateur
-// ne distinguerait pas.
+// Grouped into a type rather than into two return values: the two functions
+// make no sense apart — acquiring without being able to release freezes a task
+// for ever. The grouping also makes it impossible to swap two returns that the
+// compiler would not tell apart.
 type election struct {
 	acquire ports.Acquire
 	release ports.Release
 }
 
-// elector choisit le mécanisme d'élection.
+// elector chooses the election mechanism.
 func elector(cfg config.Module, deps Deps) (election, error) {
 	switch cfg.Driver {
 	case driverCronInproc:
@@ -144,10 +144,10 @@ func elector(cfg config.Module, deps Deps) (election, error) {
 	}
 }
 
-// disabled retourne des ports qui refusent explicitement.
+// disabled returns ports that refuse explicitly.
 //
-// Acquire rend `false` ET une erreur : `false` garantit qu'aucune tâche ne
-// s'exécute, l'erreur garantit que le refus se voit.
+// Acquire returns `false` AND an error: `false` guarantees that no task runs,
+// the error guarantees that the refusal is visible.
 func disabled() Module {
 	return Module{
 		Run:     func(context.Context, []application.Scheduled) error { return ErrDisabled },

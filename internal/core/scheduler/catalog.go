@@ -2,32 +2,33 @@ package scheduler
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// # Pourquoi ici, et pas dans internal/config
+// # Why here, and not in internal/config
 //
-// Cette table vivait dans `internal/config/modules.go`, à deux paquets de la
-// fabrique qui construit réellement les pilotes. Le commentaire qui
-// l'accompagnait avouait déjà craindre la divergence : « une faute de frappe
-// dans l'une des deux rendrait un module inactivable, avec un message qui
-// accuse la configuration de l'utilisateur ».
+// This table used to live in `internal/config/modules.go`, two packages away
+// from the factory that actually builds the drivers. The comment that came
+// with it already admitted to fearing divergence: "a typo in either of the two
+// would make a module impossible to activate, with a message that blames the
+// user's configuration".
 //
-// Elle est désormais dans le MÊME paquet que le `switch` de `New`, souvent sur
-// le même écran. La divergence ne devient pas impossible — rien ne la vérifie
-// mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
-// devient improbable.
+// It now lives in the SAME package as the `switch` of `New`, often on the same
+// screen. Divergence does not become impossible — nothing checks it
+// mechanically, and ADR 014 notes this as its weakness [human] — but it
+// becomes improbable.
 //
-// Exécution périodique, avec élection entre répliques.
+// Periodic execution, with election between replicas.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vrai « `go run` démarre »
-			// sans base, sans cache, sans conteneur (ADR 012).
+			// The default requires NOTHING: this is what makes "`go run`
+			// starts" true without a database, without a cache, without a
+			// container (ADR 012).
 			Default: driverCronInproc,
 			Drivers: map[string]config.Resources{
-				// Aucune élection : chaque réplique exécuterait la tâche.
+				// No election: every replica would run the task.
 				driverCronInproc: {},
-				// Élection par verrou consultatif — une seule réplique exécute.
+				// Election by advisory lock — a single replica runs.
 				driverAdvisoryLock: {SQL: true},
 			},
 		},

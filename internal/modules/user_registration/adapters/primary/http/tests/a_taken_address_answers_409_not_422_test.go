@@ -5,25 +5,26 @@ import (
 	"testing"
 )
 
-// TestATakenAddressAnswers409Not422 : une adresse déjà prise rend 409, pas 422.
+// TestATakenAddressAnswers409Not422: an already taken address returns 409, not
+// 422.
 //
-// # La distinction que ce test protège
+// # The distinction this test protects
 //
-// 422 dit « ta requête est mal formée ». 409 dit « ta requête est parfaitement
-// formée, c'est l'état du serveur qui s'y oppose ». Ce ne sont pas deux façons
-// de dire la même chose :
+// 422 says "your request is malformed". 409 says "your request is perfectly well
+// formed, it is the state of the server that opposes it". These are not two ways
+// of saying the same thing:
 //
-//   - Un formulaire d'inscription doit afficher « cette adresse est déjà
-//     utilisée, connectez-vous » sur un 409, et « adresse invalide » sur un 422.
-//     Les confondre produit le message le plus frustrant qui soit : dire à
-//     quelqu'un que son adresse est invalide alors qu'elle est simplement à lui.
-//   - Un client automatisé peut traiter le 409 comme un succès idempotent ; il
-//     ne peut jamais faire ça d'un 422.
+//   - A registration form must display "this address is already in use, please
+//     sign in" on a 409, and "invalid address" on a 422. Confusing them produces
+//     the most frustrating message there is: telling someone their address is
+//     invalid when it is simply theirs.
+//   - An automated client may treat the 409 as an idempotent success; it can
+//     never do that with a 422.
 //
-// Le test inscrit d'abord, puis rejoue avec une casse DIFFÉRENTE : c'est le
-// domaine qui normalise, donc `ALICE@EXAMPLE.COM` doit entrer en collision avec
-// `alice@example.com`. Sans normalisation, on créerait deux comptes pour une
-// même personne — et le doublon ne se verrait qu'au support.
+// The test registers first, then replays with a DIFFERENT case: it is the domain
+// that normalises, so `ALICE@EXAMPLE.COM` must collide with
+// `alice@example.com`. Without normalisation, two accounts would be created for
+// one and the same person — and the duplicate would only be seen by support.
 func TestATakenAddressAnswers409Not422(t *testing.T) {
 	t.Parallel()
 
@@ -31,15 +32,15 @@ func TestATakenAddressAnswers409Not422(t *testing.T) {
 
 	first := post(t, server, registerBody(t, "alice@example.com", validPassword))
 	if first.status != http.StatusCreated {
-		t.Fatalf("première inscription: statut = %d, attendu 201", first.status)
+		t.Fatalf("first registration: status = %d, want 201", first.status)
 	}
 
 	resp := post(t, server, registerBody(t, "  ALICE@Example.com ", validPassword))
 	if resp.status != http.StatusConflict {
-		t.Fatalf("statut = %d, attendu 409 — l'adresse normalisée est déjà prise", resp.status)
+		t.Fatalf("status = %d, want 409 — the normalised address is already taken", resp.status)
 	}
 	if got := resp.body["detail"]; got != "cette adresse de courriel est déjà enregistrée" {
-		t.Errorf("detail = %v, attendu le message du domaine", got)
+		t.Errorf("detail = %v, want the message of the domain", got)
 	}
 	assertFieldLocated(t, resp.body, "body.email")
 }

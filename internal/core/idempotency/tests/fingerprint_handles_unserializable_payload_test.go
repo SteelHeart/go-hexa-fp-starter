@@ -6,9 +6,9 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// TestFingerprintHandlesUnserializablePayload : une charge non sérialisable est un
-// défaut de programmation. Le contrat est de rendre quand même une empreinte
-// utilisable plutôt que de propager une erreur sur un chemin défensif.
+// TestFingerprintHandlesUnserializablePayload: a non-serialisable payload is a
+// programming defect. The contract is to return a usable fingerprint all the
+// same rather than propagate an error on a defensive path.
 func TestFingerprintHandlesUnserializablePayload(t *testing.T) {
 	t.Parallel()
 
@@ -17,9 +17,9 @@ func TestFingerprintHandlesUnserializablePayload(t *testing.T) {
 	}
 	first := domain.Fingerprint(withChannel{Ch: nil})
 	if first == "" {
-		t.Fatal("empreinte vide pour une charge non sérialisable")
+		t.Fatal("empty fingerprint for a non-serialisable payload")
 	}
 	if second := domain.Fingerprint(withChannel{Ch: nil}); second != first {
-		t.Errorf("empreinte de repli instable: %q puis %q", first, second)
+		t.Errorf("unstable fallback fingerprint: %q then %q", first, second)
 	}
 }

@@ -14,67 +14,68 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/subscriber"
 )
 
-// errIdempotenceRequise refuse de consommer sans garde de rejeu.
+// errIdempotencyRequired refuses to consume without a replay guard.
 //
-// # Pourquoi c'est un refus et non un avertissement
+// # Why this is a refusal and not a warning
 //
-// Tous les transports d'ici sont « au moins une fois » : la même enveloppe
-// arrive deux fois dès qu'un accusé de réception se perd, ce qui est banal.
-// Consommer sans idempotence enverrait donc le courriel de bienvenue en double —
-// et le jour où un consommateur débitera une carte, ce sera le débit.
+// Every transport here is "at least once": the same envelope arrives twice as
+// soon as an acknowledgement is lost, which is commonplace. Consuming without
+// idempotency would therefore send the welcome email twice — and the day a
+// consumer charges a card, it will be the charge.
 //
-// Un avertissement au démarrage serait lu une fois puis jamais. Le refus nomme
-// ce qu'il faut changer, et il est réparable en une ligne de configuration.
-var errIdempotenceRequise = errors.New(
-	"consommer des événements sans idempotence rejouerait les effets — activer modules.idempotency")
+// A warning at start-up would be read once then never. The refusal names what
+// has to change, and it is repairable in one line of configuration.
+var errIdempotencyRequired = errors.New(
+	"consuming events without idempotency would replay the effects — enable modules.idempotency")
 
-// abonner branche les consommateurs d'événements sur le relais.
+// subscribe wires the event consumers onto the relay.
 //
-// # Trois issues, et chacune est une décision
+// # Three outcomes, and each one is a decision
 //
-//	notification désactivée  → aucun abonnement, et on le DIT au démarrage
-//	idempotence désactivée   → REFUS de démarrer
-//	les deux actives         → abonnement gardé contre le rejeu
+//	notification disabled  → no subscription, and we SAY so at start-up
+//	idempotency disabled   → REFUSAL to start
+//	both enabled           → subscription guarded against replay
 //
-// Le premier cas ne fait pas échouer le démarrage : un module éteint est un état
-// configuré, pas une panne. Mais le silence serait pire que l'inaction — un
-// dépileur qui publie vers personne ressemble en tout point à un dépileur qui
-// fonctionne. Le journal nomme donc la conséquence.
-func abonner(cfg config.Config, broker messaging.Broker, logger *slog.Logger) error {
+// The first case does not fail the start-up: a module that is off is a
+// configured state, not a failure. But silence would be worse than inaction —
+// a dispatcher publishing to nobody looks in every respect like a dispatcher
+// that works. The log therefore names the consequence.
+func subscribe(cfg config.Config, broker messaging.Broker, logger *slog.Logger) error {
 	notifCfg := cfg.Modules[notification.Name]
 	if !notifCfg.Enabled {
-		logger.Warn("aucun abonnement à user.registered.v1 — modules.notification est désactivé",
-			slog.String("consequence", "les événements sont publiés et personne n'y réagit"),
+		logger.Warn("no subscription to user.registered.v1 — modules.notification is disabled",
+			slog.String("consequence", "the events are published and nobody reacts to them"),
 		)
 		return nil
 	}
 
 	idemCfg := cfg.Modules[idempotency.Name]
 	if !idemCfg.Enabled {
-		return errIdempotenceRequise
+		return errIdempotencyRequired
 	}
 
 	notif, err := notification.New(notifCfg, notification.Deps{Logger: logger})
 	if err != nil {
-		return fmt.Errorf("module notification: %w", err)
+		return fmt.Errorf("notification module: %w", err)
 	}
 	idem, err := idempotency.New(idemCfg, idempotency.Deps{Now: time.Now})
 	if err != nil {
-		return fmt.Errorf("module idempotency: %w", err)
+		return fmt.Errorf("idempotency module: %w", err)
 	}
 
 	guard := subscriber.Guard{Reserve: idem.Reserve, Complete: idem.Complete, Release: idem.Release}
 
-	// L'ORDRE des décorateurs est la décision : la trace est restaurée AVANT le
-	// garde d'idempotence, pour que la réservation elle-même appartienne à la
-	// trace du producteur. Dans l'autre sens, un rejeu refusé n'apparaîtrait
-	// dans aucune trace — et c'est exactement le cas qu'on cherche à expliquer.
+	// The ORDER of the decorators is the decision: the trace is restored
+	// BEFORE the idempotency guard, so that the reservation itself belongs to
+	// the producer's trace. The other way round, a refused replay would appear
+	// in no trace at all — and that is exactly the case we are trying to
+	// explain.
 	broker.Consume.Subscribe(
 		contract.EventUserRegisteredV1,
-		subscriber.WithTrace(subscriber.Once(guard, bienvenue(notif))),
+		subscriber.WithTrace(subscriber.Once(guard, welcome(notif))),
 	)
 
-	logger.Info("abonnement monté",
+	logger.Info("subscription mounted",
 		slog.String("evenement", contract.EventUserRegisteredV1),
 		slog.String("notification", notifCfg.Driver),
 		slog.String("idempotence", idemCfg.Driver),

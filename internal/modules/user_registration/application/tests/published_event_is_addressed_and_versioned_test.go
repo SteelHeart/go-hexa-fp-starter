@@ -8,36 +8,36 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestPublishedEventIsAddressedAndVersioned : l'événement part avec son nom versionné
-// et l'identifiant de son agrégat.
+// TestPublishedEventIsAddressedAndVersioned: the event leaves with its versioned
+// name and the identifier of its aggregate.
 //
-// L'identifiant d'agrégat n'est pas décoratif : c'est lui qui permet de retrouver
-// tous les événements d'un utilisateur lors d'un incident, et de rejouer une
-// séquence dans le bon ordre. Sans lui, l'outbox n'est qu'un tas de messages.
+// The aggregate identifier is not decorative: it is what allows every event of a
+// user to be found during an incident, and a sequence to be replayed in the
+// right order. Without it, the outbox is nothing but a heap of messages.
 //
-// Le contenu est vérifié aussi : le condensé de mot de passe n'a rien à faire dans
-// un message qui traversera un courtier.
+// The content is checked too: the password digest has no business being in a
+// message that will cross a broker.
 func TestPublishedEventIsAddressedAndVersioned(t *testing.T) {
 	t.Parallel()
 
-	observe := &journal{}
-	_ = utilisateurDe(t, inscrit(depsNominales(observe)))
+	observed := &callLog{}
+	_ = userOf(t, register(nominalDeps(observed)))
 
-	if observe.typeEvent != domain.EventUserRegistered {
-		t.Errorf("type d'événement = %q, attendu %q", observe.typeEvent, domain.EventUserRegistered)
+	if observed.eventType != domain.EventUserRegistered {
+		t.Errorf("event type = %q, want %q", observed.eventType, domain.EventUserRegistered)
 	}
-	if observe.agregat != identifiant.String() {
-		t.Errorf("identifiant d'agrégat = %q, attendu %q", observe.agregat, identifiant)
+	if observed.aggregate != identifier.String() {
+		t.Errorf("aggregate identifier = %q, want %q", observed.aggregate, identifier)
 	}
 
-	encoded, err := json.Marshal(observe.evenement)
+	encoded, err := json.Marshal(observed.event)
 	if err != nil {
-		t.Fatalf("l'événement doit être sérialisable: %v", err)
+		t.Fatalf("the event must be serialisable: %v", err)
 	}
-	if strings.Contains(string(encoded), condense) {
-		t.Errorf("l'événement transporte le condensé: %s", encoded)
+	if strings.Contains(string(encoded), digest) {
+		t.Errorf("the event carries the digest: %s", encoded)
 	}
-	if !strings.Contains(string(encoded), adresseValide) {
-		t.Error("l'événement doit porter l'adresse : le consommateur en a besoin")
+	if !strings.Contains(string(encoded), validAddress) {
+		t.Error("the event must carry the address: the consumer needs it")
 	}
 }

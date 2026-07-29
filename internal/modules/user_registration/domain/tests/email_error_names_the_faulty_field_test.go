@@ -6,20 +6,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestEmailErrorNamesTheFaultyField : une erreur de validation nomme son champ.
+// TestEmailErrorNamesTheFaultyField: a validation error names its field.
 //
-// Sans `Field`, une surface HTTP ne peut pas placer le message sous le bon
-// formulaire : elle affiche une bannière générique et l'utilisateur cherche
-// lui-même ce qui cloche. Le champ est ce qui transforme une erreur en correction
-// possible.
+// Without `Field`, an HTTP surface cannot place the message under the right form
+// control: it displays a generic banner and the user has to work out for
+// themselves what is wrong. The field is what turns an error into a possible
+// correction.
 func TestEmailErrorNamesTheFaultyField(t *testing.T) {
 	t.Parallel()
 
-	err := erreurDe(t, domain.NewEmail("pas une adresse"))
+	err := failureOf(t, domain.NewEmail("not an address"))
 	if err.Field != "email" {
-		t.Errorf("champ = %q, attendu \"email\"", err.Field)
+		t.Errorf("field = %q, want \"email\"", err.Field)
 	}
 	if err.Message == "" {
-		t.Error("le message destiné à l'utilisateur ne doit pas être vide")
+		t.Error("the message intended for the user must not be empty")
 	}
 }

@@ -1,6 +1,6 @@
-// Package ports déclare les contrats du stockage d'objets.
+// Package ports declares the contracts of object storage.
 //
-// Ce paquet ne contient QUE des déclarations de types.
+// This package contains ONLY type declarations.
 package ports
 
 import (
@@ -10,24 +10,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/domain"
 )
 
-// Put écrit un objet et retourne son emplacement.
+// Put writes an object and returns its location.
 //
-// Contrat : la clé est TOUJOURS dérivée par domain.SafeKey, jamais construite par
-// le pilote. Un nom refusé rend domain.ErrUnsafeName, quel que soit le pilote.
+// Contract: the key is ALWAYS derived by domain.SafeKey, never built by the
+// driver. A refused name returns domain.ErrUnsafeName, whichever driver is in
+// use.
 //
-// Le contenu est consommé en flux : un pilote ne charge pas l'objet entier en
-// mémoire, sinon un téléversement de deux gigaoctets tuerait le processus.
+// The content is consumed as a stream: a driver does not load the whole object
+// into memory, otherwise a two-gigabyte upload would kill the process.
 type Put = func(ctx context.Context, obj domain.Object) (domain.Located, error)
 
-// Get lit un objet stocké.
+// Get reads a stored object.
 //
-// L'appelant DOIT fermer le flux retourné. Une clé hors des limites du magasin
-// rend domain.ErrUnsafeName — la clé vient d'une URL, donc d'un inconnu.
+// The caller MUST close the returned stream. A key outside the bounds of the
+// store returns domain.ErrUnsafeName — the key comes from a URL, hence from a
+// stranger.
 type Get = func(ctx context.Context, key domain.Key) (io.ReadCloser, error)
 
-// Delete supprime un objet.
+// Delete removes an object.
 //
-// Contrat : supprimer un objet absent n'est PAS une erreur. L'appelant veut que
-// l'objet ne soit plus là, et il n'y est plus. Faire échouer une suppression
-// idempotente obligerait chaque appelant à distinguer deux cas équivalents.
+// Contract: deleting an absent object is NOT an error. The caller wants the
+// object to be gone, and it is gone. Making an idempotent deletion fail would
+// force every caller to distinguish two equivalent cases.
 type Delete = func(ctx context.Context, key domain.Key) error

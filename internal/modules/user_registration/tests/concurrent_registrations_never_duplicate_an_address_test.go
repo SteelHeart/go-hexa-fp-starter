@@ -8,21 +8,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestConcurrentRegistrationsNeverDuplicateAnAddress : deux inscriptions
-// simultanées sur la même adresse, une seule gagne.
+// TestConcurrentRegistrationsNeverDuplicateAnAddress: two simultaneous
+// registrations on the same address, only one wins.
 //
-// # Pourquoi ce test existe
+// # Why this test exists
 //
-// Le cas d'usage vérifie la disponibilité PUIS écrit. Entre les deux, il y a une
-// fenêtre : deux requêtes concurrentes la franchissent toutes les deux, et
-// concluent toutes les deux que l'adresse est libre. C'est le défaut classique
-// « vérifier puis agir », et il ne se manifeste jamais en développement — il
-// apparaît sous charge, en production, sous forme de deux comptes pour une même
-// personne.
+// The use case checks availability THEN writes. Between the two, there is a
+// window: two concurrent requests both cross it, and both conclude that the
+// address is free. This is the classic "check then act" defect, and it never
+// shows up in development — it appears under load, in production, in the shape
+// of two accounts for one and the same person.
 //
-// Seul le MAGASIN peut trancher, parce que lui seul détient le verrou. Ce test
-// verrouille cette garantie pour le pilote `memory` ; le pilote SQL l'obtiendra
-// de sa contrainte d'unicité, et devra passer le même test.
+// Only the STORE can settle it, because only it holds the lock. This test locks
+// that guarantee down for the `memory` driver; the SQL driver will get it from
+// its uniqueness constraint, and will have to pass the same test.
 func TestConcurrentRegistrationsNeverDuplicateAnAddress(t *testing.T) {
 	t.Parallel()
 
@@ -43,10 +42,10 @@ func TestConcurrentRegistrationsNeverDuplicateAnAddress(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-start // relâche tout le monde en même temps
+			<-start // releases everyone at the same time
 
 			_, failure, ok := mod.Register(context.Background(), domain.RegistrationCommand{
-				Email:    "course@example.com",
+				Email:    "race@example.com",
 				Password: validPassword,
 			}).Get()
 
@@ -58,7 +57,7 @@ func TestConcurrentRegistrationsNeverDuplicateAnAddress(t *testing.T) {
 			case failure.Code == domain.CodeEmailAlreadyExists:
 				conflicts++
 			default:
-				t.Errorf("échec inattendu: %v", failure)
+				t.Errorf("unexpected failure: %v", failure)
 			}
 		}()
 	}
@@ -66,9 +65,9 @@ func TestConcurrentRegistrationsNeverDuplicateAnAddress(t *testing.T) {
 	wg.Wait()
 
 	if succeeded != 1 {
-		t.Errorf("inscriptions réussies = %d, attendu exactement 1 — l'unicité de l'adresse n'est pas tenue", succeeded)
+		t.Errorf("successful registrations = %d, want exactly 1 — address uniqueness is not held", succeeded)
 	}
 	if conflicts != attempts-1 {
-		t.Errorf("conflits = %d, attendu %d — les perdants doivent être refusés explicitement", conflicts, attempts-1)
+		t.Errorf("conflicts = %d, want %d — the losers must be refused explicitly", conflicts, attempts-1)
 	}
 }

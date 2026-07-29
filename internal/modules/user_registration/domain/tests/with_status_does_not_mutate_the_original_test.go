@@ -7,18 +7,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestWithStatusDoesNotMutateTheOriginal : `WithStatus` rend une COPIE.
+// TestWithStatusDoesNotMutateTheOriginal: `WithStatus` returns a COPY.
 //
-// L'immuabilité n'est pas un principe décoratif ici. Une valeur partagée entre un
-// décorateur de cache, un journal d'audit et le pipeline métier serait modifiée
-// pour tout le monde à la fois — et l'audit enregistrerait un état que
-// l'utilisateur n'a jamais eu au moment du fait consigné.
+// Immutability is not a decorative principle here. A value shared between a
+// cache decorator, an audit log and the business pipeline would be modified for
+// everyone at once — and the audit would record a state the user never had at
+// the time of the recorded fact.
 func TestWithStatusDoesNotMutateTheOriginal(t *testing.T) {
 	t.Parallel()
 
 	original := domain.NewUser(
 		"user-42",
-		emailValide(t, "alice@example.com"),
+		validEmail(t, "alice@example.com"),
 		domain.NewPasswordHash("$argon2id$..."),
 		time.Now(),
 	)
@@ -26,12 +26,12 @@ func TestWithStatusDoesNotMutateTheOriginal(t *testing.T) {
 	active := original.WithStatus(domain.StatusActive)
 
 	if original.Status != domain.StatusPending {
-		t.Errorf("l'original a été muté: %q", original.Status)
+		t.Errorf("the original was mutated: %q", original.Status)
 	}
 	if active.Status != domain.StatusActive {
-		t.Errorf("la copie porte %q, attendu %q", active.Status, domain.StatusActive)
+		t.Errorf("the copy carries %q, want %q", active.Status, domain.StatusActive)
 	}
 	if active.ID != original.ID || active.Email.String() != original.Email.String() {
-		t.Error("la copie doit conserver les autres champs à l'identique")
+		t.Error("the copy must keep the other fields identical")
 	}
 }

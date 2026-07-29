@@ -10,13 +10,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 )
 
-// TestPostgresDriverRefusesWithoutLogger : ce pilote ne PEUT pas retourner ses
-// pannes — le contrat de ports.IsEnabled l'interdit. Sans journal, une base
-// injoignable éteindrait les fonctionnalités masquées sans laisser de trace. Le
-// journal n'est donc pas un confort, c'est la contrepartie du contrat.
+// TestPostgresDriverRefusesWithoutLogger: this driver can NOT return its
+// outages — the contract of ports.IsEnabled forbids it. Without a logger, an
+// unreachable database would switch the hidden features off without leaving a
+// trace. The logger is therefore not a comfort, it is the counterpart of the
+// contract.
 //
-// Le pool passé est une coquille vide et jamais utilisée : la fabrique ne teste
-// que sa présence, et vérifier un refus n'exige pas une base.
+// The pool passed in is an empty shell and is never used: the factory only
+// tests its presence, and verifying a refusal does not require a database.
 func TestPostgresDriverRefusesWithoutLogger(t *testing.T) {
 	t.Parallel()
 
@@ -25,6 +26,6 @@ func TestPostgresDriverRefusesWithoutLogger(t *testing.T) {
 		dynconf.Deps{Pool: &pgxpool.Pool{}},
 	)
 	if !errors.Is(err, dynconf.ErrLoggerRequired) {
-		t.Errorf("erreur = %v, attendu ErrLoggerRequired", err)
+		t.Errorf("error = %v, want ErrLoggerRequired", err)
 	}
 }

@@ -4,22 +4,24 @@ import (
 	"testing"
 )
 
-// TestStepsRunInTheDeclaredOrder : le pipeline s'exécute dans l'ordre où il se lit.
+// TestStepsRunInTheDeclaredOrder: the pipeline runs in the order in which it
+// reads.
 //
-// C'est la promesse du style : le corps de `NewRegisterUser` se lit comme la liste
-// des étapes métier, et cette lecture doit dire la vérité. Un ordre différent de
-// celui du code rendrait le cas d'usage illisible — on croirait comprendre.
+// That is the promise of the style: the body of `NewRegisterUser` reads like the
+// list of business steps, and that reading must tell the truth. An order
+// different from the one in the code would make the use case unreadable — one
+// would only think one understands.
 //
-// Deux positions ont en plus une raison de SÉCURITÉ ou de COÛT :
-//   - la disponibilité de l'adresse est vérifiée avant le hachage (coût) ;
-//   - l'événement est enregistré après l'écriture (pas d'événement fantôme).
+// Two positions have, in addition, a SECURITY or a COST reason:
+//   - the availability of the address is checked before hashing (cost);
+//   - the event is recorded after the write (no ghost event).
 func TestStepsRunInTheDeclaredOrder(t *testing.T) {
 	t.Parallel()
 
-	observe := &journal{}
-	_ = utilisateurDe(t, inscrit(depsNominales(observe)))
+	observed := &callLog{}
+	_ = userOf(t, register(nominalDeps(observed)))
 
-	attendu := []string{
+	want := []string{
 		"EmailIsTaken",
 		"HashPassword",
 		"GenerateID",
@@ -28,12 +30,12 @@ func TestStepsRunInTheDeclaredOrder(t *testing.T) {
 		"PublishEvent",
 	}
 
-	if len(observe.appels) != len(attendu) {
-		t.Fatalf("appels = %v, attendu %v", observe.appels, attendu)
+	if len(observed.calls) != len(want) {
+		t.Fatalf("calls = %v, want %v", observed.calls, want)
 	}
-	for i, nom := range attendu {
-		if observe.appels[i] != nom {
-			t.Fatalf("appels = %v, attendu %v", observe.appels, attendu)
+	for i, name := range want {
+		if observed.calls[i] != name {
+			t.Fatalf("calls = %v, want %v", observed.calls, want)
 		}
 	}
 }

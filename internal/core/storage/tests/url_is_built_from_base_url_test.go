@@ -9,19 +9,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage"
 )
 
-// TestURLIsBuiltFromBaseURL : l'URL rendue préfixe la clé par l'adresse de base
-// configurée, sans jamais doubler la barre oblique.
+// TestURLIsBuiltFromBaseURL: the returned URL prefixes the key with the
+// configured base address, without ever doubling the slash.
 //
-// L'appelant stocke cette URL en base. Une barre en trop la rend valide un jour et
-// cassée le lendemain selon le serveur qui la sert, et les URL déjà persistées ne
-// se corrigent pas d'un déploiement.
+// The caller stores this URL in the database. One slash too many makes it valid
+// one day and broken the next depending on the server that serves it, and URLs
+// already persisted are not fixed by a deployment.
 func TestURLIsBuiltFromBaseURL(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"sans barre finale": "/files",
-		"avec barre finale": "/files/",
-		"adresse absolue":   "https://cdn.example.test/files/",
+		"without trailing slash": "/files",
+		"with trailing slash":    "/files/",
+		"absolute address":       "https://cdn.example.test/files/",
 	}
 
 	for name, base := range cases {
@@ -44,10 +44,10 @@ func TestURLIsBuiltFromBaseURL(t *testing.T) {
 
 			want := strings.TrimSuffix(base, "/") + "/" + located.Key.String()
 			if located.URL != want {
-				t.Errorf("URL = %q, attendu %q", located.URL, want)
+				t.Errorf("URL = %q, want %q", located.URL, want)
 			}
 			if strings.Contains(strings.TrimPrefix(located.URL, "https://"), "//") {
-				t.Errorf("URL = %q contient une barre doublée", located.URL)
+				t.Errorf("URL = %q contains a doubled slash", located.URL)
 			}
 		})
 	}

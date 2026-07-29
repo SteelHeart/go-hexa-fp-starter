@@ -7,21 +7,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestAuthenticationDeniesEveryUnknownState : seul `active` autorise la connexion.
+// TestAuthenticationDeniesEveryUnknownState: only `active` allows signing in.
 //
-// Le `default` du switch refuse. Ce n'est pas de la paranoïa : le jour où quelqu'un
-// ajoute un état — `suspended`, `deleted` — sans compléter la fonction, le
-// comportement par défaut doit être le REFUS. L'inverse ouvrirait un compte
-// suspendu à cause d'un oubli.
+// The `default` of the switch refuses. This is not paranoia: the day someone
+// adds a state — `suspended`, `deleted` — without completing the function, the
+// default behaviour must be REFUSAL. The opposite would open a suspended account
+// because of an oversight.
 //
-// Le linter `exhaustive` fait échouer la CI dans ce cas ; ce test couvre la
-// situation où quelqu'un désactiverait le linter, ou construirait un état à la main.
+// The `exhaustive` linter fails the CI in that case; this test covers the
+// situation where someone would disable the linter, or build a state by hand.
 func TestAuthenticationDeniesEveryUnknownState(t *testing.T) {
 	t.Parallel()
 
 	base := domain.NewUser(
 		"user-42",
-		emailValide(t, "alice@example.com"),
+		validEmail(t, "alice@example.com"),
 		domain.NewPasswordHash("$argon2id$..."),
 		time.Now(),
 	)
@@ -30,13 +30,13 @@ func TestAuthenticationDeniesEveryUnknownState(t *testing.T) {
 		domain.StatusActive:  true,
 		domain.StatusPending: false,
 		domain.StatusBlocked: false,
-		"état inventé":       false,
+		"invented state":     false,
 		"":                   false,
 	}
 
-	for status, attendu := range cases {
-		if got := base.WithStatus(status).CanAuthenticate(); got != attendu {
-			t.Errorf("CanAuthenticate avec l'état %q = %v, attendu %v", status, got, attendu)
+	for status, want := range cases {
+		if got := base.WithStatus(status).CanAuthenticate(); got != want {
+			t.Errorf("CanAuthenticate with state %q = %v, want %v", status, got, want)
 		}
 	}
 }

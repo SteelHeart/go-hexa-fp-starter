@@ -12,17 +12,17 @@ import (
 	redisidem "github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/drivers/redis"
 )
 
-// TestIdempotencyRedisOnlyOneConcurrentReservationWins éprouve la même
-// exclusivité que le pilote Postgres, contre un moteur radicalement différent.
+// TestIdempotencyRedisOnlyOneConcurrentReservationWins exercises the same
+// exclusivity as the Postgres driver, against a radically different engine.
 //
-// Les deux pilotes portent le même contrat et l'obtiennent par des moyens sans
-// rapport : `ON CONFLICT … WHERE expires_at < now()` d'un côté, `SET NX` de
-// l'autre. Vérifier l'un ne dit rien de l'autre — c'est précisément ce qu'un
-// port en type fonction rend possible, et ce qu'il rend obligatoire de tester
-// deux fois.
+// Both drivers carry the same contract and obtain it by unrelated means:
+// `ON CONFLICT … WHERE expires_at < now()` on one side, `SET NX` on the other.
+// Verifying one says nothing about the other — which is precisely what a port
+// as a function type makes possible, and what it makes mandatory to test
+// twice.
 //
-// Ce test est le seul du dépôt qui touche Redis : le paquet `cache` et ce
-// pilote n'avaient aucun test, à aucun niveau (#37).
+// This test is the only one in the repository that touches Redis: the `cache`
+// package and this driver had no test, at any level (#37).
 func TestIdempotencyRedisOnlyOneConcurrentReservationWins(t *testing.T) {
 	ctx := ctxTest(t)
 	client := redisClient(t)
@@ -30,53 +30,53 @@ func TestIdempotencyRedisOnlyOneConcurrentReservationWins(t *testing.T) {
 	namespace := unique(t, "integration-idem-redis")
 	store := redisidem.New(client, namespace, time.Hour)
 
-	key := domain.Key("cle-partagee")
+	key := domain.Key("shared-key")
 	req := domain.Request{Key: key, Fingerprint: domain.Fingerprint(map[string]string{"a": "b"})}
 
 	t.Cleanup(func() {
 		client.Del(ctxTest(t), namespace+":"+key.String())
 	})
 
-	const appels = 16
+	const calls = 16
 	var (
-		attente  sync.WaitGroup
+		wg       sync.WaitGroup
 		mu       sync.Mutex
-		gagnants int
-		enCours  int
-		autres   []error
-		depart   = make(chan struct{})
+		winners  int
+		inFlight int
+		others   []error
+		start    = make(chan struct{})
 	)
 
-	for range appels {
-		attente.Add(1)
+	for range calls {
+		wg.Add(1)
 		go func() {
-			defer attente.Done()
-			<-depart
+			defer wg.Done()
+			<-start
 
 			res, err := store.Reserve(ctx, req)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
 			case err == nil && !res.Replayed:
-				gagnants++
+				winners++
 			case errors.Is(err, domain.ErrInFlight):
-				enCours++
+				inFlight++
 			default:
-				autres = append(autres, err)
+				others = append(others, err)
 			}
 		}()
 	}
-	close(depart)
-	attente.Wait()
+	close(start)
+	wg.Wait()
 
-	if len(autres) > 0 {
-		t.Fatalf("%d appel(s) ont échoué autrement qu'en « déjà en cours » : %v", len(autres), autres)
+	if len(others) > 0 {
+		t.Fatalf("%d call(s) failed other than with \"already in flight\": %v", len(others), others)
 	}
-	if gagnants != 1 {
-		t.Fatalf("%d réservations obtenues sur %d appels concurrents, attendu exactement 1 — "+
-			"l'opération s'exécuterait %d fois", gagnants, appels, gagnants)
+	if winners != 1 {
+		t.Fatalf("%d reservations obtained out of %d concurrent calls, want exactly 1 — "+
+			"the operation would run %d times", winners, calls, winners)
 	}
-	if enCours != appels-1 {
-		t.Errorf("%d appel(s) refusés en « déjà en cours », attendu %d", enCours, appels-1)
+	if inFlight != calls-1 {
+		t.Errorf("%d call(s) refused as \"already in flight\", want %d", inFlight, calls-1)
 	}
 }

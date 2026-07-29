@@ -8,12 +8,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// TestMissingDependencyRefusesStartup fait échouer le montage, pas la production.
+// TestMissingDependencyRefusesStartup fails the wiring, not production.
 //
-// Sans ce refus, une dépendance oubliée produirait une déréférence de pointeur nil
-// à la PREMIÈRE connexion réelle — donc en production, et avec une trace qui ne
-// dit pas laquelle manquait. Le module refuse au démarrage et NOMME le port
-// absent : c'est la différence entre trente secondes et une soirée.
+// Without this refusal, a forgotten dependency would produce a nil pointer
+// dereference on the FIRST real sign-in — so in production, and with a stack
+// trace that does not say which one was missing. The module refuses at startup
+// and NAMES the missing port: that is the difference between thirty seconds and
+// an evening.
 func TestMissingDependencyRefusesStartup(t *testing.T) {
 	t.Parallel()
 
@@ -24,27 +25,27 @@ func TestMissingDependencyRefusesStartup(t *testing.T) {
 		"HashSecret":   {VerifySecret: complete.VerifySecret, Now: complete.Now},
 		"VerifySecret": {HashSecret: complete.HashSecret, Now: complete.Now},
 		"Now":          {HashSecret: complete.HashSecret, VerifySecret: complete.VerifySecret},
-		"tout":         {},
+		"everything":   {},
 	}
 
 	for name, incomplete := range cases {
 		_, err := auth.New(config.Module{Enabled: true, Driver: "memory"}, incomplete)
 		if !errors.Is(err, auth.ErrMissingDependency) {
-			t.Errorf("sans %s : attendu ErrMissingDependency, obtenu %v", name, err)
+			t.Errorf("without %s: want ErrMissingDependency, got %v", name, err)
 		}
 	}
 }
 
-// TestDisabledModuleNeedsNoDependency : un module éteint se monte sans rien.
+// TestDisabledModuleNeedsNoDependency: a turned-off module mounts with nothing.
 //
-// Exiger ses dépendances ferait échouer le démarrage du serveur à cause d'un
-// module que personne n'a activé — et pousserait à câbler des dépendances
-// factices « pour que ça passe », ce qui est exactement la manière dont un module
-// désactivé finit par être activé sans qu'on s'en aperçoive.
+// Demanding its dependencies would fail the server startup because of a module
+// nobody enabled — and would push people to wire dummy dependencies "so that it
+// passes", which is exactly how a disabled module ends up being enabled without
+// anyone noticing.
 func TestDisabledModuleNeedsNoDependency(t *testing.T) {
 	t.Parallel()
 
 	if _, err := auth.New(config.Module{Enabled: false}, auth.Deps{}); err != nil {
-		t.Fatalf("un module désactivé ne doit exiger aucune dépendance : %v", err)
+		t.Fatalf("a disabled module must demand no dependency: %v", err)
 	}
 }

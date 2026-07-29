@@ -9,18 +9,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestUnmarkableMessageIsReportedAsDuplicateRisk couvre le cas le plus grave et le
-// moins évident du dépilage.
+// TestUnmarkableMessageIsReportedAsDuplicateRisk covers the most serious and
+// least obvious case of dispatching.
 //
-// Le message a été PUBLIÉ, mais la base est tombée avant qu'on puisse l'enregistrer.
-// Il reste donc `pending` et repartira au prochain tour : le consommateur recevra
-// un doublon.
+// The message has been PUBLISHED, but the database went down before it could be
+// recorded. It therefore stays `pending` and will go out again on the next
+// round: the consumer will receive a duplicate.
 //
-// Ce n'est pas un défaut qu'on peut supprimer — publier et enregistrer sont deux
-// systèmes, et aucune transaction ne les couvre ensemble. C'est exactement pourquoi
-// la livraison est « au moins une fois » et pourquoi `ports.Handler` impose
-// l'idempotence au consommateur. Ce qui EST exigible, c'est que le risque soit
-// rapporté distinctement plutôt que confondu avec un échec de publication.
+// This is not a defect that can be removed — publishing and recording are two
+// systems, and no transaction covers them together. That is exactly why
+// delivery is « at least once » and why `ports.Handler` imposes idempotency on
+// the consumer. What IS demandable is that the risk be reported distinctly
+// rather than confused with a publication failure.
 func TestUnmarkableMessageIsReportedAsDuplicateRisk(t *testing.T) {
 	t.Parallel()
 
@@ -29,7 +29,7 @@ func TestUnmarkableMessageIsReportedAsDuplicateRisk(t *testing.T) {
 	handle := func(context.Context, domain.Message) error { published = true; return nil }
 
 	failingMarkDone := func(context.Context, domain.MessageID) error {
-		return errors.New("base injoignable")
+		return errors.New("database unreachable")
 	}
 
 	dispatcher := newDispatcher(t, application.Ports{
@@ -46,12 +46,12 @@ func TestUnmarkableMessageIsReportedAsDuplicateRisk(t *testing.T) {
 	}
 
 	if !published {
-		t.Fatal("le message devait être publié avant l'échec d'enregistrement")
+		t.Fatal("the message was supposed to be published before the recording failure")
 	}
 	if len(observed.failed) != 0 {
-		t.Error("un message PUBLIÉ ne doit pas être reprogrammé comme un échec de publication")
+		t.Error("a PUBLISHED message must not be rescheduled as a publication failure")
 	}
 	if got := observed.lastOutcome(t).Event; got != domain.EventResolveFailed {
-		t.Errorf("événement = %q, attendu %q", got, domain.EventResolveFailed)
+		t.Errorf("event = %q, want %q", got, domain.EventResolveFailed)
 	}
 }

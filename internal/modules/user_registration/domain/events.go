@@ -2,25 +2,25 @@ package domain
 
 import "time"
 
-// EventUserRegistered nomme l'événement d'inscription.
+// EventUserRegistered names the registration event.
 //
-// Le suffixe de version fait partie du nom : un consommateur déployé
-// indépendamment continue de lire la v1 pendant que la v2 apparaît. Renommer un
-// événement sans version est une rupture silencieuse.
+// The version suffix is part of the name: a consumer deployed independently
+// keeps reading v1 while v2 appears. Renaming an event without a version is a
+// silent break.
 const EventUserRegistered = "user.registered.v1"
 
-// UserRegistered est l'événement publié après une inscription réussie.
+// UserRegistered is the event published after a successful registration.
 //
-// Il porte le strict nécessaire au consommateur. Y mettre l'utilisateur entier
-// exposerait le condensé de mot de passe dans l'outbox — une table lue par des
-// humains en incident.
+// It carries the strict minimum the consumer needs. Putting the whole user in it
+// would expose the password digest in the outbox — a table read by humans during
+// an incident.
 type UserRegistered struct {
 	UserID       string    `json:"user_id"`
 	Email        string    `json:"email"`
 	RegisteredAt time.Time `json:"registered_at"`
 }
 
-// NewUserRegistered construit l'événement depuis l'utilisateur créé.
+// NewUserRegistered builds the event from the created user.
 func NewUserRegistered(user User) UserRegistered {
 	return UserRegistered{
 		UserID:       user.ID.String(),

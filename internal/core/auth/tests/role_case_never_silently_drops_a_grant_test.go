@@ -5,19 +5,20 @@ import (
 	"testing"
 )
 
-// TestRoleCaseNeverSilentlyDropsAGrant : `Comptable` et `comptable` sont UN rôle.
+// TestRoleCaseNeverSilentlyDropsAGrant: `Accountant` and `accountant` are ONE
+// role.
 //
-// # Pourquoi ce test existe (ADR 013)
+// # Why this test exists (ADR 013)
 //
-// `NewRole` normalise le nom du rôle et `NewIdentity` normalise ceux qu'elle
-// reçoit — mais l'affectation passe par un chemin distinct. Si ce chemin ne
-// normalise pas, le rôle est retenu sous `Comptable`, cherché sous `comptable`,
-// et n'accorde RIEN.
+// `NewRole` normalises the role name and `NewIdentity` normalises the ones it
+// receives — but assignment goes through a distinct path. If that path does not
+// normalise, the role is kept under `Accountant`, looked up under `accountant`,
+// and grants NOTHING.
 //
-// La faute est de la pire catégorie : elle ne produit aucune erreur. Un
-// administrateur voit le rôle affecté dans l'interface, la personne concernée
-// reçoit un 403, et les deux ont raison de ne pas comprendre. Rien dans les
-// journaux ne mentionne une casse.
+// The fault is of the worst kind: it produces no error at all. An administrator
+// sees the role assigned in the interface, the person concerned gets a 403, and
+// both are right not to understand. Nothing in the logs mentions a case
+// difference.
 func TestRoleCaseNeverSilentlyDropsAGrant(t *testing.T) {
 	t.Parallel()
 
@@ -25,29 +26,29 @@ func TestRoleCaseNeverSilentlyDropsAGrant(t *testing.T) {
 	mod, _ := newModule(t, nil)
 	id := register(t, mod, subject)
 
-	if err := mod.DefineRole(ctx, "Comptable", []string{"billing.invoice.cancel"}); err != nil {
-		t.Fatalf("définition du rôle: %v", err)
+	if err := mod.DefineRole(ctx, "Accountant", []string{"billing.invoice.cancel"}); err != nil {
+		t.Fatalf("defining the role: %v", err)
 	}
-	if err := mod.AssignRoles(ctx, id, []string{"  COMPTABLE  "}); err != nil {
-		t.Fatalf("affectation du rôle: %v", err)
+	if err := mod.AssignRoles(ctx, id, []string{"  ACCOUNTANT  "}); err != nil {
+		t.Fatalf("assigning the role: %v", err)
 	}
 
 	if err := mod.Authorize(ctx, id, permission(t, "billing.invoice.cancel")); err != nil {
-		t.Fatalf("la casse du rôle ne doit jamais faire perdre une permission : %v", err)
+		t.Fatalf("a role's case must never make a permission be lost: %v", err)
 	}
 }
 
-// TestAssigningAnUndefinedRoleGrantsNothingAndFailsNot sépare l'ordre de
-// provisionnement de la décision de sécurité.
+// TestAssigningAnUndefinedRoleGrantsNothingAndFailsNot separates provisioning
+// order from the security decision.
 //
-// Affecter un rôle qui n'existe pas encore n'accorde RIEN — `Grants` ne trouve
-// aucune permission — mais reste permis, pour qu'on puisse provisionner dans
-// l'ordre qu'on veut. Refuser serait une contrainte d'ordonnancement déguisée en
-// règle de sécurité, et elle ferait échouer un import de données parfaitement
-// valide dont les lignes ne sont pas triées.
+// Assigning a role that does not exist yet grants NOTHING — `Grants` finds no
+// permission — but remains allowed, so that one can provision in whatever order
+// one likes. Refusing would be a sequencing constraint dressed up as a security
+// rule, and it would fail a perfectly valid data import whose rows are not
+// sorted.
 //
-// La propriété qui compte est la seconde : l'affectation ne doit rien accorder
-// tant que le rôle n'est pas défini.
+// The property that matters is the second one: the assignment must grant
+// nothing as long as the role is not defined.
 func TestAssigningAnUndefinedRoleGrantsNothingAndFailsNot(t *testing.T) {
 	t.Parallel()
 
@@ -55,38 +56,38 @@ func TestAssigningAnUndefinedRoleGrantsNothingAndFailsNot(t *testing.T) {
 	mod, _ := newModule(t, nil)
 	id := register(t, mod, subject)
 
-	if err := mod.AssignRoles(ctx, id, []string{"jamais-defini"}); err != nil {
-		t.Fatalf("l'affectation ne doit pas dépendre de l'ordre de provisionnement : %v", err)
+	if err := mod.AssignRoles(ctx, id, []string{"never-defined"}); err != nil {
+		t.Fatalf("the assignment must not depend on the provisioning order: %v", err)
 	}
 	if err := mod.Authorize(ctx, id, permission(t, "billing.invoice.cancel")); err == nil {
-		t.Fatal("un rôle non défini ne doit accorder aucune permission")
+		t.Fatal("an undefined role must grant no permission")
 	}
 
-	// Une fois défini, il accorde — sans réaffectation.
-	if err := mod.DefineRole(ctx, "jamais-defini", []string{"billing.invoice.cancel"}); err != nil {
-		t.Fatalf("définition tardive du rôle: %v", err)
+	// Once defined, it grants — without reassignment.
+	if err := mod.DefineRole(ctx, "never-defined", []string{"billing.invoice.cancel"}); err != nil {
+		t.Fatalf("late definition of the role: %v", err)
 	}
 	if err := mod.Authorize(ctx, id, permission(t, "billing.invoice.cancel")); err != nil {
-		t.Fatalf("le rôle défini après coup doit accorder : %v", err)
+		t.Fatalf("the role defined after the fact must grant: %v", err)
 	}
 }
 
-// TestAssigningRolesToAnUnknownIdentityIsRefused interdit le succès silencieux.
+// TestAssigningRolesToAnUnknownIdentityIsRefused forbids the silent success.
 //
-// Un succès silencieux ferait croire à l'administrateur que le droit est posé.
-// C'est la même faute que fermer un compte inexistant sans le dire, et elle se
-// découvre au même moment : quand quelqu'un ne peut pas faire ce qu'on lui a
-// pourtant accordé.
+// A silent success would make the administrator believe the right is in place.
+// It is the same fault as closing a non-existent account without saying so, and
+// it is discovered at the same moment: when someone cannot do what they were
+// nonetheless granted.
 func TestAssigningRolesToAnUnknownIdentityIsRefused(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	mod, _ := newModule(t, nil)
 
-	if err := mod.AssignRoles(ctx, "personne", []string{"comptable"}); err == nil {
-		t.Error("affecter un rôle à une identité inconnue doit être refusé")
+	if err := mod.AssignRoles(ctx, "nobody", []string{"accountant"}); err == nil {
+		t.Error("assigning a role to an unknown identity must be refused")
 	}
-	if err := mod.AssignRoles(ctx, "", []string{"comptable"}); err == nil {
-		t.Error("affecter un rôle à une identité vide doit être refusé")
+	if err := mod.AssignRoles(ctx, "", []string{"accountant"}); err == nil {
+		t.Error("assigning a role to an empty identity must be refused")
 	}
 }

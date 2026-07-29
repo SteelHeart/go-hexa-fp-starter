@@ -8,51 +8,51 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// NewDeactivate compose la fermeture d'un compte.
+// NewDeactivate composes the closure of an account.
 //
-// # Ce que la fermeture atteint, et pourquoi c'est suffisant
+// # What the closure reaches, and why that is enough
 //
-// Elle ne supprime aucune session. Elle n'a pas à le faire : `Verify` relit
-// l'identité à chaque appel et refuse une identité inactive, et `Grants` refuse
-// de même. Le compte cesse donc de valoir au prochain appel, y compris pour les
-// jetons déjà en circulation — c'est la décision 1 de l'ADR 017, et elle rend
-// gratuit ce qui coûterait autrement un balayage du magasin.
+// It deletes no session. It does not have to: `Verify` re-reads the identity on
+// every call and refuses an inactive identity, and `Grants` refuses likewise.
+// The account therefore stops being worth anything on the next call, including
+// for tokens already in circulation — that is decision 1 of ADR 017, and it
+// makes free what would otherwise cost a sweep of the store.
 //
-// Supprimer les sessions en plus serait du nettoyage, pas de la sécurité. Le
-// confondre ferait croire que le nettoyage est ce qui protège, et la protection
-// disparaîtrait le jour où le nettoyage échouerait à moitié.
+// Deleting the sessions on top would be housekeeping, not security. Conflating
+// the two would make people believe housekeeping is what protects, and the
+// protection would vanish the day housekeeping half failed.
 func NewDeactivate(deps Deps) ports.Deactivate {
 	return deps.setActive(domain.Identity.Deactivated)
 }
 
-// NewReactivate compose la réouverture d'un compte.
+// NewReactivate composes the reopening of an account.
 func NewReactivate(deps Deps) ports.Reactivate {
 	return deps.setActive(domain.Identity.Reactivated)
 }
 
-// setActive factorise les deux transitions.
+// setActive factors out the two transitions.
 //
-// La transformation est passée en paramètre plutôt qu'un booléen : l'appelant
-// nomme ce qu'il fait, et il n'existe aucun endroit où l'on puisse écrire
-// « active = true » par inadvertance.
+// The transformation is passed as a parameter rather than a boolean: the caller
+// names what it does, and there is nowhere one could write "active = true"
+// inadvertently.
 //
-// Les deux sont IDEMPOTENTES : appliquer la même transition deux fois donne le
-// même état. Deux administrateurs qui réagissent au même incident ne doivent pas
-// s'annuler.
+// Both are IDEMPOTENT: applying the same transition twice gives the same state.
+// Two administrators reacting to the same incident must not cancel each other
+// out.
 func (d Deps) setActive(transition func(domain.Identity) domain.Identity) func(
 	context.Context, domain.IdentityID,
 ) error {
 	return func(ctx context.Context, id domain.IdentityID) error {
 		if id == "" {
-			return fmt.Errorf("%w: l'identité est obligatoire", domain.ErrIncomplete)
+			return fmt.Errorf("%w: the identity is mandatory", domain.ErrIncomplete)
 		}
 
 		identity, err := d.FindIdentity(ctx, id)
 		if err != nil {
-			return fmt.Errorf("identité: %w", err)
+			return fmt.Errorf("identity: %w", err)
 		}
 		if err := d.UpdateIdentity(ctx, transition(identity)); err != nil {
-			return fmt.Errorf("mise à jour de l'identité: %w", err)
+			return fmt.Errorf("updating the identity: %w", err)
 		}
 		return nil
 	}

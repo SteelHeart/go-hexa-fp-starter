@@ -7,10 +7,10 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestClaimIsExclusive vérifie le contrat le plus important du port : deux
-// réservations concurrentes ne retournent JAMAIS le même message. Le pilote
-// postgres l'obtient par FOR UPDATE SKIP LOCKED ; le pilote memory doit le
-// garantir aussi, sinon il mentirait sur le comportement de production.
+// TestClaimIsExclusive checks the most important contract of the port: two
+// concurrent claims NEVER return the same message. The postgres driver obtains
+// this through FOR UPDATE SKIP LOCKED; the memory driver must guarantee it too,
+// otherwise it would lie about production behaviour.
 func TestClaimIsExclusive(t *testing.T) {
 	t.Parallel()
 
@@ -22,13 +22,13 @@ func TestClaimIsExclusive(t *testing.T) {
 
 	first, err := mod.Claim(ctx, 10)
 	if err != nil || len(first) != 1 {
-		t.Fatalf("première réservation: %d message(s), err=%v", len(first), err)
+		t.Fatalf("first claim: %d message(s), err=%v", len(first), err)
 	}
 	second, err := mod.Claim(ctx, 10)
 	if err != nil {
-		t.Fatalf("seconde réservation: %v", err)
+		t.Fatalf("second claim: %v", err)
 	}
 	if len(second) != 0 {
-		t.Errorf("un message déjà réservé a été rendu une seconde fois: %d", len(second))
+		t.Errorf("an already claimed message was returned a second time: %d", len(second))
 	}
 }

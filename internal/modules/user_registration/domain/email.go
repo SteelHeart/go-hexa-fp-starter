@@ -7,19 +7,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// emailMaxLen borne la longueur d'une adresse. La limite du protocole est 254
-// octets ; au-delà, aucun serveur ne l'accepterait.
+// emailMaxLen bounds the length of an email address. The protocol limit is 254
+// bytes; beyond that, no server would accept it.
 const emailMaxLen = 254
 
-// Email est une adresse de courriel valide et normalisée.
+// Email is a valid, normalised email address.
 //
-// Le champ est non exporté : il est IMPOSSIBLE de fabriquer un Email invalide
-// hors de ce paquet. Conséquence directe : une fonction qui reçoit un Email n'a
-// plus à le valider — c'est le type qui le garantit, pas une convention.
+// The field is unexported: it is IMPOSSIBLE to build an invalid Email outside
+// this package. Direct consequence: a function that receives an Email no longer
+// has to validate it — the type guarantees it, not a convention.
 type Email struct{ value string }
 
-// NewEmail normalise puis valide une adresse. C'est le seul chemin de
-// construction.
+// NewEmail normalises then validates an email address. This is the only
+// construction path.
 func NewEmail(raw string) result.Result[Email, Error] {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 
@@ -36,9 +36,9 @@ func NewEmail(raw string) result.Result[Email, Error] {
 		return invalid("l'adresse de courriel est trop longue")
 	}
 
-	// mail.ParseAddress accepte les formes « Nom <a@b.c> » : on refuse tout ce
-	// qui ne serait pas exactement l'adresse, sinon deux entrées différentes
-	// donneraient le même utilisateur.
+	// mail.ParseAddress accepts the "Name <a@b.c>" forms: we refuse anything
+	// that would not be exactly the address, otherwise two different inputs
+	// would yield the same user.
 	parsed, err := mail.ParseAddress(normalized)
 	if err != nil || parsed.Address != normalized || parsed.Name != "" {
 		return invalid("l'adresse de courriel n'est pas valide")
@@ -49,15 +49,15 @@ func NewEmail(raw string) result.Result[Email, Error] {
 	return result.Ok[Email, Error](Email{value: normalized})
 }
 
-// String retourne l'adresse normalisée.
+// String returns the normalised address.
 func (e Email) String() string { return e.value }
 
-// IsZero indique une adresse non construite.
+// IsZero reports an address that was never constructed.
 func (e Email) IsZero() bool { return e.value == "" }
 
-// Masked retourne une forme masquée, destinée aux journaux.
+// Masked returns a masked form, intended for logs.
 //
-// Un courriel est une donnée personnelle : il ne se journalise jamais en clair
+// An email address is personal data: it is never logged in clear
 // (rules/securite.md §5).
 func (e Email) Masked() string {
 	local, domain, found := strings.Cut(e.value, "@")

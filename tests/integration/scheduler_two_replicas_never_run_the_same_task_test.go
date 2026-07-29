@@ -9,61 +9,62 @@ import (
 	pgsched "github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/drivers/postgres"
 )
 
-// TestSchedulerTwoReplicasNeverRunTheSameTask éprouve l'élection entre
-// répliques.
+// TestSchedulerTwoReplicasNeverRunTheSameTask exercises election between
+// replicas.
 //
-// C'est la propriété que le pilote `cron-inproc` n'a PAS, et qu'il documente
-// comme sa NON-garantie : sans élection, chaque réplique exécute la tâche. Une
-// purge nocturne lancée en triple, ou un rapport envoyé trois fois.
+// This is the property the `cron-inproc` driver does NOT have, and which it
+// documents as its NON-guarantee: without election, every replica runs the
+// task. A nightly purge launched three times over, or a report sent three
+// times.
 //
-// Le verrou consultatif de Postgres appartient à sa SESSION, donc à sa
-// connexion. C'est ce qui rend ce pilote délicat, et intestable sans base : le
-// prendre sur une connexion aussitôt rendue au pool revient à ne rien
-// verrouiller. Deux électeurs distincts, comme deux processus, sont le seul
-// moyen de le constater.
+// The Postgres advisory lock belongs to its SESSION, hence to its connection.
+// That is what makes this driver delicate, and untestable without a database:
+// taking it on a connection immediately handed back to the pool amounts to
+// locking nothing. Two distinct electors, like two processes, are the only way
+// to observe it.
 func TestSchedulerTwoReplicasNeverRunTheSameTask(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
 
-	// Deux électeurs sur le même pool : chacun prendra sa PROPRE connexion, ce
-	// qui reproduit fidèlement deux répliques.
-	replique1 := pgsched.New(p)
-	replique2 := pgsched.New(p)
+	// Two electors on the same pool: each will take its OWN connection, which
+	// faithfully reproduces two replicas.
+	replica1 := pgsched.New(p)
+	replica2 := pgsched.New(p)
 
-	// Un nom propre au test : la clé de verrou en dérive, et une collision avec
-	// un autre test rendrait l'échec intermittent.
+	// A name specific to the test: the lock key derives from it, and a
+	// collision with another test would make the failure intermittent.
 	task := domain.TaskName(unique(t, "integration-purge"))
 
-	elu1, err := replique1.Acquire(ctx, task)
+	elected1, err := replica1.Acquire(ctx, task)
 	if err != nil {
-		t.Fatalf("première élection: %v", err)
+		t.Fatalf("first election: %v", err)
 	}
-	if !elu1 {
-		t.Fatal("la première réplique doit être élue : personne ne tient le verrou")
+	if !elected1 {
+		t.Fatal("the first replica must be elected: nobody holds the lock")
 	}
 
-	elu2, err := replique2.Acquire(ctx, task)
+	elected2, err := replica2.Acquire(ctx, task)
 	if err != nil {
-		t.Fatalf("seconde élection: %v", err)
+		t.Fatalf("second election: %v", err)
 	}
-	if elu2 {
-		t.Fatal("les DEUX répliques ont été élues : la tâche s'exécuterait en double, " +
-			"ce qui est exactement ce que l'élection doit empêcher")
+	if elected2 {
+		t.Fatal("BOTH replicas were elected: the task would run twice, " +
+			"which is exactly what election has to prevent")
 	}
 
-	// Après libération, la seconde doit pouvoir prendre la main — sinon la tâche
-	// ne tournerait plus jamais après le premier redémarrage.
-	if err := replique1.Release(ctx, task); err != nil {
-		t.Fatalf("libération: %v", err)
+	// After release, the second one must be able to take over — otherwise the
+	// task would never run again after the first restart.
+	if err := replica1.Release(ctx, task); err != nil {
+		t.Fatalf("release: %v", err)
 	}
 
-	elu2, err = replique2.Acquire(ctx, task)
+	elected2, err = replica2.Acquire(ctx, task)
 	if err != nil {
-		t.Fatalf("élection après libération: %v", err)
+		t.Fatalf("election after release: %v", err)
 	}
-	if !elu2 {
-		t.Fatal("après libération, la seconde réplique doit être élue : " +
-			"un verrou jamais relâché fige la tâche jusqu'au redémarrage")
+	if !elected2 {
+		t.Fatal("after release, the second replica must be elected: " +
+			"a lock never released freezes the task until restart")
 	}
-	t.Cleanup(func() { _ = replique2.Release(ctxTest(t), task) })
+	t.Cleanup(func() { _ = replica2.Release(ctxTest(t), task) })
 }

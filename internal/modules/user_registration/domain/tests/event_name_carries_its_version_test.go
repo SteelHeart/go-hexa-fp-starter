@@ -7,19 +7,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestEventNameCarriesItsVersion : le nom d'un événement porte sa version.
+// TestEventNameCarriesItsVersion: the name of an event carries its version.
 //
-// Un consommateur est déployé INDÉPENDAMMENT du producteur. Sans version dans le
-// nom, changer la forme de la charge casse silencieusement tous les consommateurs
-// encore en vol — et le producteur, lui, ne voit aucune erreur.
+// A consumer is deployed INDEPENDENTLY of the producer. Without a version in the
+// name, changing the shape of the payload silently breaks every consumer still
+// in flight — and the producer, for its part, sees no error at all.
 //
-// Avec la version, la v2 apparaît à côté de la v1 : les consommateurs migrent à
-// leur rythme, et la v1 se retire quand plus personne ne l'écoute.
+// With the version, v2 appears alongside v1: consumers migrate at their own
+// pace, and v1 is withdrawn once nobody listens to it any more.
 func TestEventNameCarriesItsVersion(t *testing.T) {
 	t.Parallel()
 
 	if !strings.HasSuffix(domain.EventUserRegistered, ".v1") {
-		t.Errorf("nom = %q : un événement sans version est une rupture silencieuse en puissance",
+		t.Errorf("name = %q: an event without a version is a silent break waiting to happen",
 			domain.EventUserRegistered)
 	}
 }

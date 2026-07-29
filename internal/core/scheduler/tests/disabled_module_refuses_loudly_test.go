@@ -10,12 +10,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/application"
 )
 
-// TestDisabledModuleRefusesLoudly : un ordonnanceur désactivé refuse à l'appel.
+// TestDisabledModuleRefusesLoudly: a disabled scheduler refuses when called.
 //
-// `Acquire` rend `false` ET une erreur, et les deux comptent : `false` garantit
-// qu'aucune tâche ne s'exécute, l'erreur garantit que le refus se voit. Un
-// ordonnanceur silencieusement inerte est un défaut qu'on découvre en constatant
-// que le travail n'a pas été fait depuis des semaines.
+// `Acquire` returns `false` AND an error, and both matter: `false` guarantees
+// that no task runs, the error guarantees that the refusal is visible. A
+// silently inert scheduler is a defect one discovers upon noticing that the
+// work has not been done for weeks.
 func TestDisabledModuleRefusesLoudly(t *testing.T) {
 	t.Parallel()
 
@@ -24,23 +24,23 @@ func TestDisabledModuleRefusesLoudly(t *testing.T) {
 		scheduler.Deps{Logger: discardLogger()},
 	)
 	if err != nil {
-		t.Fatalf("un module désactivé se construit sans erreur: %v", err)
+		t.Fatalf("a disabled module builds without error: %v", err)
 	}
 	ctx := context.Background()
 
 	if runErr := mod.Run(ctx, []application.Scheduled{}); !errors.Is(runErr, scheduler.ErrDisabled) {
-		t.Errorf("Run = %v, attendu ErrDisabled", runErr)
+		t.Errorf("Run = %v, want ErrDisabled", runErr)
 	}
 
 	elected, err := mod.Acquire(ctx, "purge")
 	if !errors.Is(err, scheduler.ErrDisabled) {
-		t.Errorf("Acquire = %v, attendu ErrDisabled", err)
+		t.Errorf("Acquire = %v, want ErrDisabled", err)
 	}
 	if elected {
-		t.Error("un module désactivé ne doit élire personne")
+		t.Error("a disabled module must elect nobody")
 	}
 
 	if releaseErr := mod.Release(ctx, "purge"); !errors.Is(releaseErr, scheduler.ErrDisabled) {
-		t.Errorf("Release = %v, attendu ErrDisabled", releaseErr)
+		t.Errorf("Release = %v, want ErrDisabled", releaseErr)
 	}
 }

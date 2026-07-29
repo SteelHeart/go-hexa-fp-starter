@@ -9,31 +9,31 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/domain"
 )
 
-// TestExpiredReservationIsTakenOver : une réservation abandonnée — processus tué
-// entre Reserve et Complete — doit se reprendre. Sans reprise, un plantage
-// bloquerait la clé jusqu'à sa purge et le client ne pourrait plus rien faire.
+// TestExpiredReservationIsTakenOver: an abandoned reservation — process killed
+// between Reserve and Complete — must be taken over. Without take-over, a crash
+// would block the key until it is purged and the client could do nothing more.
 func TestExpiredReservationIsTakenOver(t *testing.T) {
 	t.Parallel()
 
 	clk := newClock()
 	mod := newMemoryModule(t, clk, "1h")
 	ctx := context.Background()
-	req := request("k1", "charge")
+	req := request("k1", "payload")
 
 	if _, err := mod.Reserve(ctx, req); err != nil {
-		t.Fatalf("réservation: %v", err)
+		t.Fatalf("reservation: %v", err)
 	}
 	if _, err := mod.Reserve(ctx, req); !errors.Is(err, domain.ErrInFlight) {
-		t.Fatalf("avant expiration, attendu ErrInFlight, reçu %v", err)
+		t.Fatalf("before expiry, want ErrInFlight, got %v", err)
 	}
 
 	clk.advance(time.Hour + time.Second)
 
 	taken, err := mod.Reserve(ctx, req)
 	if err != nil {
-		t.Fatalf("après expiration, la clé doit être reprise: %v", err)
+		t.Fatalf("after expiry, the key must be taken over: %v", err)
 	}
 	if taken.Replayed {
-		t.Error("une réservation expirée n'a rien mémorisé")
+		t.Error("an expired reservation memorised nothing")
 	}
 }

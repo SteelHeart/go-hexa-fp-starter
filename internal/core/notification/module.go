@@ -1,8 +1,8 @@
-// Package notification est la composition root du module de notification.
+// Package notification is the composition root of the notification module.
 //
-// C'est le SEUL fichier du module qui connaît les pilotes (ADR 012). Les cas
-// d'usage ne voient que des types fonction : changer de pilote ne touche pas une
-// ligne d'`application/` ni de `domain/`.
+// It is the ONLY file of the module that knows the drivers (ADR 012). The use
+// cases only see function types: changing driver does not touch a line of
+// `application/` nor of `domain/`.
 package notification
 
 import (
@@ -18,69 +18,69 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification/ports"
 )
 
-// Name est le nom du module, tel qu'il apparaît dans config/modules.yaml.
+// Name is the module name, as it appears in config/modules.yaml.
 const Name = "notification"
 
-// Pilotes disponibles.
+// Available drivers.
 const (
 	driverLog = "log"
 )
 
-// Clés d'options lues par ce module, partagées avec le catalogue (ADR 014, #93).
+// Option keys read by this module, shared with the catalogue (ADR 014, #93).
 const (
-	// OptionBody décide si le corps du message est journalisé.
+	// OptionBody decides whether the message body is logged.
 	OptionBody = "body"
 )
 
-// Valeurs admises par OptionBody.
+// Values admitted by OptionBody.
 //
-// # Pourquoi deux mots plutôt qu'un booléen
+// # Why two words rather than a boolean
 //
-// `body: false` répond à une question que le fichier ne pose pas — faux quoi ?
-// `body: masked` et `body: logged` nomment les deux positions, donc se relisent
-// sans aller chercher la documentation. Et une valeur mal orthographiée REFUSE
-// le démarrage, là où un booléen mal typé se serait rabattu sur le défaut.
+// `body: false` answers a question the file does not ask — false what?
+// `body: masked` and `body: logged` name the two positions, hence read back
+// without going to look up the documentation. And a misspelled value REFUSES
+// startup, where a mistyped boolean would have fallen back to the default.
 const (
-	// BodyMasked tait le corps. C'est le défaut, et la position sûre.
+	// BodyMasked keeps the body silent. It is the default, and the safe
+	// position.
 	BodyMasked = "masked"
 
-	// BodyLogged écrit le corps — développement uniquement.
+	// BodyLogged writes the body — development only.
 	BodyLogged = "logged"
 )
 
-// Module expose les ports primaires.
+// Module exposes the primary ports.
 //
-// Une surface — HTTP, CLI, consommateur d'événements — ne reçoit QUE cette
-// structure. Elle ne peut donc pas atteindre le fournisseur, ni contourner le
-// cas d'usage.
+// A surface — HTTP, CLI, event consumer — receives ONLY this struct. It
+// therefore cannot reach the provider, nor bypass the use case.
 type Module struct {
 	Send ports.Send
 }
 
-// Deps porte les effets que le module ne fabrique pas lui-même.
+// Deps carries the effects the module does not build itself.
 type Deps struct {
-	// Logger sert au pilote `log`. Il n'est PAS utilisé par les cas d'usage :
-	// `application/` ne journalise pas, il rend compte.
+	// Logger serves the `log` driver. It is NOT used by the use cases:
+	// `application/` does not log, it reports.
 	Logger *slog.Logger
 }
 
-// Erreurs du module.
+// Errors of the module.
 var (
-	// ErrDisabled signale un appel à un module désactivé.
-	ErrDisabled = errors.New("module notification désactivé")
+	// ErrDisabled signals a call to a disabled module.
+	ErrDisabled = errors.New("notification module disabled")
 
-	// ErrMissingDependency refuse un montage incomplet.
-	ErrMissingDependency = errors.New("dépendance obligatoire absente")
+	// ErrMissingDependency refuses an incomplete assembly.
+	ErrMissingDependency = errors.New("mandatory dependency missing")
 
-	errUnknownDriver = errors.New("pilote notification inconnu")
+	errUnknownDriver = errors.New("unknown notification driver")
 
-	errUnknownBodyOption = errors.New("valeur inconnue pour l'option body")
+	errUnknownBodyOption = errors.New("unknown value for the body option")
 )
 
-// New construit le module selon le pilote demandé.
+// New builds the module according to the requested driver.
 //
-// Un pilote inconnu REFUSE le démarrage : une faute de frappe ne se résout
-// jamais en « le pilote le plus proche ». Deny par défaut.
+// An unknown driver REFUSES startup: a typo never resolves into "the closest
+// driver". Deny by default.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return Disabled(), nil
@@ -104,12 +104,12 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	return Module{Send: application.NewSend(application.Deps{Deliver: deliver})}, nil
 }
 
-// logDriver choisit entre les deux constructeurs du pilote `log`.
+// logDriver chooses between the two constructors of the `log` driver.
 //
-// Une valeur inconnue REFUSE le démarrage plutôt que de se rabattre sur le
-// défaut. Le repli serait pourtant tentant — il est « sûr », puisqu'il tait le
-// corps — mais il ferait croire à quelqu'un qui a écrit `body: logué` que le
-// corps sera écrit, et il chercherait ailleurs pendant une heure.
+// An unknown value REFUSES startup rather than falling back to the default. The
+// fallback would be tempting though — it is "safe", since it keeps the body
+// silent — but it would make someone who wrote `body: logging` believe the body
+// will be written, and they would search elsewhere for an hour.
 func logDriver(cfg config.Module, logger *slog.Logger) (ports.Deliver, error) {
 	body, err := cfg.StringOption(OptionBody, BodyMasked)
 	if err != nil {
@@ -123,20 +123,19 @@ func logDriver(cfg config.Module, logger *slog.Logger) (ports.Deliver, error) {
 		return log.NewIncludingBody(logger), nil
 	default:
 		return nil, fmt.Errorf(
-			"%w: %q — attendu %q ou %q", errUnknownBodyOption, body, BodyMasked, BodyLogged)
+			"%w: %q — expected %q or %q", errUnknownBodyOption, body, BodyMasked, BodyLogged)
 	}
 }
 
-// Disabled rend un module qui refuse à l'appel.
+// Disabled returns a module that refuses on call.
 //
-// Il se monte toujours : c'est ce qui permet à un consommateur d'événements
-// d'exister et de rendre compte clairement, plutôt que de faire échouer le
-// démarrage entier pour un module que personne n'a activé.
+// It always mounts: that is what lets an event consumer exist and report
+// clearly, rather than failing the whole startup for a module nobody enabled.
 //
-// ⚠️ Il REFUSE, il n'avale pas. Un module de notification désactivé qui rendrait
-// `nil` ferait compter chaque message comme envoyé — et le défaut ne se verrait
-// qu'au premier client affirmant n'avoir jamais reçu son courriel, c'est-à-dire
-// des semaines plus tard, sans aucune trace.
+// ⚠️ It REFUSES, it does not swallow. A disabled notification module returning
+// `nil` would make every message count as sent — and the defect would only show
+// at the first customer claiming they never received their email, that is to say
+// weeks later, without any trace.
 func Disabled() Module {
 	return Module{
 		Send: func(context.Context, domain.Message) error { return ErrDisabled },

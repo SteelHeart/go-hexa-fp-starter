@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du module storage : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the storage module: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -15,11 +15,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/domain"
 )
 
-// baseURL est l'adresse de lecture utilisée par les tests.
+// baseURL is the read address used by the tests.
 const baseURL = "/files"
 
-// newDiskModule construit le module sur son pilote par défaut, dans un répertoire
-// temporaire nettoyé automatiquement.
+// newDiskModule builds the module on its default driver, in a temporary
+// directory cleaned up automatically.
 func newDiskModule(t *testing.T) storage.Module {
 	t.Helper()
 	mod, err := storage.New(config.Module{
@@ -28,12 +28,12 @@ func newDiskModule(t *testing.T) storage.Module {
 		Options: map[string]any{"base_dir": t.TempDir(), "base_url": baseURL},
 	}, storage.Deps{})
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	return mod
 }
 
-// object forge un objet à stocker.
+// object forges an object to be stored.
 func object(name, content string) domain.Object {
 	return domain.Object{
 		Name:        name,

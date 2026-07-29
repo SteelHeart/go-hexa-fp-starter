@@ -9,14 +9,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestCancellationIsACleanStop : l'annulation est la fin NORMALE d'un ordonnanceur.
+// TestCancellationIsACleanStop: cancellation is the NORMAL end of a scheduler.
 //
-// Un arrêt propre ne doit ressembler à une panne ni dans le code de retour, ni dans
-// les comptes rendus. Sinon chaque redéploiement remplit les alertes, et l'équipe
-// apprend à ignorer les erreurs de l'ordonnanceur — y compris les vraies.
+// A clean stop must not look like an outage, neither in the return code, nor in
+// the reports. Otherwise every redeployment fills the alerts, and the team
+// learns to ignore the errors of the scheduler — including the real ones.
 //
-// Le test ne dort pas : il se termine dès la première exécution, déclenchée par une
-// période très courte, puis annule.
+// The test does not sleep: it finishes as soon as the first execution happens,
+// triggered by a very short period, then cancels.
 func TestCancellationIsACleanStop(t *testing.T) {
 	t.Parallel()
 
@@ -25,10 +25,10 @@ func TestCancellationIsACleanStop(t *testing.T) {
 
 	executed := make(chan struct{}, 1)
 	acquire, release := alwaysElected()
-	log := &journal{}
+	log := &reportLog{}
 	runner := newRunner(t, acquire, release, log)
 
-	quick := domain.Task{Name: "rapide", Every: time.Millisecond, Timeout: time.Second}
+	quick := domain.Task{Name: "quick", Every: time.Millisecond, Timeout: time.Second}
 	stopped := make(chan error, 1)
 	go func() {
 		stopped <- runner.Run(ctx, []application.Scheduled{{
@@ -43,16 +43,16 @@ func TestCancellationIsACleanStop(t *testing.T) {
 		}})
 	}()
 
-	<-executed // la boucle tourne réellement
+	<-executed // the loop really is running
 	cancel()
 
 	if err := <-stopped; err != nil {
-		t.Errorf("Run = %v, un arrêt demandé doit rendre nil", err)
+		t.Errorf("Run = %v, a requested stop must return nil", err)
 	}
 	if log.count(domain.EventSucceeded) == 0 {
-		t.Error("aucune exécution réussie n'a été rapportée")
+		t.Error("no successful execution was reported")
 	}
 	if log.count(domain.EventFailed) != 0 {
-		t.Errorf("un arrêt propre ne doit produire aucun échec, reçu %d", log.count(domain.EventFailed))
+		t.Errorf("a clean stop must produce no failure, got %d", log.count(domain.EventFailed))
 	}
 }

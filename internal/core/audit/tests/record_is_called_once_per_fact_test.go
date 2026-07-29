@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestRecordIsCalledOncePerFact : le pilote log n'écrit qu'une ligne par fait. Un
-// doublon dans un journal d'audit fait douter de tout le journal.
+// TestRecordIsCalledOncePerFact: the log driver writes only one line per fact.
+// A duplicate in an audit log casts doubt on the whole log.
 func TestRecordIsCalledOncePerFact(t *testing.T) {
 	t.Parallel()
 
@@ -22,6 +22,6 @@ func TestRecordIsCalledOncePerFact(t *testing.T) {
 		}
 	}
 	if lines != 1 {
-		t.Errorf("lignes écrites = %d, attendu 1", lines)
+		t.Errorf("lines written = %d, want 1", lines)
 	}
 }

@@ -8,17 +8,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestClaimFailureIsReportedAndStops : un magasin injoignable arrête le tour sans
-// rien perdre. Aucun message n'a été réservé, donc aucun n'est en danger.
+// TestClaimFailureIsReportedAndStops: an unreachable store stops the round
+// without losing anything. No message has been claimed, so none is in danger.
 func TestClaimFailureIsReportedAndStops(t *testing.T) {
 	t.Parallel()
 
 	observed := &spy{}
-	panne := errors.New("base injoignable")
-	failingClaim := func(context.Context, int) ([]domain.Message, error) { return nil, panne }
+	outage := errors.New("database unreachable")
+	failingClaim := func(context.Context, int) ([]domain.Message, error) { return nil, outage }
 
 	handle := func(context.Context, domain.Message) error {
-		t.Error("aucun message ne doit être publié quand la réservation échoue")
+		t.Error("no message must be published when the claim fails")
 		return nil
 	}
 
@@ -27,12 +27,12 @@ func TestClaimFailureIsReportedAndStops(t *testing.T) {
 
 	count, err := dispatcher.DrainOnce(context.Background())
 	if err == nil {
-		t.Fatal("une réservation en échec doit remonter une erreur")
+		t.Fatal("a failed claim must report an error")
 	}
 	if count != 0 {
-		t.Errorf("messages traités = %d, attendu 0", count)
+		t.Errorf("processed messages = %d, want 0", count)
 	}
 	if got := observed.lastOutcome(t).Event; got != domain.EventClaimFailed {
-		t.Errorf("événement = %q, attendu %q", got, domain.EventClaimFailed)
+		t.Errorf("event = %q, want %q", got, domain.EventClaimFailed)
 	}
 }

@@ -1,19 +1,19 @@
-// Commande server expose les surfaces HTTP du socle.
+// Command server exposes the starter's HTTP surfaces.
 //
-// # C'est le composition root : le SEUL code autorisé à tout connaître
+// # This is the composition root: the ONLY code allowed to know everything
 //
-// Il connaît la configuration, les pilotes, les adaptateurs et les modules. Tout
-// le reste du dépôt ne connaît que des types fonction. C'est ce déséquilibre
-// assumé qui garde le cœur pur : il faut bien qu'un endroit branche les fils, et
-// cet endroit est ici, visible, plutôt que dispersé dans un conteneur
-// d'injection (ADR 004).
+// It knows the configuration, the drivers, the adapters and the modules. All
+// the rest of the repository knows nothing but function types. That accepted
+// imbalance is what keeps the core pure: some place has to wire the threads
+// together, and that place is here, visible, rather than scattered across a
+// dependency injection container (ADR 004).
 //
-// # Zéro prérequis d'infrastructure
+// # Zero infrastructure prerequisite
 //
-// Avec la configuration livrée, ce binaire démarre sans base, sans Redis, sans
-// Docker : tous les pilotes par défaut sont en mémoire. C'est la promesse de
-// l'ADR 012, et ce fichier est l'endroit où elle se vérifie — `go run
-// ./cmd/server` doit fonctionner sur une machine vierge.
+// With the shipped configuration, this binary starts with no database, no
+// Redis, no Docker: every default driver is in memory. That is the promise of
+// ADR 012, and this file is where it is checked — `go run ./cmd/server` must
+// work on a bare machine.
 package main
 
 import (
@@ -32,7 +32,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/httpserver"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/ressources"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/resources"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/security"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
@@ -45,10 +45,10 @@ import (
 	userhttp "github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/adapters/primary/http"
 )
 
-// Injectés à la compilation par la CI (voir Dockerfile).
+// Injected at build time by the CI (see Dockerfile).
 //
-// Globales assumées : `-ldflags -X` ne sait écrire que dans une variable de
-// paquet. Il n'existe aucune autre façon de graver la version dans le binaire.
+// Globals accepted: `-ldflags -X` can only write into a package variable.
+// There is no other way to burn the version into the binary.
 var (
 	version   = "dev"
 	commit    = "unknown"
@@ -57,26 +57,26 @@ var (
 
 func main() {
 	if err := run(); err != nil {
-		// Écrit sur stderr et non par le logger : l'échec peut précéder la
-		// construction du logger lui-même.
-		fmt.Fprintf(os.Stderr, "démarrage impossible: %v\n", err)
+		// Written to stderr and not through the logger: the failure may
+		// precede the construction of the logger itself.
+		fmt.Fprintf(os.Stderr, "cannot start: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	// NotifyContext avant tout le reste : un Ctrl+C pendant l'initialisation doit
-	// interrompre, pas être avalé.
+	// NotifyContext before anything else: a Ctrl+C during initialisation must
+	// interrupt, not be swallowed.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Le catalogue AVANT la configuration : c'est lui qui dit ce que la
-	// configuration a le droit de nommer (ADR 014). Aucune table de modules ne
-	// vit dans `internal/config` — elle y nommerait des modules, ce que la
-	// règle 7 d'`arch-go` lui interdit.
+	// The catalogue BEFORE the configuration: it is what says what the
+	// configuration is allowed to name (ADR 014). No module table lives in
+	// `internal/config` — it would name modules there, which `arch-go` rule 7
+	// forbids it.
 	catalog, err := moduleCatalog()
 	if err != nil {
-		return fmt.Errorf("catalogue des modules: %w", err)
+		return fmt.Errorf("module catalogue: %w", err)
 	}
 
 	cfg, err := config.Load(catalog)
@@ -86,21 +86,21 @@ func run() error {
 
 	logger := telemetry.NewLogger(cfg)
 
-	// L'observabilité AVANT tout le reste : un défaut d'initialisation qui
-	// surviendrait après le montage des modules ne serait tracé nulle part.
-	arret, err := demarrerObservabilite(ctx, cfg)
+	// Observability BEFORE everything else: an initialisation defect arising
+	// after the modules are mounted would be traced nowhere.
+	shutdown, err := startObservability(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer arreterObservabilite(ctx, arret, logger)
+	defer stopObservability(ctx, shutdown, logger)
 
-	// Un contexte dérivé, pour que le serveur de métriques puisse couper le
-	// service : sans lui, son échec resterait un avertissement dans un journal.
-	ctx, couper := context.WithCancel(ctx)
-	defer couper()
-	servirMetriques(ctx, cfg, logger, couper)
+	// A derived context, so that the metrics server can cut the service off:
+	// without it, its failure would stay a warning in a log.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	serveMetrics(ctx, cfg, logger, cancel)
 
-	logger.InfoContext(ctx, "démarrage",
+	logger.InfoContext(ctx, "starting",
 		slog.String("service", cfg.App.Name),
 		slog.String("env", string(cfg.App.Env)),
 		slog.String("version", version),
@@ -108,38 +108,38 @@ func run() error {
 		slog.String("build_date", buildDate),
 	)
 
-	// Les connexions AVANT les surfaces : un pilote `postgres` reçoit un pool ou
-	// refuse le démarrage, il ne tombe jamais en panne à la première requête.
+	// The connections BEFORE the surfaces: a `postgres` driver receives a pool
+	// or refuses to start, it never breaks down on the first request.
 	//
-	// Rien n'est ouvert si aucun module activé n'en réclame — c'est la promesse
-	// de l'ADR 012, et corriger #103 ne devait pas la coûter.
-	conn, err := ressources.Open(ctx, cfg, catalog)
+	// Nothing is opened if no enabled module asks for it — that is the promise
+	// of ADR 012, and fixing #103 was not to cost it.
+	conn, err := resources.Open(ctx, cfg, catalog)
 	if err != nil {
-		return fmt.Errorf("ouverture des connexions: %w", err)
+		return fmt.Errorf("opening the connections: %w", err)
 	}
 	defer conn.Close()
 
-	return servir(ctx, cfg, conn, logger)
+	return serve(ctx, cfg, conn, logger)
 }
 
-// servir monte les surfaces et tient le serveur jusqu'à l'annulation.
+// serve mounts the surfaces and holds the server until cancellation.
 //
-// Extraite de `run` parce que celle-ci dépassait le seuil de lignes d'`arch-go`
-// en y branchant l'observabilité. Le garde a attrapé la régression avant la
-// relecture — c'est exactement ce qu'on lui demande.
+// Extracted from `run` because that one went past the `arch-go` line threshold
+// once observability was wired into it. The guard caught the regression before
+// review — which is exactly what it is asked to do.
 //
-// La coupure n'est pas arbitraire : `run` porte désormais l'AMORÇAGE — signaux,
-// catalogue, configuration, journal, observabilité — et `servir` porte les
-// SURFACES. Deux responsabilités, deux fonctions.
-func servir(ctx context.Context, cfg config.Config, conn ressources.Connexions, logger *slog.Logger) error {
+// The cut is not arbitrary: `run` now carries the BOOTSTRAP — signals,
+// catalogue, configuration, log, observability — and `serve` carries the
+// SURFACES. Two responsibilities, two functions.
+func serve(ctx context.Context, cfg config.Config, conn resources.Connections, logger *slog.Logger) error {
 	mounted, err := compose(cfg, conn, logger)
 	if err != nil {
 		return err
 	}
 
-	// L'amorçage AVANT le montage des routes : un compte annoncé sur un serveur
-	// qui n'écoute pas encore ne peut pas être utilisé entre-temps.
-	if err := amorcerAuthentification(ctx, mounted.auth, cfg.App.Env, logger); err != nil {
+	// The bootstrap BEFORE the routes are mounted: an account announced on a
+	// server that is not listening yet cannot be used in the meantime.
+	if err := bootstrapAuthentication(ctx, mounted.auth, cfg.App.Env, logger); err != nil {
 		return err
 	}
 
@@ -148,47 +148,49 @@ func servir(ctx context.Context, cfg config.Config, conn ressources.Connexions, 
 	userhttp.Mount(router.API, mounted.users)
 	userhttp.MountAvailability(router.API, mounted.users)
 
-	// Les chemins annoncés sont ceux qui RÉPONDENT : huma sert le contrat sous
-	// `/openapi.json` et `/openapi.yaml`, jamais sous `/openapi` nu — qui rend 404.
-	// Annoncer un chemin qui ne répond pas envoie chercher une panne inexistante.
-	logger.InfoContext(ctx, "surfaces montées",
+	// The paths announced are the ones that ANSWER: huma serves the contract
+	// under `/openapi.json` and `/openapi.yaml`, never under a bare `/openapi`
+	// — which returns 404. Announcing a path that does not answer sends people
+	// hunting for a failure that does not exist.
+	logger.InfoContext(ctx, "surfaces mounted",
 		slog.String("docs", "/docs"),
 		slog.String("openapi", "/openapi.json · /openapi.yaml"),
 	)
 
 	if err := httpserver.New(cfg, router.Mux, logger).Run(ctx); err != nil {
-		return fmt.Errorf("serveur HTTP: %w", err)
+		return fmt.Errorf("HTTP server: %w", err)
 	}
 	return nil
 }
 
-// assembled rassemble les modules montés.
+// assembled gathers the mounted modules.
 //
-// Structure nommée plutôt que retours multiples : au troisième module, une
-// fonction rendrait quatre valeurs, et « plus de trois retours = un type
-// manquant » est une leçon déjà payée trois fois dans ce dépôt.
+// A named struct rather than multiple return values: at the third module a
+// function would return four values, and "more than three returns = a missing
+// type" is a lesson already paid for three times in this repository.
 type assembled struct {
 	outbox outbox.Module
 	auth   auth.Module
 	users  userregistration.Module
 }
 
-// compose branche les modules noyau puis les modules métier.
+// compose wires the core modules then the business modules.
 //
-// L'ordre n'est pas arbitraire : un module métier consomme les ports du noyau,
-// jamais l'inverse (ADR 012).
-func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger) (assembled, error) {
-	// Le pool peut être nil, légitimement : il l'est dès qu'aucun module activé
-	// ne réclame de base, ce qui est le cas de la configuration livrée. Un pilote
-	// `postgres` activé sans base REFUSE alors le démarrage plutôt que de tomber
-	// en panne à la première requête.
+// The order is not arbitrary: a business module consumes the core's ports,
+// never the other way round (ADR 012).
+func compose(cfg config.Config, conn resources.Connections, logger *slog.Logger) (assembled, error) {
+	// The pool may legitimately be nil: it is as soon as no enabled module
+	// asks for a database, which is the case of the shipped configuration. A
+	// `postgres` driver enabled without a database then REFUSES to start
+	// rather than breaking down on the first request.
 	//
-	// ⚠️ Ce commentaire disait « le pool est nil », au présent et sans condition.
-	// C'était exact, et c'était le défaut : AUCUN binaire n'ouvrait de connexion,
-	// donc aucun pilote `postgres` du dépôt n'était atteignable (#103).
+	// ⚠️ This comment used to say "the pool is nil", in the present tense and
+	// without any condition. It was accurate, and that was the defect: NO
+	// binary opened a connection, so no `postgres` driver of the repository
+	// was reachable (#103).
 	outboxMod, err := outbox.New(cfg.Modules[outbox.Name], outbox.Deps{Pool: conn.Pool, Now: time.Now})
 	if err != nil {
-		return assembled{}, fmt.Errorf("module outbox: %w", err)
+		return assembled{}, fmt.Errorf("outbox module: %w", err)
 	}
 
 	hasher := security.NewHasher(security.Argon2Params{
@@ -197,18 +199,18 @@ func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger)
 		Threads:    cfg.Security.Argon2.Threads,
 	})
 
-	authMod, err := monterAuth(cfg, hasher)
+	authMod, err := mountAuth(cfg, hasher)
 	if err != nil {
 		return assembled{}, err
 	}
 
-	// Le pilote vient de la configuration, qui le porte enfin.
+	// The driver comes from the configuration, which carries it at last.
 	//
-	// Ce champ restait TOUJOURS vide avant l'ADR 014 : `config/modules.yaml` ne
-	// validait que les modules noyau, donc y déclarer `user_registration` faisait
-	// refuser le démarrage. Le module se rabattait silencieusement sur son
-	// défaut, et la tranche de référence contournait le mécanisme qu'elle est
-	// censée démontrer.
+	// This field ALWAYS stayed empty before ADR 014: `config/modules.yaml`
+	// only validated core modules, so declaring `user_registration` there made
+	// the start-up refuse. The module silently fell back to its default, and
+	// the reference slice bypassed the very mechanism it is meant to
+	// demonstrate.
 	driver := cfg.Modules.DriverOf(userregistration.Name)
 
 	users, err := userregistration.New(driver, userregistration.Deps{
@@ -218,54 +220,53 @@ func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger)
 		Now:          userregistration.SystemClock(),
 	})
 	if err != nil {
-		return assembled{}, fmt.Errorf("module user_registration: %w", err)
+		return assembled{}, fmt.Errorf("user_registration module: %w", err)
 	}
 
-	logger.Info("modules montés",
+	logger.Info("modules mounted",
 		slog.String("outbox", cfg.Modules[outbox.Name].Driver),
-		// Le pilote OU « désactivé » : annoncer `auth=memory` sur un module
-		// éteint enverrait chercher un défaut d'authentification du côté du
-		// magasin, alors que la surface rend 503 parce que personne ne l'a
-		// activée.
+		// The driver OR "disabled": announcing `auth=memory` for a module that
+		// is off would send people looking for an authentication defect on the
+		// store side, when the surface returns 503 because nobody enabled it.
 		slog.String("auth", driverOrDisabled(cfg.Modules[auth.Name])),
 		slog.String("user_registration", orDefault(driver, userregistration.DriverMemory)),
 	)
 	return assembled{outbox: outboxMod, auth: authMod, users: users}, nil
 }
 
-// monterAuth branche l'authentification sur le hachage de l'application.
+// mountAuth wires authentication onto the application's hashing.
 //
-// # Pourquoi le hachage vient d'ICI et non du module
+// # Why the hashing comes from HERE and not from the module
 //
-// Argon2id est coûteux et paramétré, et son réglage appartient à la
-// configuration de sécurité de l'application. Un module qui choisirait ses
-// propres paramètres les figerait pour tout le monde — et le socle a précisément
-// un endroit où cette décision se prend.
+// Argon2id is costly and parameterised, and its tuning belongs to the
+// application's security configuration. A module choosing its own parameters
+// would freeze them for everyone — and the starter has precisely one place
+// where that decision is taken.
 //
-// Extraite de `compose` parce que celle-ci dépassait le seuil de lignes
-// d'`arch-go` en y branchant l'ouverture du pool. Le garde a attrapé la
-// régression avant la relecture, pour la deuxième fois sur ce fichier.
-func monterAuth(cfg config.Config, hasher security.Hasher) (auth.Module, error) {
+// Extracted from `compose` because that one went past the `arch-go` line
+// threshold once the pool opening was wired into it. The guard caught the
+// regression before review, for the second time in this file.
+func mountAuth(cfg config.Config, hasher security.Hasher) (auth.Module, error) {
 	mod, err := auth.New(cfg.Modules[auth.Name], auth.Deps{
 		HashSecret:   hasher.Hash,
 		VerifySecret: hasher.Verify,
 		Now:          time.Now,
 	})
 	if err != nil {
-		return auth.Module{}, fmt.Errorf("module auth: %w", err)
+		return auth.Module{}, fmt.Errorf("auth module: %w", err)
 	}
 	return mod, nil
 }
 
-// generateUserID produit un identifiant ordonné dans le temps.
+// generateUserID produces a time-ordered identifier.
 //
-// UUID v7 et non v4 : l'identifiant devient une clé primaire, et une clé
-// aléatoire disperse les insertions sur tout l'index
+// UUID v7 and not v4: the identifier becomes a primary key, and a random key
+// scatters the inserts across the whole index
 // (rules/donnees-et-migrations.md §7).
 //
-// Le repli sur v4 en cas d'échec est délibéré : `NewV7` n'échoue que si
-// l'entropie du système est indisponible, et refuser une inscription pour cette
-// raison serait pire qu'un identifiant moins bien ordonné.
+// The fallback to v4 on failure is deliberate: `NewV7` only fails when the
+// system entropy is unavailable, and refusing a registration for that reason
+// would be worse than a less well ordered identifier.
 func generateUserID() domain.UserID {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -274,20 +275,21 @@ func generateUserID() domain.UserID {
 	return domain.UserID(id.String())
 }
 
-// probes déclare ce que /readyz vérifie.
+// probes declares what /readyz checks.
 //
-// /healthz ne vérifie RIEN, volontairement : sinon un incident de base ferait
-// redémarrer tous les conteneurs, transformant une panne partielle en
-// indisponibilité totale. /readyz, lui, retire l'instance du service.
+// /healthz checks NOTHING, deliberately: otherwise a database incident would
+// restart every container, turning a partial failure into total
+// unavailability. /readyz, on the other hand, removes the instance from the
+// service.
 func probes(mods assembled) map[string]httpserver.Probe {
 	return map[string]httpserver.Probe{
-		// L'outbox est la dépendance dont la panne est SILENCIEUSE : si le
-		// dépileur meurt, tout continue de répondre pendant que les événements
-		// s'accumulent. Compter les messages en attente est le seul symptôme
-		// observable, donc la sonde la plus utile du système.
+		// The outbox is the dependency whose failure is SILENT: if the
+		// dispatcher dies, everything keeps answering while the events pile
+		// up. Counting the pending messages is the only observable symptom,
+		// hence the most useful probe of the system.
 		"outbox": func(ctx context.Context) error {
 			if _, err := mods.outbox.PendingCount(ctx); err != nil {
-				return fmt.Errorf("outbox injoignable: %w", err)
+				return fmt.Errorf("outbox unreachable: %w", err)
 			}
 			return nil
 		},
@@ -301,40 +303,40 @@ func orDefault(value, fallback string) string {
 	return value
 }
 
-// driverOrDisabled rend le pilote d'un module, ou son état d'inactivité.
+// driverOrDisabled returns a module's driver, or its inactive state.
 //
-// Un journal qui nomme un pilote pour un module éteint est un journal qui ment
-// utilement : il répond à la question qu'on n'a pas posée, et cache celle qui
-// compte. C'est mesuré — un démarrage en production annonçait `auth=memory`
-// alors que la surface rendait 503.
+// A log that names a driver for a module that is off is a log that lies
+// usefully: it answers the question nobody asked, and hides the one that
+// matters. This is measured — a production start-up announced `auth=memory`
+// while the surface was returning 503.
 func driverOrDisabled(mod config.Module) string {
 	if !mod.Enabled {
-		return "désactivé"
+		return "disabled"
 	}
 	return mod.Driver
 }
 
-// moduleCatalog assemble ce que la configuration a le droit de nommer.
+// moduleCatalog assembles what the configuration is allowed to name.
 //
-// Le noyau apporte le sien ; ce binaire y ajoute celui de chaque module métier
-// qu'il embarque. Aucun fichier du framework ne nomme un module métier — c'est
-// très exactement la friction que l'ADR 014 supprime.
+// The core brings its own; this binary adds that of every business module it
+// embeds. No framework file names a business module — that is very exactly
+// the friction ADR 014 removes.
 func moduleCatalog() (config.ModuleCatalog, error) {
 	coreCatalog, err := core.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue du noyau: %w", err)
+		return nil, fmt.Errorf("core catalogue: %w", err)
 	}
-	// Les deux binaires lisent le MÊME `config/modules.yaml` : l'ensemble des
-	// modules déclarables est donc une propriété de l'application, pas du
-	// binaire. Voir internal/modules/catalog.go — le dépileur refusait de
-	// démarrer tant que ce n'était pas le cas.
+	// Both binaries read the SAME `config/modules.yaml`: the set of declarable
+	// modules is therefore a property of the application, not of the binary.
+	// See internal/modules/catalog.go — the dispatcher refused to start until
+	// that was the case.
 	businessCatalog, err := modules.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue des modules métier: %w", err)
+		return nil, fmt.Errorf("business module catalogue: %w", err)
 	}
 	merged, err := config.MergeCatalogs(coreCatalog, businessCatalog)
 	if err != nil {
-		return nil, fmt.Errorf("fusion des catalogues: %w", err)
+		return nil, fmt.Errorf("merging the catalogues: %w", err)
 	}
 	return merged, nil
 }

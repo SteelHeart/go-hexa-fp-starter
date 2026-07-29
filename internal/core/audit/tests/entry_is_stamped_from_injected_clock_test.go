@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// TestEntryIsStampedFromInjectedClock : l'instant vient d'un port, jamais de
-// time.Now(). Sans cette injection, aucun test d'audit ne serait déterministe et
-// aucune rétention ne serait vérifiable.
+// TestEntryIsStampedFromInjectedClock: the instant comes from a port, never
+// from time.Now(). Without that injection, no audit test would be deterministic
+// and no retention would be verifiable.
 func TestEntryIsStampedFromInjectedClock(t *testing.T) {
 	t.Parallel()
 
@@ -17,12 +17,12 @@ func TestEntryIsStampedFromInjectedClock(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	raw, _ := decodeJournal(t, buf)["occurred_at"].(string)
+	raw, _ := decodeLogLine(t, buf)["occurred_at"].(string)
 	stamped, err := time.Parse(time.RFC3339Nano, raw)
 	if err != nil {
-		t.Fatalf("horodatage illisible (%q): %v", raw, err)
+		t.Fatalf("unreadable timestamp (%q): %v", raw, err)
 	}
 	if !stamped.Equal(recordedAt()) {
-		t.Errorf("occurred_at = %v, attendu %v", stamped, recordedAt())
+		t.Errorf("occurred_at = %v, want %v", stamped, recordedAt())
 	}
 }

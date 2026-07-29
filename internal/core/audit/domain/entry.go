@@ -1,4 +1,4 @@
-// Package domain porte le vocabulaire du journal d'audit, sans dépendance.
+// Package domain carries the vocabulary of the audit log, with no dependency.
 package domain
 
 import (
@@ -6,44 +6,43 @@ import (
 	"time"
 )
 
-// ErrIncomplete refuse une entrée sans acteur, action ou entité.
+// ErrIncomplete refuses an entry without an actor, an action or an entity.
 //
-// Déclarée dans le domaine et non dans un pilote : tous les pilotes doivent
-// refuser la MÊME chose, et un appelant doit pouvoir la reconnaître avec
-// errors.Is quel que soit le pilote branché. C'est la forme opérationnelle de
-// la substituabilité (ADR 003).
-var ErrIncomplete = errors.New("entrée d'audit incomplète")
+// Declared in the domain and not in a driver: every driver must refuse the
+// SAME thing, and a caller must be able to recognise it with errors.Is
+// whichever driver is plugged in. This is the operational form of
+// substitutability (ADR 003).
+var ErrIncomplete = errors.New("incomplete audit entry")
 
-// Entry est un fait d'audit.
+// Entry is an audit fact.
 //
-// Volontairement pauvre : un journal d'audit répond à « qui a fait quoi, quand,
-// sur quoi ». Il ne répond pas à « pourquoi » — ça, c'est le rôle de l'issue et
-// de la PR.
+// Deliberately poor: an audit log answers "who did what, when, on what". It
+// does not answer "why" — that is the job of the issue and of the PR.
 type Entry struct {
-	// Actor identifie l'auteur. Un identifiant, jamais un nom ni une adresse.
+	// Actor identifies the author. An identifier, never a name nor an address.
 	Actor string
-	// Action nomme le fait, au passé et à la forme métier : "user.registered",
-	// pas "INSERT users".
+	// Action names the fact, in the past tense and in business form:
+	// "user.registered", not "INSERT users".
 	Action     string
 	EntityType string
 	EntityID   string
-	// Metadata ne doit contenir AUCUNE donnée personnelle en clair : le journal
-	// est conservé longtemps et lu par des humains (rules/securite.md §5).
+	// Metadata must contain NO personal data in the clear: the log is kept for
+	// a long time and read by humans (rules/securite.md §5).
 	Metadata map[string]any
 	At       time.Time
 }
 
-// WithTime retourne une copie horodatée. L'instant vient d'un port, jamais de
-// time.Now() : un test d'audit doit être déterministe.
+// WithTime returns a timestamped copy. The instant comes from a port, never
+// from time.Now(): an audit test must be deterministic.
 func (e Entry) WithTime(at time.Time) Entry {
 	e.At = at.UTC()
 	return e
 }
 
-// IsComplete indique si l'entrée porte le minimum exploitable.
+// IsComplete says whether the entry carries the usable minimum.
 //
-// Une entrée d'audit incomplète est pire qu'absente : elle donne l'illusion
-// d'une traçabilité. Le pilote refuse donc d'écrire ce qui n'est pas complet.
+// An incomplete audit entry is worse than an absent one: it gives the illusion
+// of traceability. The driver therefore refuses to write what is not complete.
 func (e Entry) IsComplete() bool {
 	return e.Actor != "" && e.Action != "" && e.EntityType != "" && e.EntityID != ""
 }

@@ -8,26 +8,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestExhaustedMessageStopsBeingReplayed : après N essais, on arrête.
+// TestExhaustedMessageStopsBeingReplayed: after N tries, we stop.
 //
-// Un message empoisonné — charge illisible par le consommateur, destinataire
-// disparu — ne se publiera jamais. Le rejouer éternellement noierait les journaux
-// et occuperait chaque lot, retardant les messages sains derrière lui.
+// A poisoned message — payload unreadable by the consumer, recipient gone —
+// will never be published. Replaying it forever would drown the logs and take
+// up every batch, delaying the healthy messages behind it.
 //
-// Il passe donc en `failed` et n'est plus repris. Il n'est PAS supprimé : c'est la
-// seule trace de ce qui n'a pas été publié, et l'événement mérite une intervention
-// humaine — d'où le compte rendu distinct.
+// It therefore goes to `failed` and is no longer picked up. It is NOT deleted:
+// it is the only trace of what has not been published, and the event deserves
+// human intervention — hence the distinct report.
 func TestExhaustedMessageStopsBeingReplayed(t *testing.T) {
 	t.Parallel()
 
 	observed := &spy{}
 	handle := func(context.Context, domain.Message) error {
-		return errors.New("charge illisible")
+		return errors.New("unreadable payload")
 	}
 
-	// La politique de test autorise trois tentatives au total.
+	// The test policy allows three attempts in total.
 	policy := testPolicy()
-	// Le message a déjà échoué deux fois : cet essai est le troisième.
+	// The message has already failed twice: this try is the third.
 	dispatcher := newDispatcher(t,
 		dispatcherPorts(observed, claimOnce(pending("m-1", 2)), handle), policy)
 
@@ -37,15 +37,15 @@ func TestExhaustedMessageStopsBeingReplayed(t *testing.T) {
 
 	attempt := observed.lastAttempt(t)
 	if attempt.Attempts != policy.Retry.MaxAttempts {
-		t.Errorf("tentatives = %d, attendu %d", attempt.Attempts, policy.Retry.MaxAttempts)
+		t.Errorf("attempts = %d, want %d", attempt.Attempts, policy.Retry.MaxAttempts)
 	}
 	if attempt.Status != domain.StatusFailed {
-		t.Errorf("statut = %q, attendu %q", attempt.Status, domain.StatusFailed)
+		t.Errorf("status = %q, want %q", attempt.Status, domain.StatusFailed)
 	}
 	if attempt.Reason == "" {
-		t.Error("la cause doit être conservée : sans elle, la trace est inexploitable")
+		t.Error("the cause must be kept: without it, the trace is unusable")
 	}
 	if got := observed.lastOutcome(t).Event; got != domain.EventExhausted {
-		t.Errorf("événement = %q, attendu %q", got, domain.EventExhausted)
+		t.Errorf("event = %q, want %q", got, domain.EventExhausted)
 	}
 }

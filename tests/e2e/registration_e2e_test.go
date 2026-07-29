@@ -1,30 +1,30 @@
 //go:build e2e
 
-// Package e2e éprouve le BINAIRE déployé, par-dessus le réseau.
+// Package e2e exercises the DEPLOYED BINARY, over the network.
 //
-// # Ce que ce niveau ajoute, et ce qu'il n'ajoute pas
+// # What this level adds, and what it does not
 //
-// La surface HTTP a déjà ses tests, en processus, dans
-// `internal/modules/user_registration/adapters/primary/http/tests/`. Ils sont
-// plus rapides, plus précis, et tournent partout. Répéter ici ce qu'ils
-// vérifient n'apporterait rien qu'un doublon à maintenir.
+// The HTTP surface already has its tests, in process, under
+// `internal/modules/user_registration/adapters/primary/http/tests/`. They are
+// faster, more precise, and run everywhere. Repeating here what they verify
+// would bring nothing but a duplicate to maintain.
 //
-// Ce niveau vérifie ce qu'eux ne PEUVENT pas vérifier : que le binaire compilé,
-// avec la configuration LIVRÉE, démarre réellement et répond. C'est-à-dire tout
-// ce qui se passe entre `go build` et la première requête — chargement de la
-// configuration, montage des modules, pile de middlewares, écoute réseau.
+// This level verifies what they CANNOT verify: that the compiled binary, with
+// the SHIPPED configuration, really starts and answers. That is, everything
+// that happens between `go build` and the first request — configuration
+// loading, module mounting, middleware stack, network listening.
 //
-// C'est exactement la classe de défaut qu'un test en processus laisse passer :
-// une configuration invalide, un module qui refuse de se monter, un port qui
-// n'écoute pas.
+// This is exactly the class of defect an in-process test lets through: an
+// invalid configuration, a module that refuses to mount, a port that does not
+// listen.
 //
-// # Exécution
+// # Running
 //
 //	go test -tags=e2e ./tests/e2e/...
 //
-// ⚠️ SANS le tag, ce fichier n'est pas compilé : `go test ./tests/e2e/...`
-// affiche `ok` en n'exécutant RIEN. Vérifier le code de retour ne suffit pas —
-// il faut vérifier que des tests ont réellement tourné.
+// ⚠️ WITHOUT the tag, this file is not compiled: `go test ./tests/e2e/...`
+// prints `ok` while running NOTHING. Checking the exit code is not enough —
+// one has to check that tests really ran.
 package e2e
 
 import (
@@ -36,76 +36,76 @@ import (
 	"time"
 )
 
-// baseURL est l'adresse du serveur lancé par la CI.
+// baseURL is the address of the server started by the CI.
 func baseURL(t *testing.T) string {
 	t.Helper()
 
 	url := os.Getenv("E2E_BASE_URL")
 	if url == "" {
-		t.Skip("E2E_BASE_URL absent : aucun serveur à interroger")
+		t.Skip("E2E_BASE_URL missing: no server to query")
 	}
 	return url
 }
 
-// TestDeployedBinaryRegistersAUser : le binaire compilé répond à une inscription.
+// TestDeployedBinaryRegistersAUser: the compiled binary answers a registration.
 //
-// Le parcours complet, par-dessus le réseau : chargement de la configuration
-// livrée, montage des modules, pile de middlewares, écoute, traitement.
+// The complete journey, over the network: loading of the shipped
+// configuration, module mounting, middleware stack, listening, handling.
 func TestDeployedBinaryRegistersAUser(t *testing.T) {
 	url := baseURL(t)
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// Adresse unique par exécution : la CI peut rejouer le job sans que le
-	// magasin, s'il est durable, ne fasse échouer la seconde tentative en 409.
+	// One address per run: the CI can replay the job without the store, if it
+	// is durable, making the second attempt fail with a 409.
 	email := "e2e-" + time.Now().UTC().Format("20060102150405.000000000") + "@example.test"
 	body, err := json.Marshal(map[string]string{
 		"email":    email,
-		"password": "correct cheval batterie agrafe",
+		"password": "correct horse battery staple",
 	})
 	if err != nil {
-		t.Fatalf("sérialisation: %v", err)
+		t.Fatalf("serialisation: %v", err)
 	}
 
-	resp, err := client.Post(url+"/v1/users", "application/json", bytes.NewReader(body)) //nolint:noctx // client avec délai explicite
+	resp, err := client.Post(url+"/v1/users", "application/json", bytes.NewReader(body)) //nolint:noctx // client with an explicit timeout
 	if err != nil {
 		t.Fatalf("POST /v1/users: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("statut = %d, attendu 201", resp.StatusCode)
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
 	}
 
 	var payload map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("corps illisible: %v", err)
+		t.Fatalf("unreadable body: %v", err)
 	}
 	if got := payload["status"]; got != "pending" {
-		t.Errorf("status = %v, attendu pending", got)
+		t.Errorf("status = %v, want pending", got)
 	}
 	if id, ok := payload["user_id"].(string); !ok || id == "" {
-		t.Errorf("user_id = %v, attendu un identifiant non vide", payload["user_id"])
+		t.Errorf("user_id = %v, want a non-empty identifier", payload["user_id"])
 	}
 }
 
-// TestDeployedBinaryServesItsContract : le contrat OpenAPI est servi.
+// TestDeployedBinaryServesItsContract: the OpenAPI contract is served.
 //
-// Un contrat que le binaire n'expose pas est un contrat que personne ne peut
-// consommer : les SDK clients en découlent. Le chemin NU `/openapi` rend 404 —
-// c'est une erreur déjà commise ici, et ce test la fige.
+// A contract the binary does not expose is a contract nobody can consume:
+// client SDKs are derived from it. The BARE path `/openapi` returns 404 —
+// that is a mistake already made here, and this test locks it down.
 func TestDeployedBinaryServesItsContract(t *testing.T) {
 	url := baseURL(t)
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/healthz"} {
-		resp, err := client.Get(url + path) //nolint:noctx // client avec délai explicite
+		resp, err := client.Get(url + path) //nolint:noctx // client with an explicit timeout
 		if err != nil {
 			t.Errorf("GET %s: %v", path, err)
 			continue
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			t.Errorf("GET %s = %d, attendu 200", path, resp.StatusCode)
+			t.Errorf("GET %s = %d, want 200", path, resp.StatusCode)
 		}
 	}
 }

@@ -10,52 +10,52 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestBootstrapCreatesNothingOutsideDevelopment est le garde qui rend l'amorçage
-// acceptable.
+// TestBootstrapCreatesNothingOutsideDevelopment is the guard that makes
+// bootstrapping acceptable.
 //
-// # Ce qu'il empêche
+// # What it prevents
 //
-// Un compte de démonstration créé en production. Le raccourci n'est tolérable
-// QUE parce qu'il n'existe pas ailleurs qu'en local — et « il n'existe pas
-// ailleurs » est une affirmation qui se vérifie ou qui se dégrade.
+// A demo account created in production. The shortcut is tolerable ONLY because
+// it does not exist anywhere but locally — and "it does not exist anywhere
+// else" is a claim that is either checked or degrades.
 //
-// Le test constate les deux moitiés : rien n'est rendu dans le compte rendu, ET
-// aucune identité n'existe réellement — parce qu'un compte rendu vide ne prouve
-// rien si l'écriture a eu lieu quand même.
+// The test records both halves: nothing is returned in the report, AND no
+// identity really exists — because an empty report proves nothing if the write
+// happened anyway.
 func TestBootstrapCreatesNothingOutsideDevelopment(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	for _, env := range []config.Environment{config.EnvProduction, config.EnvUAT, "n'importe quoi", ""} {
+	for _, env := range []config.Environment{config.EnvProduction, config.EnvUAT, "anything at all", ""} {
 		mod, _ := newModule(t, nil)
 
 		report, err := auth.Bootstrap(ctx, mod, env)
 		if err != nil {
-			t.Fatalf("env %q : l'amorçage refuse d'agir, il n'échoue pas — %v", env, err)
+			t.Fatalf("env %q: bootstrapping refuses to act, it does not fail — %v", env, err)
 		}
 		if report.Created || report.Subject != "" || report.Secret != "" {
-			t.Fatalf("env %q : l'amorçage a agi hors développement — %+v", env, report)
+			t.Fatalf("env %q: bootstrapping acted outside development — %+v", env, report)
 		}
 
-		// La preuve qui compte : aucun compte n'existe. Un compte rendu vide se
-		// falsifie en une ligne ; un magasin peuplé, non.
-		_, err = mod.Authenticate(ctx, auth.BootstrapSubject, "n'importe quel secret")
+		// The proof that matters: no account exists. An empty report can be
+		// faked in one line; a populated store cannot.
+		_, err = mod.Authenticate(ctx, auth.BootstrapSubject, "any secret whatsoever")
 		if !errors.Is(err, domain.ErrInvalidCredentials) {
-			t.Fatalf("env %q : un compte d'amorçage existe — %v", env, err)
+			t.Fatalf("env %q: a bootstrap account exists — %v", env, err)
 		}
 	}
 }
 
-// TestBootstrapOpensASessionInDevelopment referme le délai avant premier succès.
+// TestBootstrapOpensASessionInDevelopment closes the time to first success.
 //
-// C'est le critère d'acceptation de #99 : un serveur fraîchement démarré doit
-// permettre d'obtenir une session. Avant, `POST /v1/auth/sessions` rendait 401
-// pour tout le monde, sans exception, faute d'un compte créable.
+// This is the acceptance criterion of #99: a freshly started server must make
+// it possible to obtain a session. Before, `POST /v1/auth/sessions` returned
+// 401 to everybody, without exception, for want of a creatable account.
 //
-// Le secret est ENGENDRÉ, donc le test ne peut pas le connaître d'avance — il le
-// lit dans le compte rendu, ce qui est exactement ce que fera l'exploitant en
-// lisant son journal.
+// The secret is GENERATED, so the test cannot know it in advance — it reads it
+// from the report, which is exactly what the operator will do reading their
+// log.
 func TestBootstrapOpensASessionInDevelopment(t *testing.T) {
 	t.Parallel()
 
@@ -64,26 +64,26 @@ func TestBootstrapOpensASessionInDevelopment(t *testing.T) {
 
 	report, err := auth.Bootstrap(ctx, mod, config.EnvDevelopment)
 	if err != nil {
-		t.Fatalf("amorçage: %v", err)
+		t.Fatalf("bootstrapping: %v", err)
 	}
 	if !report.Created {
-		t.Fatal("l'amorçage devait créer un compte en développement")
+		t.Fatal("bootstrapping should have created an account in development")
 	}
 	if len(report.Secret) < 12 {
-		t.Fatalf("le secret engendré doit satisfaire les bornes du module, obtenu %d caractères", len(report.Secret))
+		t.Fatalf("the generated secret must satisfy the module's bounds, got %d characters", len(report.Secret))
 	}
 
 	if _, err := mod.Authenticate(ctx, report.Subject, report.Secret); err != nil {
-		t.Fatalf("le compte amorcé doit s'authentifier : %v", err)
+		t.Fatalf("the bootstrapped account must authenticate: %v", err)
 	}
 }
 
-// TestBootstrapEngendersADistinctSecretEachTime garde l'aléa.
+// TestBootstrapEngendersADistinctSecretEachTime guards the randomness.
 //
-// Un secret dérivé du sujet, de l'horloge ou d'une constante serait devinable —
-// et un poste de développement est souvent joignable depuis le réseau local. Le
-// fait qu'un secret soit « seulement » de développement ne le rend pas moins
-// utilisable par quelqu'un d'autre.
+// A secret derived from the subject, from the clock or from a constant would be
+// guessable — and a development workstation is often reachable from the local
+// network. The fact that a secret is "only" for development does not make it
+// any less usable by someone else.
 func TestBootstrapEngendersADistinctSecretEachTime(t *testing.T) {
 	t.Parallel()
 
@@ -94,21 +94,21 @@ func TestBootstrapEngendersADistinctSecretEachTime(t *testing.T) {
 		mod, _ := newModule(t, nil)
 		report, err := auth.Bootstrap(ctx, mod, config.EnvDevelopment)
 		if err != nil {
-			t.Fatalf("amorçage: %v", err)
+			t.Fatalf("bootstrapping: %v", err)
 		}
 		if seen[report.Secret] {
-			t.Fatalf("secret réutilisé d'un amorçage à l'autre : %q", report.Secret)
+			t.Fatalf("secret reused from one bootstrap to the next: %q", report.Secret)
 		}
 		seen[report.Secret] = true
 	}
 }
 
-// TestBootstrapIsIdempotentAndNeverResetsAnAccount garde le compte existant.
+// TestBootstrapIsIdempotentAndNeverResetsAnAccount guards the existing account.
 //
-// Redémarrer un serveur ne doit pas réinitialiser un compte existant, ni rendre
-// un secret qu'on ne connaît pas. Le second appel ne crée rien et ne prétend
-// rien : c'est ce qui évite qu'un exploitant croie avoir reçu le mot de passe
-// courant alors qu'il lit celui d'un compte jamais créé.
+// Restarting a server must not reset an existing account, nor return a secret
+// nobody knows. The second call creates nothing and claims nothing: that is
+// what prevents an operator from believing they received the current password
+// when they are reading that of an account that was never created.
 func TestBootstrapIsIdempotentAndNeverResetsAnAccount(t *testing.T) {
 	t.Parallel()
 
@@ -117,59 +117,59 @@ func TestBootstrapIsIdempotentAndNeverResetsAnAccount(t *testing.T) {
 
 	first, err := auth.Bootstrap(ctx, mod, config.EnvDevelopment)
 	if err != nil {
-		t.Fatalf("premier amorçage: %v", err)
+		t.Fatalf("first bootstrap: %v", err)
 	}
 
 	second, err := auth.Bootstrap(ctx, mod, config.EnvDevelopment)
 	if err != nil {
-		t.Fatalf("second amorçage: %v", err)
+		t.Fatalf("second bootstrap: %v", err)
 	}
 	if second.Created || second.Secret != "" {
-		t.Fatalf("le second amorçage a agi : %+v", second)
+		t.Fatalf("the second bootstrap acted: %+v", second)
 	}
 
-	// Le premier secret vaut TOUJOURS : rien n'a été réinitialisé.
+	// The first secret is STILL worth something: nothing was reset.
 	if _, err := mod.Authenticate(ctx, first.Subject, first.Secret); err != nil {
-		t.Fatalf("le compte a été réinitialisé par le second amorçage : %v", err)
+		t.Fatalf("the account was reset by the second bootstrap: %v", err)
 	}
 }
 
-// TestBootstrapNeverBreaksTheStartupOfADisabledModule garde le démarrage.
+// TestBootstrapNeverBreaksTheStartupOfADisabledModule guards startup.
 //
-// # Ce test disait EXACTEMENT le contraire, et il avait tort
+// # This test said EXACTLY the opposite, and it was wrong
 //
-// Il exigeait que le refus d'un module éteint remonte, au motif qu'un démarrage
-// annonçant « compte amorcé » sur un module désactivé enverrait chercher la
-// panne du côté du mot de passe. Le raisonnement portait sur le mauvais risque :
-// remonter l'erreur **fait échouer le démarrage entier** dès qu'`auth` est
-// désactivé.
+// It required the refusal of a turned-off module to surface, on the grounds
+// that a startup announcing "account bootstrapped" on a disabled module would
+// send people looking for the fault on the password side. The reasoning was
+// about the wrong risk: surfacing the error **fails the whole startup** as soon
+// as `auth` is disabled.
 //
-// C'est arrivé. `IsLocal()` couvre `development` ET `test`, alors que
-// l'activation ne vient que de la couche `development` : sous `APP_ENV=test`, le
-// serveur refusait de démarrer avec `module auth désactivé`. La CI end-to-end
-// l'a trouvé ; la mesure locale ne pouvait pas, elle avait porté sur
-// `development` et `production` — jamais sur la seule combinaison qui casse,
-// **environnement local ET module éteint**.
+// That happened. `IsLocal()` covers `development` AND `test`, whereas enabling
+// only comes from the `development` layer: under `APP_ENV=test`, the server
+// refused to start with `auth module disabled`. The end-to-end CI found it; the
+// local measurement could not, it had covered `development` and `production` —
+// never the one combination that breaks, **local environment AND module turned
+// off**.
 //
-// Un module désactivé n'est pas une panne, c'est un état configuré. Il n'y a
-// rien à amorcer, et le dire par une erreur fatale est un fail-closed posé au
-// mauvais endroit.
+// A disabled module is not an outage, it is a configured state. There is
+// nothing to bootstrap, and saying so through a fatal error is a fail-closed
+// put in the wrong place.
 func TestBootstrapNeverBreaksTheStartupOfADisabledModule(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	disabled, err := auth.New(config.Module{Enabled: false}, auth.Deps{})
 	if err != nil {
-		t.Fatalf("montage du module désactivé: %v", err)
+		t.Fatalf("mounting the disabled module: %v", err)
 	}
 
 	for _, env := range []config.Environment{config.EnvDevelopment, config.EnvTest} {
 		report, err := auth.Bootstrap(ctx, disabled, env)
 		if err != nil {
-			t.Fatalf("env %q : un module éteint ne doit pas faire échouer le démarrage — %v", env, err)
+			t.Fatalf("env %q: a turned-off module must not fail startup — %v", env, err)
 		}
 		if report.Created || report.Secret != "" {
-			t.Fatalf("env %q : un module désactivé ne crée rien — %+v", env, report)
+			t.Fatalf("env %q: a disabled module creates nothing — %+v", env, report)
 		}
 	}
 }

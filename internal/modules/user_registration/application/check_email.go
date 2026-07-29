@@ -8,12 +8,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// NewCheckEmailAvailability construit le cas d'usage de vérification de
-// disponibilité d'une adresse.
+// NewCheckEmailAvailability builds the use case that checks whether an email
+// address is available.
 //
-// C'est un port de LECTURE : c'est lui qui reçoit le décorateur de cache. Un
-// cache sur l'inscription n'aurait aucun sens — d'où l'existence de ce second
-// cas d'usage dans le socle de référence.
+// This is a READ port: it is the one that receives the cache decorator. A cache
+// on registration would make no sense at all — hence the existence of this
+// second use case in the reference starter.
 func NewCheckEmailAvailability(emailIsTaken ports.EmailIsTaken) ports.CheckEmailAvailability {
 	return func(ctx context.Context, rawEmail string) result.Result[bool, domain.Error] {
 		return result.FlatMap(

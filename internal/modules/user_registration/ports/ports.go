@@ -1,13 +1,12 @@
-// Package ports déclare les contrats de la feature.
+// Package ports declares the contracts of the feature.
 //
-// Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface (vérifié par arch-go.yml). Un port est un type fonction —
-// la plus petite interface possible, donc rien à ségréguer
-// (documentation/adr/003).
+// This package contains ONLY type declarations: no struct, no function, no
+// interface (enforced by arch-go.yml). A port is a function type — the smallest
+// possible interface, hence nothing to segregate (documentation/adr/003).
 //
-// Chaque port secondaire porte son CONTRAT D'ERREUR en commentaire : c'est la
-// forme opérationnelle de la substituabilité, et il est vérifié par la suite de
-// conformité partagée entre implémentations.
+// Every secondary port carries its ERROR CONTRACT in a comment: that is the
+// operational form of substitutability, and it is checked by the conformance
+// suite shared between implementations.
 package ports
 
 import (
@@ -19,78 +18,78 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// ─── Ports primaires : ce que le monde extérieur peut demander ───────────────
+// ─── Primary ports: what the outside world may ask for ───────────────────────
 
-// RegisterUser inscrit un nouvel utilisateur.
+// RegisterUser registers a new user.
 //
-// Toutes les surfaces appellent CETTE fonction : HTTP, CLI, seeders. Ajouter une
-// surface n'en change pas la signature (documentation/adr/005).
+// Every surface calls THIS function: HTTP, CLI, seeders. Adding a surface does
+// not change its signature (documentation/adr/005).
 //
-// Erreurs : CodeInvalidEmail · CodeWeakPassword · CodeEmailAlreadyExists ·
+// Errors: CodeInvalidEmail · CodeWeakPassword · CodeEmailAlreadyExists ·
 // CodeUnavailable · CodeInternal.
 type RegisterUser = func(
 	ctx context.Context,
 	cmd domain.RegistrationCommand,
 ) result.Result[domain.User, domain.Error]
 
-// CheckEmailAvailability indique si une adresse est encore libre.
+// CheckEmailAvailability reports whether an email address is still free.
 //
-// Port de lecture : c'est lui qui porte le décorateur de cache, un cache sur une
-// écriture n'ayant aucun sens.
+// A READ port: it is the one that carries the cache decorator, a cache on a
+// write making no sense at all.
 //
-// Erreurs : CodeInvalidEmail · CodeUnavailable · CodeInternal.
+// Errors: CodeInvalidEmail · CodeUnavailable · CodeInternal.
 type CheckEmailAvailability = func(
 	ctx context.Context,
 	rawEmail string,
 ) result.Result[bool, domain.Error]
 
-// ─── Ports secondaires : ce dont le cœur a besoin du monde ───────────────────
+// ─── Secondary ports: what the core needs from the world ─────────────────────
 
-// SaveUser persiste un utilisateur nouvellement inscrit.
+// SaveUser persists a newly registered user.
 //
-// Contrat d'erreur — toute implémentation DOIT respecter :
-//   - CodeEmailAlreadyExists si la contrainte d'unicité d'adresse est violée
-//   - CodeUnavailable        si le stockage est injoignable ou la requête annulée
-//   - CodeInternal           pour tout le reste, avec la cause attachée
+// Error contract — every implementation MUST honour:
+//   - CodeEmailAlreadyExists if the address uniqueness constraint is violated
+//   - CodeUnavailable        if the storage is unreachable or the query cancelled
+//   - CodeInternal           for everything else, with the cause attached
 //
-// Aucune erreur de pilote ne doit remonter telle quelle.
+// No driver error must travel up as it is.
 type SaveUser = func(
 	ctx context.Context,
 	user domain.User,
 ) result.Result[domain.User, domain.Error]
 
-// EmailIsTaken indique si une adresse est déjà enregistrée.
+// EmailIsTaken reports whether an address is already registered.
 //
-// Contrat d'erreur : CodeUnavailable · CodeInternal. L'absence de ligne n'est
-// PAS une erreur — elle vaut `false`.
+// Error contract: CodeUnavailable · CodeInternal. A missing row is NOT an error
+// — it amounts to `false`.
 type EmailIsTaken = func(
 	ctx context.Context,
 	email domain.Email,
 ) result.Result[bool, domain.Error]
 
-// FindUserByEmail cherche un utilisateur par son adresse.
+// FindUserByEmail looks a user up by email address.
 //
-// Contrat d'erreur : CodeUnavailable · CodeInternal. Une absence retourne
-// `None`, jamais une erreur : l'Option rend l'absence explicite dans le type.
+// Error contract: CodeUnavailable · CodeInternal. An absence returns `None`,
+// never an error: the Option makes absence explicit in the type.
 type FindUserByEmail = func(
 	ctx context.Context,
 	email domain.Email,
 ) result.Result[fp.Option[domain.User], domain.Error]
 
-// HashPassword produit le condensé d'un mot de passe.
+// HashPassword produces the digest of a password.
 //
-// Contrat d'erreur : CodeInternal uniquement. Un échec de hachage est un défaut
-// technique, jamais une erreur utilisateur.
+// Error contract: CodeInternal only. A hashing failure is a technical defect,
+// never a user error.
 type HashPassword = func(
 	password domain.RawPassword,
 ) result.Result[domain.PasswordHash, domain.Error]
 
-// PublishEvent enregistre un événement à publier.
+// PublishEvent records an event to be published.
 //
-// L'implémentation écrit dans l'outbox, DANS la transaction courante. Le cœur ne
-// connaît aucun broker (documentation/adr/006).
+// The implementation writes into the outbox, WITHIN the current transaction. The
+// core knows no broker (documentation/adr/006).
 //
-// Contrat d'erreur : CodeUnavailable · CodeInternal.
+// Error contract: CodeUnavailable · CodeInternal.
 type PublishEvent = func(
 	ctx context.Context,
 	eventType string,
@@ -98,34 +97,34 @@ type PublishEvent = func(
 	payload any,
 ) result.Result[domain.Ack, domain.Error]
 
-// SendWelcomeEmail envoie le courriel de bienvenue.
+// SendWelcomeEmail sends the welcome email.
 //
-// Appelé par le consommateur d'événements, jamais par le cas d'usage
-// d'inscription : l'envoi ne doit pas faire échouer l'inscription.
+// Called by the event consumer, never by the registration use case: sending must
+// not make the registration fail.
 //
-// Contrat d'erreur : CodeUnavailable · CodeInternal.
+// Error contract: CodeUnavailable · CodeInternal.
 type SendWelcomeEmail = func(
 	ctx context.Context,
 	user domain.User,
 ) result.Result[domain.Ack, domain.Error]
 
-// ─── Ports d'effets purs : l'horloge et l'aléa ───────────────────────────────
+// ─── Ports for pure effects: the clock and randomness ────────────────────────
 
-// Now retourne l'instant courant.
+// Now returns the current instant.
 //
-// C'est un port PRÉCISÉMENT pour que les tests soient déterministes : un test
-// qui lit l'horloge réelle est un test qui échouera un jour, sans raison.
+// It is a port PRECISELY so that tests are deterministic: a test that reads the
+// real clock is a test that will fail one day, for no reason.
 type Now = func() time.Time
 
-// GenerateID produit un identifiant d'utilisateur.
+// GenerateID produces a user identifier.
 type GenerateID = func() domain.UserID
 
-// ─── Unité de travail ────────────────────────────────────────────────────────
+// ─── Unit of work ────────────────────────────────────────────────────────────
 
-// RunInTx exécute une fonction dans une transaction.
+// RunInTx runs a function inside a transaction.
 //
-// Le rollback est déclenché par un Result en Err : une inscription refusée ne
-// laisse donc aucun événement dans l'outbox.
+// The rollback is triggered by a Result in Err: a refused registration therefore
+// leaves no event in the outbox.
 type RunInTx = func(
 	ctx context.Context,
 	fn func(context.Context) result.Result[domain.User, domain.Error],

@@ -17,12 +17,12 @@ func TestNextAttemptBackoffIsExponentialAndBounded(t *testing.T) {
 		attempts int
 		want     time.Duration
 	}{
-		"premier echec":  {attempts: 0, want: 2 * time.Second},
-		"deuxieme echec": {attempts: 1, want: 4 * time.Second},
-		"troisieme":      {attempts: 2, want: 8 * time.Second},
-		// Le décalage est borné : sans borne, 1<<40 déborderait et produirait une
-		// durée NÉGATIVE, donc un message rejoué en boucle immédiatement.
-		"decalage borne a 2^10": {attempts: 40, want: 1024 * time.Second},
+		"first failure":  {attempts: 0, want: 2 * time.Second},
+		"second failure": {attempts: 1, want: 4 * time.Second},
+		"third":          {attempts: 2, want: 8 * time.Second},
+		// The shift is bounded: without a bound, 1<<40 would overflow and produce
+		// a NEGATIVE duration, hence a message replayed immediately in a loop.
+		"shift bounded at 2^10": {attempts: 40, want: 1024 * time.Second},
 	}
 
 	for name, tc := range cases {
@@ -31,13 +31,13 @@ func TestNextAttemptBackoffIsExponentialAndBounded(t *testing.T) {
 			got := domain.NextAttempt(
 				domain.Message{Attempts: tc.attempts},
 				domain.RetryPolicy{MaxAttempts: 100, BaseBackoff: base},
-				now, "raison",
+				now, "reason",
 			)
 			if delay := got.AvailableAt.Sub(now); delay != tc.want {
-				t.Errorf("recul = %v, attendu %v", delay, tc.want)
+				t.Errorf("backoff = %v, want %v", delay, tc.want)
 			}
 			if got.AvailableAt.Before(now) {
-				t.Error("le prochain essai est dans le passé : débordement de durée")
+				t.Error("the next try is in the past: duration overflow")
 			}
 		})
 	}

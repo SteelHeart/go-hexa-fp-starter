@@ -1,32 +1,33 @@
-// Package http expose le module d'authentification sur la surface HTTP.
+// Package http exposes the authentication module on the HTTP surface.
 //
-// # Une surface est un TRADUCTEUR, jamais une place métier
+// # A surface is a TRANSLATOR, never a place for business logic
 //
-// Ce paquet traduit une requête en appel de cas d'usage, puis un retour en
-// réponse. Il ne valide rien lui-même : le domaine le fait déjà, et dupliquer la
-// validation garantit qu'un jour les deux divergeront — au détriment de celle qui
-// parle à l'utilisateur.
+// This package translates a request into a use case call, then a return value
+// into a response. It validates nothing itself: the domain already does, and
+// duplicating the validation guarantees that one day the two will diverge — to
+// the detriment of the one that talks to the user.
 //
-// # Carte des fichiers
+// # File map
 //
-//	http.go             Mount, et la carte des routes
-//	open_session.go     POST   /v1/auth/sessions          — échanger un secret
-//	close_session.go    DELETE /v1/auth/sessions/current  — révoquer
-//	identity.go         GET    /v1/auth/identity          — résoudre le jeton
-//	guard.go            exiger une permission — le seul appelant d'Authorize
-//	administration.go   les quatre routes PROTÉGÉES
-//	status.go           la traduction des refus en statuts, et le porteur
+//	http.go             Mount, and the route map
+//	open_session.go     POST   /v1/auth/sessions          — exchange a secret
+//	close_session.go    DELETE /v1/auth/sessions/current  — revoke
+//	identity.go         GET    /v1/auth/identity          — resolve the token
+//	guard.go            require a permission — the only caller of Authorize
+//	administration.go   the four PROTECTED routes
+//	status.go           the translation of refusals into statuses, and the bearer
 //
-// # Deux familles de routes, et la frontière entre elles est une permission
+// # Two families of routes, and the boundary between them is a permission
 //
-// Les trois routes de SESSION sont publiques par nécessité : on ne peut pas
-// exiger un jeton de quelqu'un qui vient en demander un. Les quatre routes
-// d'ADMINISTRATION exigent chacune une permission distincte.
+// The three SESSION routes are public out of necessity: you cannot demand a
+// token from someone who is coming to ask for one. The four ADMINISTRATION
+// routes each require a distinct permission.
 //
-// ⚠️ Ce paragraphe disait « cette surface n'expose PAS l'administration », faute
-// d'un premier administrateur : les publier sans les protéger aurait ouvert la
-// création de comptes à quiconque. L'amorçage tranché (ADR 017 §6), elles
-// arrivent — avec le garde qui rend `Authorize` enfin joignable.
+// ⚠️ This paragraph used to say "this surface does NOT expose administration",
+// for want of a first administrator: publishing them without protecting them
+// would have opened account creation to anyone. With bootstrapping decided
+// (ADR 017 §6), they arrive — together with the guard that finally makes
+// `Authorize` reachable.
 package http
 
 import (
@@ -35,21 +36,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// apiTag regroupe les opérations du module dans le contrat servi.
+// apiTag groups the module's operations in the served contract.
 //
-// Une constante et non trois littéraux : un regroupement qui diverge d'une
-// opération à l'autre éclate la section dans la documentation générée, et
-// personne ne relit un contrat pour vérifier une étiquette.
+// A constant and not three literals: a grouping that diverges from one
+// operation to the next shatters the section in the generated documentation,
+// and nobody re-reads a contract to check a label.
 const apiTag = "auth"
 
-// Mount enregistre les opérations du module sur l'API.
+// Mount registers the module's operations on the API.
 //
-// Reçoit le Module, jamais un pilote ni un magasin : une surface ne peut pas
-// contourner un cas d'usage, même par accident.
+// Receives the Module, never a driver nor a store: a surface cannot bypass a
+// use case, even by accident.
 //
-// Les trois opérations sont montées ensemble, délibérément. Monter la connexion
-// sans la révocation livrerait un service où l'on peut entrer sans pouvoir
-// sortir — et la révocation est la propriété que l'ADR 017 achète.
+// The three operations are mounted together, deliberately. Mounting sign-in
+// without revocation would ship a service you can get into without being able
+// to get out — and revocation is the property ADR 017 buys.
 func Mount(api huma.API, mod auth.Module) {
 	mountOpenSession(api, mod)
 	mountCloseSession(api, mod)

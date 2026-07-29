@@ -7,12 +7,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestInprocDriverRefusesOverlap : le pilote sans dépendance n'élit personne entre
-// répliques, mais il refuse le RECOUVREMENT local — et ça, ce n'est pas rien.
+// TestInprocDriverRefusesOverlap: the driver with no dependency elects nobody
+// between replicas, but it does refuse local OVERLAP — and that is not nothing.
 //
-// Une tâche plus lente que sa période empilerait sinon les exécutions à chaque tick
-// jusqu'à saturer le processus. La panne arriverait longtemps après la mise en
-// service, sous charge, et ressemblerait à une fuite de mémoire.
+// A task slower than its period would otherwise pile executions up on every
+// tick until the process was saturated. The outage would arrive long after
+// going live, under load, and would look like a memory leak.
 func TestInprocDriverRefusesOverlap(t *testing.T) {
 	t.Parallel()
 
@@ -22,28 +22,28 @@ func TestInprocDriverRefusesOverlap(t *testing.T) {
 
 	first, err := mod.Acquire(ctx, name)
 	if err != nil {
-		t.Fatalf("première élection: %v", err)
+		t.Fatalf("first election: %v", err)
 	}
 	if !first {
-		t.Fatal("la première élection doit être accordée")
+		t.Fatal("the first election must be granted")
 	}
 
 	second, err := mod.Acquire(ctx, name)
 	if err != nil {
-		t.Fatalf("seconde élection: %v", err)
+		t.Fatalf("second election: %v", err)
 	}
 	if second {
-		t.Error("une tâche déjà en cours ne doit pas être relancée")
+		t.Error("a task already in progress must not be relaunched")
 	}
 
 	if releaseErr := mod.Release(ctx, name); releaseErr != nil {
-		t.Fatalf("libération: %v", releaseErr)
+		t.Fatalf("release: %v", releaseErr)
 	}
 	again, err := mod.Acquire(ctx, name)
 	if err != nil {
-		t.Fatalf("élection après libération: %v", err)
+		t.Fatalf("election after release: %v", err)
 	}
 	if !again {
-		t.Error("après libération, la tâche doit être réélisible")
+		t.Error("after release, the task must be re-electable")
 	}
 }

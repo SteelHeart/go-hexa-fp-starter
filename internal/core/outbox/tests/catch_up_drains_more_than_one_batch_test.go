@@ -8,16 +8,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestCatchUpDrainsMoreThanOneBatch : un lot PLEIN signifie « il en reste ».
+// TestCatchUpDrainsMoreThanOneBatch: a FULL batch means « there are more ».
 //
-// Attendre le tick suivant ferait avancer le rattrapage d'un seul lot par période.
-// Si le débit d'entrée dépasse un lot par tour — ce qui arrive dès qu'un
-// consommateur revient après une panne — le retard ne se résorberait jamais et
-// grandirait au contraire.
+// Waiting for the next tick would advance the catch-up by a single batch per
+// period. If the input rate exceeds one batch per round — which happens as soon
+// as a consumer comes back after an outage — the backlog would never be
+// absorbed and would grow instead.
 //
-// Le rattrapage est borné : sans borne, cent mille messages en retard
-// monopoliseraient la boucle, le `select` ne serait plus atteint, et le worker
-// ignorerait la demande d'arrêt jusqu'à avoir tout vidé.
+// The catch-up is bounded: without a bound, a hundred thousand backlogged
+// messages would monopolise the loop, the `select` would no longer be reached,
+// and the worker would ignore the shutdown request until it had drained
+// everything.
 func TestCatchUpDrainsMoreThanOneBatch(t *testing.T) {
 	t.Parallel()
 
@@ -25,7 +26,7 @@ func TestCatchUpDrainsMoreThanOneBatch(t *testing.T) {
 
 	var mu sync.Mutex
 	rounds := 0
-	// Deux lots pleins, puis un lot partiel qui signale la fin du retard.
+	// Two full batches, then a partial batch that signals the end of the backlog.
 	claim := func(context.Context, int) ([]domain.Message, error) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -50,8 +51,8 @@ func TestCatchUpDrainsMoreThanOneBatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Trois appels successifs reproduisent ce que fait un tour de scrutation :
-	// enchaîner tant que le lot revient plein.
+	// Three successive calls reproduce what a polling round does: chain as long
+	// as the batch comes back full.
 	for range 3 {
 		count, err := dispatcher.DrainOnce(ctx)
 		if err != nil {
@@ -63,6 +64,6 @@ func TestCatchUpDrainsMoreThanOneBatch(t *testing.T) {
 	}
 
 	if len(observed.done) != 5 {
-		t.Errorf("messages traités = %d, attendu 5 — le retard n'a pas été rattrapé", len(observed.done))
+		t.Errorf("processed messages = %d, want 5 — the backlog was not caught up", len(observed.done))
 	}
 }

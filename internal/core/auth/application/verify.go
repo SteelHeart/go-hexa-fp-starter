@@ -7,20 +7,20 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// NewVerify compose la résolution d'un jeton en identité.
+// NewVerify composes the resolution of a token into an identity.
 //
-// # Trois causes, un seul refus
+// # Three causes, a single refusal
 //
-// Jeton inconnu, session expirée, identité désactivée : tout rend
-// `domain.ErrTokenUnknown`. Répondre « expiré » plutôt qu'« inconnu » confirmerait
-// qu'un tel jeton a existé, donc qu'un compte existe.
+// Unknown token, expired session, deactivated identity: everything returns
+// `domain.ErrTokenUnknown`. Answering "expired" rather than "unknown" would
+// confirm that such a token existed, hence that an account exists.
 //
-// # L'expiration est vérifiée ICI, pas seulement au magasin
+// # Expiry is checked HERE, not only at the store
 //
-// Un pilote peut purger paresseusement — celui en mémoire ne purge pas du tout.
-// Compter sur lui pour ne rendre que des sessions valides ferait dépendre la
-// sécurité d'un détail d'implémentation, et le premier pilote qui purgerait
-// autrement rouvrirait la faille sans que rien ne le signale.
+// A driver may purge lazily — the in-memory one does not purge at all. Relying
+// on it to return only valid sessions would make security depend on an
+// implementation detail, and the first driver that purged differently would
+// reopen the hole without anything reporting it.
 func NewVerify(deps Deps) ports.Verify {
 	return func(ctx context.Context, token domain.Token) (domain.Identity, error) {
 		if token.IsZero() {
@@ -43,11 +43,11 @@ func NewVerify(deps Deps) ports.Verify {
 	}
 }
 
-// NewRevoke compose la révocation d'une session.
+// NewRevoke composes the revocation of a session.
 //
-// Idempotente : révoquer un jeton déjà inconnu n'est pas une erreur. Un client
-// qui se déconnecte deux fois n'a rien fait de mal, et faire échouer le second
-// appel produirait une erreur que personne ne saurait traiter.
+// Idempotent: revoking an already unknown token is not an error. A client who
+// signs out twice has done nothing wrong, and failing the second call would
+// produce an error nobody would know how to handle.
 func NewRevoke(deps Deps) ports.Revoke {
 	return func(ctx context.Context, token domain.Token) error {
 		if token.IsZero() {

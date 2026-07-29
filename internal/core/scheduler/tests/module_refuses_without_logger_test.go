@@ -8,12 +8,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler"
 )
 
-// TestModuleRefusesWithoutLogger : le journal n'est pas un confort.
+// TestModuleRefusesWithoutLogger: the logger is not a comfort.
 //
-// L'orchestration ne journalise pas — elle rend compte (ports.Report) — mais le
-// compte rendu doit bien aboutir quelque part. Sans destination, une tâche en échec
-// échouerait en silence : c'est le pire défaut possible pour un travail qui tourne
-// sans témoin, la nuit, sans personne pour constater qu'il n'a rien fait.
+// The orchestration does not log — it reports (ports.Report) — but the report
+// has to end up somewhere. With no destination, a failing task would fail in
+// silence: that is the worst possible defect for work that runs with no
+// witness, at night, with nobody to notice that it did nothing.
 func TestModuleRefusesWithoutLogger(t *testing.T) {
 	t.Parallel()
 
@@ -23,7 +23,7 @@ func TestModuleRefusesWithoutLogger(t *testing.T) {
 			scheduler.Deps{},
 		)
 		if !errors.Is(err, scheduler.ErrLoggerRequired) {
-			t.Errorf("pilote %q: erreur = %v, attendu ErrLoggerRequired", driver, err)
+			t.Errorf("driver %q: error = %v, want ErrLoggerRequired", driver, err)
 		}
 	}
 }

@@ -7,17 +7,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency"
 )
 
-// TestInvalidTTLOptionRefusesStartup : une option illisible refuse le démarrage.
-// Se rabattre silencieusement sur la valeur par défaut donnerait un TTL surprise,
-// donc une fenêtre de rejeu qui n'est pas celle qu'on croit.
+// TestInvalidTTLOptionRefusesStartup: an unreadable option refuses startup.
+// Silently falling back on the default value would give a surprise TTL, hence a
+// replay window that is not the one one believes in.
 func TestInvalidTTLOptionRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]any{
-		"unité manquante": "24",
-		"négative":        "-1h",
-		"nulle":           "0s",
-		"booléen":         true,
+		"missing unit": "24",
+		"negative":     "-1h",
+		"zero":         "0s",
+		"boolean":      true,
 	}
 
 	for name, value := range cases {
@@ -28,7 +28,7 @@ func TestInvalidTTLOptionRefusesStartup(t *testing.T) {
 				Options: map[string]any{"ttl": value},
 			}
 			if _, err := idempotency.New(cfg, idempotency.Deps{}); err == nil {
-				t.Errorf("ttl=%v doit refuser le démarrage", value)
+				t.Errorf("ttl=%v must refuse startup", value)
 			}
 		})
 	}

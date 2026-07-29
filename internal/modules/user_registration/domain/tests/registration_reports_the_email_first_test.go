@@ -6,26 +6,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestRegistrationReportsTheEmailFirst : quand l'adresse ET le mot de passe sont
-// mauvais, c'est l'adresse qui est signalée.
+// TestRegistrationReportsTheEmailFirst: when the address AND the password are
+// both wrong, it is the address that is reported.
 //
-// L'ordre n'est pas arbitraire : c'est le champ que l'utilisateur remplit en
-// premier, donc celui qu'il corrigera en premier. Signaler le mot de passe d'abord
-// le ferait corriger un champ pour découvrir ensuite que le précédent était fautif —
-// deux allers-retours au lieu d'un.
+// The order is not arbitrary: it is the field the user fills in first, therefore
+// the one they will correct first. Reporting the password first would have them
+// fix one field only to discover afterwards that the previous one was at fault —
+// two round trips instead of one.
 //
-// C'est une décision d'ergonomie, prise une fois, et ce test l'empêche de se
-// perdre au premier refactoring du pipeline de validation.
+// This is an ergonomics decision, taken once, and this test keeps it from
+// getting lost at the first refactoring of the validation pipeline.
 func TestRegistrationReportsTheEmailFirst(t *testing.T) {
 	t.Parallel()
 
-	lesDeuxMauvais := domain.RegistrationCommand{Email: "pas une adresse", Password: "court"}
-	if got := codeDe(t, domain.ParseRegistration(lesDeuxMauvais)); got != domain.CodeInvalidEmail {
-		t.Errorf("code = %q, attendu %q en premier", got, domain.CodeInvalidEmail)
+	bothWrong := domain.RegistrationCommand{Email: "not an address", Password: "short"}
+	if got := codeOf(t, domain.ParseRegistration(bothWrong)); got != domain.CodeInvalidEmail {
+		t.Errorf("code = %q, want %q first", got, domain.CodeInvalidEmail)
 	}
 
-	adresseValide := domain.RegistrationCommand{Email: "alice@example.com", Password: "court"}
-	if got := codeDe(t, domain.ParseRegistration(adresseValide)); got != domain.CodeWeakPassword {
-		t.Errorf("code = %q, attendu %q une fois l'adresse valide", got, domain.CodeWeakPassword)
+	validAddress := domain.RegistrationCommand{Email: "alice@example.com", Password: "short"}
+	if got := codeOf(t, domain.ParseRegistration(validAddress)); got != domain.CodeWeakPassword {
+		t.Errorf("code = %q, want %q once the address is valid", got, domain.CodeWeakPassword)
 	}
 }

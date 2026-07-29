@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du module scheduler : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the scheduler module: they only
+// use the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -21,15 +21,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/ports"
 )
 
-// discardLogger satisfait l'exigence de journal sans polluer la sortie des tests.
+// discardLogger satisfies the logger requirement without polluting the output
+// of the tests.
 //
-// Le module refuse un logger nil : un compte rendu qui n'aboutit nulle part
-// laisserait une tâche échouer en silence.
+// The module refuses a nil logger: a report that ends up nowhere would let a
+// task fail in silence.
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// newInprocModule construit le module sur son pilote par défaut.
+// newInprocModule builds the module on its default driver.
 func newInprocModule(t *testing.T) scheduler.Module {
 	t.Helper()
 	mod, err := scheduler.New(
@@ -37,16 +38,16 @@ func newInprocModule(t *testing.T) scheduler.Module {
 		scheduler.Deps{Logger: discardLogger()},
 	)
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	return mod
 }
 
-// startedAt est l'instant de référence. Aucun test ne lit l'horloge réelle.
+// startedAt is the reference instant. No test reads the real clock.
 func startedAt() time.Time { return time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC) }
 
-// clock est une horloge pilotée : chaque lecture avance d'un pas fixe, ce qui rend
-// les durées mesurées déterministes sans jamais attendre.
+// clock is a driven clock: every read advances by a fixed step, which makes the
+// measured durations deterministic without ever waiting.
 type clock struct {
 	mu   sync.Mutex
 	at   time.Time
@@ -65,14 +66,14 @@ func (c *clock) now() time.Time {
 	return current
 }
 
-// journal collecte les comptes rendus. C'est ce que le port Report rend possible :
-// vérifier une politique d'exécution en lisant des valeurs, pas du JSON.
-type journal struct {
+// reportLog collects the reports. This is what the Report port makes possible:
+// verifying an execution policy by reading values, not JSON.
+type reportLog struct {
 	mu       sync.Mutex
 	outcomes []domain.Outcome
 }
 
-func (j *journal) report() ports.Report {
+func (j *reportLog) report() ports.Report {
 	return func(_ context.Context, outcome domain.Outcome) {
 		j.mu.Lock()
 		defer j.mu.Unlock()
@@ -80,14 +81,14 @@ func (j *journal) report() ports.Report {
 	}
 }
 
-func (j *journal) all() []domain.Outcome {
+func (j *reportLog) all() []domain.Outcome {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	return append([]domain.Outcome(nil), j.outcomes...)
 }
 
-// count compte les comptes rendus d'un événement donné.
-func (j *journal) count(event domain.Event) int {
+// count counts the reports of a given event.
+func (j *reportLog) count(event domain.Event) int {
 	total := 0
 	for _, outcome := range j.all() {
 		if outcome.Event == event {
@@ -97,8 +98,8 @@ func (j *journal) count(event domain.Event) int {
 	return total
 }
 
-// last rend le dernier compte rendu, ou false s'il n'y en a aucun.
-func (j *journal) last() (domain.Outcome, bool) {
+// last returns the final report, or false if there is none.
+func (j *reportLog) last() (domain.Outcome, bool) {
 	all := j.all()
 	if len(all) == 0 {
 		return domain.Outcome{}, false
@@ -106,14 +107,14 @@ func (j *journal) last() (domain.Outcome, bool) {
 	return all[len(all)-1], true
 }
 
-// alwaysElected accorde toujours l'exécution.
+// alwaysElected always grants the execution.
 func alwaysElected() (acquire ports.Acquire, release ports.Release) {
 	return func(context.Context, domain.TaskName) (bool, error) { return true, nil },
 		func(context.Context, domain.TaskName) error { return nil }
 }
 
-// newRunner construit un exécutant sur des closures.
-func newRunner(t *testing.T, acquire ports.Acquire, release ports.Release, j *journal) *application.Runner {
+// newRunner builds a runner on closures.
+func newRunner(t *testing.T, acquire ports.Acquire, release ports.Release, j *reportLog) *application.Runner {
 	t.Helper()
 	runner, err := application.NewRunner(application.Ports{
 		Acquire: acquire,
@@ -122,12 +123,12 @@ func newRunner(t *testing.T, acquire ports.Acquire, release ports.Release, j *jo
 		Now:     newClock(250 * time.Millisecond).now,
 	})
 	if err != nil {
-		t.Fatalf("construction de l'exécutant: %v", err)
+		t.Fatalf("building the runner: %v", err)
 	}
 	return runner
 }
 
-// task décrit une tâche valide.
+// task describes a valid task.
 func task(name string) domain.Task {
 	return domain.Task{Name: domain.TaskName(name), Every: time.Hour, Timeout: time.Minute}
 }

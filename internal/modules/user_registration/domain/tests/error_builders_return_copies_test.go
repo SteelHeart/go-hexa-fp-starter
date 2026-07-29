@@ -7,35 +7,34 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestErrorBuildersReturnCopies : `WithField` et `WithCause` rendent une nouvelle
-// erreur.
+// TestErrorBuildersReturnCopies: `WithField` and `WithCause` return a new error.
 //
-// Une Error est une VALEUR, pas une interface, précisément pour que l'ensemble des
-// erreurs reste énumérable. Si les constructeurs mutaient leur receveur, une erreur
-// sentinelle partagée — déclarée une fois au niveau paquet — se retrouverait
-// enrichie du champ et de la cause du dernier appel. Deux requêtes concurrentes
-// s'échangeraient alors leurs détails techniques.
+// An Error is a VALUE, not an interface, precisely so that the set of errors
+// stays enumerable. If the builders mutated their receiver, a shared sentinel
+// error — declared once at package level — would end up enriched with the field
+// and the cause of the latest call. Two concurrent requests would then swap
+// their technical details.
 func TestErrorBuildersReturnCopies(t *testing.T) {
 	t.Parallel()
 
 	base := domain.NewError(domain.CodeInternal, "erreur interne")
 
-	avecChamp := base.WithField("email")
-	avecCause := base.WithCause(errors.New("détail"))
+	withField := base.WithField("email")
+	withCause := base.WithCause(errors.New("detail"))
 
 	if base.Field != "" {
-		t.Errorf("WithField a muté l'original: champ = %q", base.Field)
+		t.Errorf("WithField mutated the original: field = %q", base.Field)
 	}
 	if base.Cause() != nil {
-		t.Error("WithCause a muté l'original")
+		t.Error("WithCause mutated the original")
 	}
-	if avecChamp.Field != "email" {
-		t.Errorf("la copie porte %q, attendu \"email\"", avecChamp.Field)
+	if withField.Field != "email" {
+		t.Errorf("the copy carries %q, want \"email\"", withField.Field)
 	}
-	if avecCause.Cause() == nil {
-		t.Error("la copie doit porter la cause")
+	if withCause.Cause() == nil {
+		t.Error("the copy must carry the cause")
 	}
-	if avecChamp.Cause() != nil {
-		t.Error("les deux copies doivent être indépendantes l'une de l'autre")
+	if withField.Cause() != nil {
+		t.Error("both copies must be independent of one another")
 	}
 }

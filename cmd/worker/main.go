@@ -1,22 +1,22 @@
-// Commande worker dépile l'outbox et publie vers le relais de messagerie.
+// Command worker dispatches the outbox and publishes to the messaging relay.
 //
-// # La moitié asynchrone de la chaîne
+// # The asynchronous half of the chain
 //
-// Un cas d'usage écrit son événement dans l'outbox, DANS sa transaction métier :
-// c'est ce qui garantit qu'aucun événement n'est perdu ni fantôme (ADR 006).
-// Sans ce binaire, l'événement est durable et n'est jamais publié — la chaîne
-// s'arrête à mi-parcours, et rien ne le signale côté serveur.
+// A use case writes its event into the outbox, INSIDE its business
+// transaction: that is what guarantees no event is lost nor phantom (ADR 006).
+// Without this binary, the event is durable and never published — the chain
+// stops halfway, and nothing signals it on the server side.
 //
-// # Ce binaire REFUSE de démarrer sur le pilote `memory`, et c'est voulu
+// # This binary REFUSES to start on the `memory` driver, and that is intended
 //
-// Le pilote `memory` de l'outbox vit dans le processus. Un worker séparé
-// dépilerait donc SON magasin, vide, pendant que les événements du serveur
-// resteraient dans la mémoire du serveur. Il tournerait sans rien publier, sans
-// aucune erreur, et le défaut ne se verrait que chez le consommateur qui
-// n'aurait jamais rien reçu.
+// The outbox's `memory` driver lives in the process. A separate worker would
+// therefore dispatch ITS store, empty, while the server's events would stay in
+// the server's memory. It would run publishing nothing, with no error at all,
+// and the defect would only show at the consumer that would never have
+// received anything.
 //
-// Un composant silencieusement inerte est le pire défaut possible. Le worker
-// refuse donc explicitement, en disant quoi changer.
+// A silently inert component is the worst possible defect. The worker
+// therefore refuses explicitly, saying what to change.
 package main
 
 import (
@@ -34,15 +34,15 @@ import (
 	outboxapp "github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/application"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/messaging"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/relay"
-	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/ressources"
+	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/resources"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/telemetry"
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules"
 )
 
-// Injectés à la compilation par la CI (voir Dockerfile).
+// Injected at build time by the CI (see Dockerfile).
 //
-// Globales assumées : `-ldflags -X` ne sait écrire que dans une variable de
-// paquet. Il n'existe aucune autre façon de graver la version dans le binaire.
+// Globals accepted: `-ldflags -X` can only write into a package variable.
+// There is no other way to burn the version into the binary.
 var (
 	version   = "dev"
 	commit    = "unknown"
@@ -51,7 +51,7 @@ var (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "démarrage impossible: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cannot start: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -60,13 +60,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Le catalogue AVANT la configuration : c'est lui qui dit ce que la
-	// configuration a le droit de nommer (ADR 014). Aucune table de modules ne
-	// vit dans `internal/config` — elle y nommerait des modules, ce que la
-	// règle 7 d'`arch-go` lui interdit.
+	// The catalogue BEFORE the configuration: it is what says what the
+	// configuration is allowed to name (ADR 014). No module table lives in
+	// `internal/config` — it would name modules there, which `arch-go` rule 7
+	// forbids it.
 	catalog, err := moduleCatalog()
 	if err != nil {
-		return fmt.Errorf("catalogue des modules: %w", err)
+		return fmt.Errorf("module catalogue: %w", err)
 	}
 
 	cfg, err := config.Load(catalog)
@@ -76,44 +76,46 @@ func run() error {
 
 	logger := telemetry.NewLogger(cfg)
 
-	arret, err := demarrerObservabilite(ctx, cfg)
+	shutdown, err := startObservability(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer arreterObservabilite(ctx, arret, logger)
+	defer stopObservability(ctx, shutdown, logger)
 
-	ctx, couper := context.WithCancel(ctx)
-	defer couper()
-	servirMetriques(ctx, cfg, logger, couper)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	serveMetrics(ctx, cfg, logger, cancel)
 
-	logger.InfoContext(ctx, "démarrage du dépileur",
+	logger.InfoContext(ctx, "dispatcher starting",
 		slog.String("version", version),
 		slog.String("commit", commit),
 		slog.String("build_date", buildDate),
 	)
 
-	return depiler(ctx, cfg, catalog, logger)
+	return runDispatcher(ctx, cfg, catalog, logger)
 }
 
-// depiler ouvre les connexions, monte le dépileur et le tient jusqu'à l'arrêt.
+// runDispatcher opens the connections, mounts the dispatcher and holds it
+// until shutdown.
 //
-// Extraite de `run` parce que celle-ci dépassait le seuil de lignes d'`arch-go`
-// en y branchant l'ouverture du pool. Le garde a attrapé la régression avant la
-// relecture — c'est exactement ce qu'on lui demande, et c'est la deuxième fois.
+// Extracted from `run` because that one went past the `arch-go` line threshold
+// once the pool opening was wired into it. The guard caught the regression
+// before review — which is exactly what it is asked to do, and it is the
+// second time.
 //
-// La coupure n'est pas arbitraire : `run` porte l'AMORÇAGE — signaux, catalogue,
-// configuration, journal, observabilité — et `depiler` porte le TRAVAIL.
-func depiler(
+// The cut is not arbitrary: `run` carries the BOOTSTRAP — signals, catalogue,
+// configuration, log, observability — and `runDispatcher` carries the WORK.
+func runDispatcher(
 	ctx context.Context, cfg config.Config, catalog config.ModuleCatalog, logger *slog.Logger,
 ) error {
-	// Les connexions AVANT les modules : un pilote `postgres` reçoit un pool ou
-	// refuse le démarrage, il ne tombe jamais en panne à la première requête.
+	// The connections BEFORE the modules: a `postgres` driver receives a pool
+	// or refuses to start, it never breaks down on the first request.
 	//
-	// Rien n'est ouvert si aucun module activé n'en réclame — c'est la promesse
-	// de l'ADR 012, et corriger #103 ne devait pas la coûter.
-	conn, err := ressources.Open(ctx, cfg, catalog)
+	// Nothing is opened if no enabled module asks for it — that is the promise
+	// of ADR 012, and fixing #103 was not to cost it.
+	conn, err := resources.Open(ctx, cfg, catalog)
 	if err != nil {
-		return fmt.Errorf("ouverture des connexions: %w", err)
+		return fmt.Errorf("opening the connections: %w", err)
 	}
 	defer conn.Close()
 
@@ -123,74 +125,76 @@ func depiler(
 	}
 	defer func() {
 		if err := w.closeBroker(); err != nil {
-			logger.Error("fermeture du relais en échec", slog.Any("error", err))
+			logger.Error("closing the relay failed", slog.Any("error", err))
 		}
 	}()
 
-	logger.InfoContext(ctx, "dépilage en cours",
+	logger.InfoContext(ctx, "dispatching in progress",
 		slog.String("outbox_driver", cfg.Modules[outbox.Name].Driver),
 		slog.String("relais", cfg.Messaging.Driver),
 	)
 
-	if err := w.boucler(ctx); err != nil {
+	if err := w.loop(ctx); err != nil {
 		return err
 	}
-	logger.Info("dépileur arrêté proprement")
+	logger.Info("dispatcher stopped gracefully")
 	return nil
 }
 
-// worker est le dépileur monté, avec ce qu'il faut pour le libérer.
+// worker is the mounted dispatcher, with what is needed to release it.
 //
-// Type plutôt que trois retours : `compose` rendait
-// `(*Dispatcher, Closer, error)`, et la règle d'architecture l'a refusé. Elle a
-// raison, et c'est la CINQUIÈME fois que ce dépôt paie la même leçon — après
-// `election`, `decodedHash`, `RetryPolicy` et `messaging.Broker`. Plus de deux
-// valeurs de retour signale toujours un type qui manque.
+// A type rather than three return values: `compose` used to return
+// `(*Dispatcher, Closer, error)`, and the architecture rule refused it. It is
+// right, and this is the FIFTH time this repository pays the same lesson —
+// after `election`, `decodedHash`, `RetryPolicy` and `messaging.Broker`. More
+// than two return values always signals a missing type.
 type worker struct {
 	dispatch    *outboxapp.Dispatcher
 	consume     messaging.Consumer
 	closeBroker messaging.Closer
 }
 
-// compose monte le relais, l'outbox et le dépileur.
+// compose mounts the relay, the outbox and the dispatcher.
 //
-// Rend le libérateur du courtier plutôt que de le fermer lui-même : la durée de
-// vie du courtier est celle du processus, pas celle de cette fonction.
-func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger) (worker, error) {
+// It returns the broker's releaser rather than closing it itself: the broker's
+// lifetime is that of the process, not that of this function.
+func compose(cfg config.Config, conn resources.Connections, logger *slog.Logger) (worker, error) {
 	outboxCfg := cfg.Modules[outbox.Name]
 	if !outboxCfg.Enabled {
-		return worker{}, fmt.Errorf("%w: modules.outbox.enabled est false", outbox.ErrDisabled)
+		return worker{}, fmt.Errorf("%w: modules.outbox.enabled is false", outbox.ErrDisabled)
 	}
-	// Le serveur, lui, n'a pas cette exigence : il ÉCRIT dans l'outbox et n'a donc
-	// aucune raison de réclamer un pilote partagé. Seul un dépileur SÉPARÉ en a
-	// besoin, et c'est pourquoi le refus vit ici et non dans le module.
+	// The server has no such requirement: it WRITES into the outbox and
+	// therefore has no reason to demand a shared driver. Only a SEPARATE
+	// dispatcher needs one, and that is why the refusal lives here and not in
+	// the module.
 	if err := outbox.RequireSharedDriver(outboxCfg.Driver); err != nil {
-		return worker{}, fmt.Errorf("configuration du dépileur: %w", err)
+		return worker{}, fmt.Errorf("dispatcher configuration: %w", err)
 	}
 
 	broker, err := messaging.New(cfg.Messaging, logger)
 	if err != nil {
-		return worker{}, fmt.Errorf("relais de messagerie: %w", err)
+		return worker{}, fmt.Errorf("messaging relay: %w", err)
 	}
 
-	// Les abonnements AVANT le dépileur : `Subscribe` doit être appelé avant
-	// `Run`, et un dépileur qui publierait pendant que les abonnements se
-	// montent perdrait les premières enveloppes sans le dire.
+	// The subscriptions BEFORE the dispatcher: `Subscribe` must be called
+	// before `Run`, and a dispatcher publishing while the subscriptions are
+	// being mounted would lose the first envelopes without saying so.
 	//
-	// Variable NOMMÉE plutôt que `err` réutilisé : `govet shadow` et
-	// `gocritic sloppyReassign` se contredisent sur cette ligne — l'un veut `=`,
-	// l'autre `:=`. Un nom distinct sort du conflit sans faire taire ni l'un ni
-	// l'autre, et se relit mieux.
-	if erreurAbonnement := abonner(cfg, broker, logger); erreurAbonnement != nil {
-		return worker{}, erreurAbonnement
+	// A NAMED variable rather than a reused `err`: `govet shadow` and
+	// `gocritic sloppyReassign` contradict each other on this line — one wants
+	// `=`, the other `:=`. A distinct name steps out of the conflict without
+	// silencing either, and reads better.
+	if subscriptionErr := subscribe(cfg, broker, logger); subscriptionErr != nil {
+		return worker{}, subscriptionErr
 	}
 
-	// Le pool peut être nil, légitimement : il l'est dès qu'aucun module activé
-	// ne réclame de base. Un pilote qui en a besoin refuse alors le démarrage en
-	// le disant — c'est le garde qui existait déjà et que personne n'atteignait.
+	// The pool may legitimately be nil: it is as soon as no enabled module
+	// asks for a database. A driver that needs one then refuses to start,
+	// saying so — that is the guard which already existed and that nobody
+	// reached.
 	mod, err := outbox.New(outboxCfg, outbox.Deps{Pool: conn.Pool, Now: time.Now})
 	if err != nil {
-		return worker{}, fmt.Errorf("module outbox: %w", err)
+		return worker{}, fmt.Errorf("outbox module: %w", err)
 	}
 
 	dispatch, err := outbox.NewDispatcher(mod, outboxCfg, outbox.DispatcherDeps{
@@ -199,32 +203,32 @@ func compose(cfg config.Config, conn ressources.Connexions, logger *slog.Logger)
 		Now:    time.Now,
 	})
 	if err != nil {
-		return worker{}, fmt.Errorf("dépileur de l'outbox: %w", err)
+		return worker{}, fmt.Errorf("outbox dispatcher: %w", err)
 	}
 	return worker{dispatch: dispatch, consume: broker.Consume, closeBroker: broker.Close}, nil
 }
 
-// moduleCatalog assemble ce que la configuration a le droit de nommer.
+// moduleCatalog assembles what the configuration is allowed to name.
 //
-// Le noyau apporte le sien ; ce binaire y ajoute celui de chaque module métier
-// qu'il embarque. Aucun fichier du framework ne nomme un module métier — c'est
-// très exactement la friction que l'ADR 014 supprime.
+// The core brings its own; this binary adds that of every business module it
+// embeds. No framework file names a business module — that is very exactly
+// the friction ADR 014 removes.
 func moduleCatalog() (config.ModuleCatalog, error) {
 	coreCatalog, err := core.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue du noyau: %w", err)
+		return nil, fmt.Errorf("core catalogue: %w", err)
 	}
-	// Les deux binaires lisent le MÊME `config/modules.yaml` : l'ensemble des
-	// modules déclarables est donc une propriété de l'application, pas du
-	// binaire. Voir internal/modules/catalog.go — le dépileur refusait de
-	// démarrer tant que ce n'était pas le cas.
+	// Both binaries read the SAME `config/modules.yaml`: the set of declarable
+	// modules is therefore a property of the application, not of the binary.
+	// See internal/modules/catalog.go — the dispatcher refused to start until
+	// that was the case.
 	businessCatalog, err := modules.Catalog()
 	if err != nil {
-		return nil, fmt.Errorf("catalogue des modules métier: %w", err)
+		return nil, fmt.Errorf("business module catalogue: %w", err)
 	}
 	merged, err := config.MergeCatalogs(coreCatalog, businessCatalog)
 	if err != nil {
-		return nil, fmt.Errorf("fusion des catalogues: %w", err)
+		return nil, fmt.Errorf("merging the catalogues: %w", err)
 	}
 	return merged, nil
 }

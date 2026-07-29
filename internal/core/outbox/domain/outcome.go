@@ -2,49 +2,50 @@ package domain
 
 import "time"
 
-// Event nomme ce qui est arrivé à un message pendant son dépilage.
+// Event names what happened to a message during its dispatching.
 //
-// Déclaré dans le domaine parce que l'orchestration ne journalise PAS : elle rend
-// compte (ports.Report). C'est ce qui la garde pure — aucun logger, aucune I/O —
-// et ce qui permet à un test de vérifier une politique de dépilage en lisant des
-// valeurs plutôt qu'en analysant du JSON.
+// Declared in the domain because orchestration does NOT log: it reports
+// (ports.Report). That is what keeps it pure — no logger, no I/O — and what
+// allows a test to check a dispatching policy by reading values rather than by
+// parsing JSON.
 type Event string
 
 const (
-	// EventPublished : le message est parti et son sort est enregistré. Seul cas
-	// où la chaîne est réellement bouclée.
+	// EventPublished: the message went out and its fate is recorded. The only
+	// case where the chain is genuinely closed.
 	EventPublished Event = "published"
-	// EventRetryScheduled : la publication a échoué, un nouvel essai est programmé.
+	// EventRetryScheduled: publication failed, a new attempt is scheduled.
 	EventRetryScheduled Event = "retry_scheduled"
-	// EventExhausted : les tentatives sont épuisées. Le message passe en `failed`
-	// et n'est plus rejoué — il reste en base comme SEULE trace de ce qui n'a pas
-	// été publié. Quelqu'un doit regarder.
+	// EventExhausted: the attempts are exhausted. The message goes to `failed`
+	// and is no longer replayed — it stays in the database as the ONLY trace of
+	// what has not been published. Someone must look.
 	EventExhausted Event = "exhausted"
-	// EventClaimFailed : impossible de réserver un lot. Le magasin est en panne ;
-	// rien n'a été publié et rien n'est perdu.
+	// EventClaimFailed: impossible to claim a batch. The store is down; nothing
+	// has been published and nothing is lost.
 	EventClaimFailed Event = "claim_failed"
-	// EventResolveFailed est le plus grave, et le moins évident.
+	// EventResolveFailed is the most serious, and the least obvious.
 	//
-	// Le message a été publié, mais son sort n'a PAS pu être enregistré. Il reste
-	// donc « en attente » et sera republié au prochain tour : le consommateur
-	// recevra un doublon. C'est précisément pour ça que la livraison est « au moins
-	// une fois » et que tout consommateur doit être idempotent.
+	// The message has been published, but its fate could NOT be recorded. It
+	// therefore stays « pending » and will be republished on the next round: the
+	// consumer will receive a duplicate. That is precisely why delivery is « at
+	// least once » and why every consumer must be idempotent.
 	EventResolveFailed Event = "resolve_failed"
-	// EventHandlerPanicked : le publieur a paniqué. Traité comme un échec ordinaire
-	// pour que le dépileur survive à un message empoisonné.
+	// EventHandlerPanicked: the publisher panicked. Treated as an ordinary
+	// failure so that the dispatcher survives a poisoned message.
 	EventHandlerPanicked Event = "handler_panicked"
 )
 
-// Outcome est le compte rendu du traitement d'un message.
+// Outcome is the report of a message's processing.
 type Outcome struct {
 	ID   MessageID
 	Type string
-	// Event dit ce qui s'est passé.
+	// Event says what happened.
 	Event Event
-	// Attempts est le nombre de tentatives APRÈS celle-ci.
+	// Attempts is the number of attempts AFTER this one.
 	Attempts int
-	// Duration mesure l'appel au publieur seul, pas l'enregistrement du sort.
+	// Duration measures the call to the publisher alone, not the recording of
+	// the fate.
 	Duration time.Duration
-	// Err porte la cause pour tout événement autre que EventPublished.
+	// Err carries the cause for any event other than EventPublished.
 	Err error
 }

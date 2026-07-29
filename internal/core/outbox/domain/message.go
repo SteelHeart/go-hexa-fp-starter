@@ -1,48 +1,48 @@
-// Package domain porte le vocabulaire de l'outbox, sans aucune dépendance.
+// Package domain carries the vocabulary of the outbox, without any dependency.
 //
-// Il n'importe ni pilote, ni driver de base, ni générateur d'identifiants :
-// l'identifiant est fourni par le pilote, ce qui rend ce paquet testable sans
-// rien et vérifiable par arch-go.yml.
+// It imports neither driver, nor database driver, nor identifier generator:
+// the identifier is supplied by the driver, which makes this package testable
+// with nothing and verifiable by arch-go.yml.
 package domain
 
 import "time"
 
-// MessageID identifie un message de l'outbox.
+// MessageID identifies an outbox message.
 type MessageID string
 
-// String retourne l'identifiant.
+// String returns the identifier.
 func (id MessageID) String() string { return string(id) }
 
-// Status énumère les états d'un message. Ensemble fermé : tout switch est
-// vérifié exhaustif par le linter.
+// Status enumerates the states of a message. A closed set: every switch is
+// checked for exhaustiveness by the linter.
 type Status string
 
-// Les états d'un message.
+// The states of a message.
 const (
-	// StatusPending attend sa publication, ou son prochain essai.
+	// StatusPending is awaiting its publication, or its next attempt.
 	StatusPending Status = "pending"
-	// StatusDone a été publié avec succès.
+	// StatusDone has been published successfully.
 	StatusDone Status = "done"
-	// StatusFailed a épuisé ses tentatives. JAMAIS supprimé : c'est la seule
-	// trace de ce qui n'a pas été publié.
+	// StatusFailed has exhausted its attempts. NEVER deleted: it is the only
+	// trace of what has not been published.
 	StatusFailed Status = "failed"
 )
 
-// NewMessage est une intention de publication, avant persistance.
+// NewMessage is an intent to publish, before persistence.
 //
-// L'identifiant et l'horodatage n'y figurent pas : ce sont des effets, produits
-// par le pilote. C'est ce qui rend un test déterministe.
+// The identifier and the timestamp do not appear in it: those are effects,
+// produced by the driver. That is what makes a test deterministic.
 type NewMessage struct {
 	Type        string
 	AggregateID string
-	// Payload est du JSON opaque. Le domaine ne le sérialise pas lui-même : un
-	// consommateur écrit dans un autre langage doit pouvoir le lire.
+	// Payload is opaque JSON. The domain does not serialise it itself: a
+	// consumer written in another language must be able to read it.
 	Payload     []byte
 	TraceParent string
 	Headers     map[string]string
 }
 
-// Message est un message persisté.
+// Message is a persisted message.
 type Message struct {
 	ID          MessageID
 	Type        string
@@ -56,7 +56,7 @@ type Message struct {
 	AvailableAt time.Time
 }
 
-// FailedAttempt décrit un échec de publication à enregistrer.
+// FailedAttempt describes a publication failure to be recorded.
 type FailedAttempt struct {
 	ID          MessageID
 	Attempts    int
@@ -65,30 +65,30 @@ type FailedAttempt struct {
 	Reason      string
 }
 
-// RetryPolicy borne l'acharnement du dépileur.
+// RetryPolicy bounds the dispatcher's persistence.
 //
-// Regroupée en type plutôt qu'en paramètres séparés : les deux valeurs n'ont de
-// sens qu'ensemble — un nombre de tentatives sans recul, ou l'inverse, ne décrit
-// aucune politique. Le regroupement rend aussi impossible d'inverser deux
-// arguments que le compilateur ne distinguerait pas.
+// Grouped into a type rather than separate parameters: the two values only make
+// sense together — a number of attempts without a backoff, or the reverse,
+// describes no policy at all. The grouping also makes it impossible to swap two
+// arguments that the compiler would not tell apart.
 type RetryPolicy struct {
-	// MaxAttempts est le nombre d'essais avant abandon définitif.
+	// MaxAttempts is the number of tries before definitive abandonment.
 	MaxAttempts int
-	// BaseBackoff est le pas du recul exponentiel.
+	// BaseBackoff is the step of the exponential backoff.
 	BaseBackoff time.Duration
 }
 
-// maxShift borne l'exposant du recul.
+// maxShift bounds the exponent of the backoff.
 //
-// Sans borne, `1 << 40` produirait une durée NÉGATIVE après débordement, donc un
-// message immédiatement rejoué en boucle serrée — l'inverse exact de ce qu'un
-// recul exponentiel doit produire.
+// Without a bound, `1 << 40` would produce a NEGATIVE duration after overflow,
+// hence a message immediately replayed in a tight loop — the exact opposite of
+// what an exponential backoff must produce.
 const maxShift = 10
 
-// NextAttempt calcule l'état d'un message après un échec.
+// NextAttempt computes the state of a message after a failure.
 //
-// Fonction PURE : ni horloge, ni aléa. L'instant courant est un paramètre, ce
-// qui rend la politique de réessai testable sans attendre.
+// A PURE function: no clock, no randomness. The current instant is a parameter,
+// which makes the retry policy testable without waiting.
 func NextAttempt(msg Message, policy RetryPolicy, now time.Time, reason string) FailedAttempt {
 	attempts := msg.Attempts + 1
 
@@ -108,7 +108,7 @@ func NextAttempt(msg Message, policy RetryPolicy, now time.Time, reason string) 
 	}
 }
 
-// IsDue indique si un message doit être traité maintenant.
+// IsDue states whether a message must be processed now.
 func (m Message) IsDue(now time.Time) bool {
 	return m.Status == StatusPending && !m.AvailableAt.After(now)
 }

@@ -1,7 +1,7 @@
-// Package application orchestre les cas d'usage et porte les décorateurs.
+// Package application orchestrates the use cases and carries the decorators.
 //
-// Il ne connaît ni transport, ni persistance, ni logger : il reçoit des ports et
-// retourne des Result. Vérifié par arch-go.yml.
+// It knows neither transport, nor persistence, nor a logger: it receives ports
+// and returns Results. Enforced by arch-go.yml.
 package application
 
 import (
@@ -12,11 +12,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Deps rassemble les effets dont le cas d'usage a besoin.
+// Deps gathers the effects the use case needs.
 //
-// Chaque champ est un type fonction : un double de test est une closure de trois
-// lignes, et aucune bibliothèque de mock n'est nécessaire — donc aucune n'est
-// autorisée (rules/dependances.md).
+// Every field is a function type: a test double is a three-line closure, and no
+// mocking library is needed — therefore none is allowed
+// (rules/dependances.md).
 type Deps struct {
 	EmailIsTaken ports.EmailIsTaken
 	HashPassword ports.HashPassword
@@ -26,11 +26,11 @@ type Deps struct {
 	Now          ports.Now
 }
 
-// state porte l'état intermédiaire du pipeline.
+// state carries the intermediate state of the pipeline.
 //
-// Toutes les étapes ont la MÊME signature `func(state) Result[state, Error]`, ce
-// qui permet de les composer avec result.Chain. Sans cela, il faudrait imbriquer
-// six FlatMap — Go n'ayant pas de do-notation (documentation/adr/002).
+// Every step has the SAME signature `func(state) Result[state, Error]`, which
+// allows composing them with result.Chain. Without that, six FlatMap calls would
+// have to be nested — Go having no do-notation (documentation/adr/002).
 type state struct {
 	command      domain.RegistrationCommand
 	registration domain.ValidRegistration
@@ -40,11 +40,11 @@ type state struct {
 
 type step = func(state) result.Result[state, domain.Error]
 
-// NewRegisterUser construit le cas d'usage d'inscription.
+// NewRegisterUser builds the registration use case.
 //
-// Le corps se lit comme la liste des étapes métier, dans l'ordre. Chaque étape
-// est testable isolément, et le court-circuit au premier échec est porté par
-// result.Chain, pas par des `if err != nil` répétés.
+// The body reads like the list of business steps, in order. Every step is
+// testable in isolation, and the short circuit on the first failure is carried
+// by result.Chain, not by repeated `if err != nil`.
 func NewRegisterUser(deps Deps) ports.RegisterUser {
 	return func(ctx context.Context, cmd domain.RegistrationCommand) result.Result[domain.User, domain.Error] {
 		start := result.Ok[state, domain.Error](state{command: cmd})
@@ -62,7 +62,7 @@ func NewRegisterUser(deps Deps) ports.RegisterUser {
 	}
 }
 
-// validate est pure : elle ne touche à rien d'extérieur.
+// validate is pure: it touches nothing on the outside.
 func validate(s state) result.Result[state, domain.Error] {
 	return result.Map(
 		domain.ParseRegistration(s.command),
@@ -73,8 +73,8 @@ func validate(s state) result.Result[state, domain.Error] {
 	)
 }
 
-// ensureEmailAvailable ferme le contexte par application partielle : l'étape
-// retournée a la signature homogène exigée par result.Chain.
+// ensureEmailAvailable closes over the context by partial application: the
+// returned step has the homogeneous signature result.Chain requires.
 func (d Deps) ensureEmailAvailable(ctx context.Context) step {
 	return func(s state) result.Result[state, domain.Error] {
 		return result.FlatMap(
@@ -92,7 +92,7 @@ func (d Deps) ensureEmailAvailable(ctx context.Context) step {
 	}
 }
 
-// hashPassword délègue au port : le hachage est un effet, jamais du domaine.
+// hashPassword delegates to the port: hashing is an effect, never domain.
 func (d Deps) hashPassword(s state) result.Result[state, domain.Error] {
 	return result.Map(
 		d.HashPassword(s.registration.Password),
@@ -103,7 +103,7 @@ func (d Deps) hashPassword(s state) result.Result[state, domain.Error] {
 	)
 }
 
-// buildUser est pure : l'horloge et l'identifiant viennent de ports.
+// buildUser is pure: the clock and the identifier come from ports.
 func (d Deps) buildUser(s state) result.Result[state, domain.Error] {
 	s.user = domain.NewUser(d.GenerateID(), s.registration.Email, s.hash, d.Now())
 	return result.Ok[state, domain.Error](s)
@@ -118,10 +118,10 @@ func (d Deps) persist(ctx context.Context) step {
 	}
 }
 
-// publish écrit l'événement dans l'outbox, DANS la même transaction que
-// l'écriture métier. Un échec ici annule l'inscription : c'est voulu — un
-// utilisateur créé sans son événement de bienvenue est un état incohérent
-// silencieux, et le silence est le pire des défauts.
+// publish writes the event into the outbox, WITHIN the same transaction as the
+// business write. A failure here cancels the registration: that is intended — a
+// user created without their welcome event is a silently inconsistent state, and
+// silence is the worst kind of defect.
 func (d Deps) publish(ctx context.Context) step {
 	return func(s state) result.Result[state, domain.Error] {
 		event := domain.NewUserRegistered(s.user)

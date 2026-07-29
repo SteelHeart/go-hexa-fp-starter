@@ -1,29 +1,30 @@
-// Package core assemble le catalogue des modules NOYAU — ADR 014.
+// Package core assembles the catalogue of the CORE modules — ADR 014.
 //
-// Il ne contient que ça, et volontairement : c'est le seul endroit du socle qui
-// nomme ses huit modules, et il ne fait rien d'autre que les énumérer.
+// It holds nothing else, deliberately: it is the only place in the starter that
+// names its eight modules, and all it does is enumerate them.
 //
-// # Pourquoi ce paquet existe
+// # Why this package exists
 //
-// `internal/config` ne peut nommer aucun module — règle 7 d'`arch-go`, qui lui
-// interdit toute dépendance interne. Le catalogue doit donc être construit
-// ailleurs et lui être passé.
+// `internal/config` cannot name any module — `arch-go` rule 7, which forbids it
+// any internal dependency. The catalogue must therefore be built elsewhere and
+// handed to it.
 //
-// Le composition root pourrait le faire, mais `cmd/server` et `cmd/worker`
-// écriraient alors la même liste deux fois — et le jour où elles divergeraient,
-// un module serait configurable dans un binaire et pas dans l'autre, sans que
-// rien ne le dise. C'est la divergence que ce dépôt a déjà payée trois fois.
+// The composition root could do it, but `cmd/server` and `cmd/worker` would then
+// write the same list twice — and the day they diverged, a module would be
+// configurable in one binary and not in the other, without anything saying so.
+// That is the divergence this repository has already paid for three times.
 //
-// # Ce que ce catalogue déclare, et ce qu'il ne déclare pas
+// # What this catalogue declares, and what it does not
 //
-// Il déclare ce que les binaires du socle EMBARQUENT, pas ce qu'ils montent.
-// La nuance compte : `cmd/server` ne câble aujourd'hui qu'`outbox` et `auth`,
-// tandis que `config/modules.yaml` les déclare tous. Restreindre le catalogue
-// aux seuls modules câblés ferait donc REFUSER la configuration livrée.
+// It declares what the starter's binaries EMBED, not what they mount. The
+// nuance matters: `cmd/server` currently wires only `outbox` and `auth`, while
+// `config/modules.yaml` declares them all. Restricting the catalogue to the
+// wired modules alone would therefore make it REFUSE the shipped configuration.
 //
-// L'ADR 014 formule la règle plus étroitement — « un module qui n'est pas monté
-// n'est pas dans le catalogue ». L'écart est assumé, et écrit ici plutôt que taire :
-// la propriété qui compte est qu'aucun nom ARBITRAIRE ne passe, et elle tient.
+// ADR 014 states the rule more narrowly — "a module that is not mounted is not
+// in the catalogue". The gap is assumed, and written here rather than left
+// unsaid: the property that matters is that no ARBITRARY name gets through, and
+// that one holds.
 package core
 
 import (
@@ -40,15 +41,15 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage"
 )
 
-// Catalog rend le catalogue fusionné des modules noyau.
+// Catalog returns the merged catalogue of the core modules.
 //
-// Chaque module déclare le sien chez lui, à côté de la fabrique qui construit
-// ses pilotes. Ce fichier ne fait que les réunir : il ne contient aucun nom de
-// pilote, donc il ne peut pas diverger d'une fabrique.
+// Every module declares its own at home, next to the factory that builds its
+// drivers. This file only brings them together: it holds no driver name, so it
+// cannot diverge from a factory.
 //
-// Une collision de noms est impossible ici — huit constantes distinctes — mais
-// `MergeCatalogs` la refuserait, et c'est cette garantie-là qui compte quand
-// une application ajoutera les siens.
+// A name collision is impossible here — eight distinct constants — but
+// `MergeCatalogs` would refuse it, and that is the guarantee that matters the
+// day an application adds its own.
 func Catalog() (config.ModuleCatalog, error) {
 	merged, err := config.MergeCatalogs(
 		outbox.Catalog(),
@@ -61,7 +62,7 @@ func Catalog() (config.ModuleCatalog, error) {
 		notification.Catalog(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("catalogue du noyau: %w", err)
+		return nil, fmt.Errorf("core catalogue: %w", err)
 	}
 	return merged, nil
 }

@@ -9,25 +9,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// NewAuthenticate compose l'échange d'un secret contre une session.
+// NewAuthenticate composes the exchange of a secret for a session.
 //
-// # L'ordre des étapes est la décision, et il se lit
+// # The order of the steps is the decision, and it reads
 //
-// Valider la forme, retrouver la créance, comparer le secret, émettre la session.
-// Une inversion ferait émettre avant de comparer — c'est-à-dire authentifier
-// n'importe qui.
+// Validate the shape, look up the credential, compare the secret, issue the
+// session. An inversion would issue before comparing — that is, authenticate
+// anybody.
 //
-// # Un seul refus pour trois causes, délibérément
+// # A single refusal for three causes, deliberately
 //
-// Sujet mal formé, sujet inconnu, secret faux : tout rend
-// `domain.ErrInvalidCredentials`. Distinguer « ce compte n'existe pas » de « le
-// mot de passe est faux » transforme le formulaire de connexion en **oracle
-// d'existence de comptes** — on interroge mille adresses, on note lesquelles
-// répondent différemment, et on sait où concentrer l'effort.
+// Malformed subject, unknown subject, wrong secret: all return
+// `domain.ErrInvalidCredentials`. Distinguishing "this account does not exist"
+// from "the password is wrong" turns the sign-in form into an **account
+// existence oracle** — you query a thousand addresses, note which ones answer
+// differently, and you know where to concentrate the effort.
 //
-// ⚠️ Cette fonction reste néanmoins un oracle par le TEMPS : un sujet inconnu
-// répond sans hachage, donc plus vite. Le remède est de hacher quand même, et il
-// n'est pas appliqué ici — voir la NON-garantie écrite à la fin de ce fichier.
+// ⚠️ This function nevertheless remains an oracle through TIME: an unknown
+// subject answers without any hashing, hence faster. The remedy is to hash
+// anyway, and it is not applied here — see the NON-guarantee written at the end
+// of this file.
 func NewAuthenticate(deps Deps) ports.Authenticate {
 	return func(ctx context.Context, rawSubject, secret string) (domain.Session, error) {
 		subject, err := domain.NewSubject(rawSubject)
@@ -45,7 +46,7 @@ func NewAuthenticate(deps Deps) ports.Authenticate {
 
 		matches, err := deps.VerifySecret(secret, credential.SecretHash())
 		if err != nil {
-			return domain.Session{}, fmt.Errorf("comparaison du secret: %w", err)
+			return domain.Session{}, fmt.Errorf("comparing the secret: %w", err)
 		}
 		if !matches {
 			return domain.Session{}, domain.ErrInvalidCredentials
@@ -55,60 +56,59 @@ func NewAuthenticate(deps Deps) ports.Authenticate {
 	}
 }
 
-// unmasked rend le refus NU quand c'est un refus d'identifiants.
+// unmasked returns the refusal BARE when it is a credentials refusal.
 //
-// # Le défaut que cette fonction corrige
+// # The defect this function fixes
 //
-// Envelopper le sentinelle — `fmt.Errorf("authentification: %w", err)` — rouvre
-// l'oracle par le MESSAGE. `errors.Is` reconnaît toujours le refus, donc tous les
-// tests de taxonomie restent verts ; mais `err.Error()` rend
-// « authentification: identifiants invalides » pour un sujet inconnu et
-// « identifiants invalides » pour un secret faux. Une surface qui journalise ou
-// renvoie le message distingue alors les deux cas — exactement ce que le message
-// unique cherchait à cacher, réintroduit par une enveloppe posée par réflexe.
+// Wrapping the sentinel — `fmt.Errorf("authentication: %w", err)` — reopens the
+// oracle through the MESSAGE. `errors.Is` still recognises the refusal, so
+// every taxonomy test stays green; but `err.Error()` returns "authentication:
+// invalid credentials" for an unknown subject and "invalid credentials" for a
+// wrong secret. A surface that logs or returns the message then tells the two
+// cases apart — exactly what the single message was trying to hide,
+// reintroduced by a wrapper added out of reflex.
 //
-// Toute AUTRE erreur reste enveloppée : une panne du magasin n'est pas un refus
-// d'identifiants, et la confondre ferait dire à quelqu'un que son mot de passe
-// est faux alors que la base est tombée.
+// Any OTHER error stays wrapped: a store outage is not a credentials refusal,
+// and conflating them would tell someone their password is wrong when the
+// database is down.
 func unmasked(err error) error {
 	if errors.Is(err, domain.ErrInvalidCredentials) {
 		return domain.ErrInvalidCredentials
 	}
-	return fmt.Errorf("authentification: %w", err)
+	return fmt.Errorf("authentication: %w", err)
 }
 
-// issue produit et persiste une session.
+// issue produces and persists a session.
 //
-// Isolée pour que `NewAuthenticate` reste sous le seuil de lignes d'`arch-go`, et
-// parce qu'elle nomme le seul endroit du module où un jeton naît.
+// Isolated so that `NewAuthenticate` stays under `arch-go`'s line threshold,
+// and because it names the only place in the module where a token is born.
 func (d Deps) issue(ctx context.Context, id domain.IdentityID) (domain.Session, error) {
 	token, err := d.NewToken()
 	if err != nil {
-		return domain.Session{}, fmt.Errorf("production du jeton: %w", err)
+		return domain.Session{}, fmt.Errorf("producing the token: %w", err)
 	}
 
 	session, err := domain.NewSession(token, id, d.Now(), d.SessionTTL)
 	if err != nil {
-		return domain.Session{}, fmt.Errorf("ouverture de session: %w", err)
+		return domain.Session{}, fmt.Errorf("opening the session: %w", err)
 	}
 	if err := d.SaveSession(ctx, session); err != nil {
-		return domain.Session{}, fmt.Errorf("enregistrement de la session: %w", err)
+		return domain.Session{}, fmt.Errorf("saving the session: %w", err)
 	}
 	return session, nil
 }
 
-// NON-GARANTIE — l'oracle temporel n'est pas fermé.
+// NON-GUARANTEE — the timing oracle is not closed.
 //
-// Un sujet inconnu rend `ErrInvalidCredentials` SANS avoir haché quoi que ce
-// soit ; un sujet connu paie un Argon2id complet, soit plusieurs dizaines de
-// millisecondes. La différence est mesurable sur un réseau local, et elle révèle
-// quels comptes existent — exactement ce que le message unique cherche à cacher.
+// An unknown subject returns `ErrInvalidCredentials` WITHOUT having hashed
+// anything; a known subject pays for a full Argon2id, that is several tens of
+// milliseconds. The difference is measurable on a local network, and it reveals
+// which accounts exist — exactly what the single message tries to hide.
 //
-// Le remède est connu : hacher contre un condensé factice quand le sujet est
-// inconnu, pour que les deux chemins coûtent pareil. Il n'est PAS appliqué ici
-// parce qu'il exige un condensé de référence produit avec les mêmes paramètres
-// que ceux configurés, et que le fabriquer au démarrage est une décision
-// d'infrastructure, pas de cas d'usage.
+// The remedy is known: hash against a dummy digest when the subject is unknown,
+// so that both paths cost the same. It is NOT applied here because it requires
+// a reference digest produced with the same parameters as those configured, and
+// building it at startup is an infrastructure decision, not a use case one.
 //
-// Écrit plutôt que tu : une faiblesse nommée se corrige, une faiblesse ignorée
-// se découvre en audit.
+// Written down rather than kept quiet: a named weakness gets fixed, an ignored
+// weakness gets discovered in an audit.

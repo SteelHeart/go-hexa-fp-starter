@@ -5,29 +5,29 @@ import (
 	"testing"
 )
 
-// TestMissingSettingIsDistinctFromEmpty : « absent » et « présent et vide » sont
-// deux situations différentes.
+// TestMissingSettingIsDistinctFromEmpty: "absent" and "present and empty" are
+// two different situations.
 //
-// Les confondre ferait appliquer une valeur par défaut à la place d'une décision
-// d'exploitation délibérée — vider une bannière pour la faire disparaître la
-// ferait réapparaître avec son texte d'origine.
+// Confusing them would apply a default value in place of a deliberate
+// operations decision — emptying a banner to make it disappear would make it
+// reappear with its original text.
 func TestMissingSettingIsDistinctFromEmpty(t *testing.T) {
 	t.Parallel()
 
 	mod := newFileModule(t, map[string]any{
-		"settings": map[string]any{"banniere": ""},
+		"settings": map[string]any{"banner": ""},
 	})
 	ctx := context.Background()
 
-	vide := mod.GetSetting(ctx, "banniere")
-	if !vide.Found {
-		t.Error("un réglage déclaré vide doit être trouvé")
+	empty := mod.GetSetting(ctx, "banner")
+	if !empty.Found {
+		t.Error("a setting declared empty must be found")
 	}
-	if vide.Value != "" {
-		t.Errorf("valeur = %q, attendu vide", vide.Value)
+	if empty.Value != "" {
+		t.Errorf("value = %q, want empty", empty.Value)
 	}
 
-	if absent := mod.GetSetting(ctx, "jamais_pose"); absent.Found {
-		t.Error("un réglage jamais posé ne doit pas être trouvé")
+	if absent := mod.GetSetting(ctx, "never_set"); absent.Found {
+		t.Error("a setting never set must not be found")
 	}
 }

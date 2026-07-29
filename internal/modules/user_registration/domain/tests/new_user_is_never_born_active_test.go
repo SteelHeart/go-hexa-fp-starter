@@ -7,28 +7,28 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestNewUserIsNeverBornActive : un compte naît PENDING.
+// TestNewUserIsNeverBornActive: an account is born PENDING.
 //
-// Naître actif serait un fail-open : à cet instant, l'adresse n'est PAS prouvée.
-// N'importe qui pourrait s'inscrire avec l'adresse d'un autre et disposer
-// immédiatement d'un compte fonctionnel à son nom.
+// Being born active would be a fail-open: at that instant, the address is NOT
+// proven. Anyone could register with somebody else's address and immediately
+// have a working account in their name.
 //
-// C'est « deny par défaut » appliqué au cycle de vie, et c'est le genre de décision
-// qu'une refonte du formulaire d'inscription défait sans s'en apercevoir.
+// This is "deny by default" applied to the life cycle, and it is the kind of
+// decision that a redesign of the registration form undoes without noticing.
 func TestNewUserIsNeverBornActive(t *testing.T) {
 	t.Parallel()
 
 	user := domain.NewUser(
 		"user-42",
-		emailValide(t, "alice@example.com"),
+		validEmail(t, "alice@example.com"),
 		domain.NewPasswordHash("$argon2id$..."),
 		time.Now(),
 	)
 
 	if user.Status != domain.StatusPending {
-		t.Errorf("état = %q, attendu %q", user.Status, domain.StatusPending)
+		t.Errorf("state = %q, want %q", user.Status, domain.StatusPending)
 	}
 	if user.CanAuthenticate() {
-		t.Error("un compte dont l'adresse n'est pas prouvée ne doit PAS pouvoir se connecter")
+		t.Error("an account whose address is not proven must NOT be able to sign in")
 	}
 }

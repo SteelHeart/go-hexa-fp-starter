@@ -1,4 +1,4 @@
-// Package ressources opens the connections that the ENABLED modules require,
+// Package resources opens the connections that the ENABLED modules require,
 // and no others.
 //
 // # The defect this package fixes — #103
@@ -32,7 +32,7 @@
 // shipped configuration, every driver is dependency-free, so **no connection is
 // opened** and `go run ./cmd/server` starts on a bare machine. Fixing #103 was
 // not to cost that promise.
-package ressources
+package resources
 
 import (
 	"context"
@@ -47,7 +47,7 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/database"
 )
 
-// Connexions carries what has been opened, and the means to close it again.
+// Connections carries what has been opened, and the means to close it again.
 //
 // A struct rather than three returns: `Open` would return
 // `(*pgxpool.Pool, *goredis.Client, error)`, and the architecture rule refuses
@@ -59,7 +59,7 @@ import (
 // it signals that no enabled module required that resource. The modules that do
 // not need it receive that nil without ever dereferencing it, and those that do
 // need it refuse to start, saying so.
-type Connexions struct {
+type Connections struct {
 	Pool  *pgxpool.Pool
 	Cache *goredis.Client
 }
@@ -75,13 +75,13 @@ type Connexions struct {
 // so does `cache.New`. That is deliberate: a service that starts without a
 // database signals its defect on the first user request, that is to say too
 // late, and from a place that does not blame the right cause.
-func Open(ctx context.Context, cfg config.Config, catalog config.ModuleCatalog) (Connexions, error) {
-	var opened Connexions
+func Open(ctx context.Context, cfg config.Config, catalog config.ModuleCatalog) (Connections, error) {
+	var opened Connections
 
 	if cfg.Modules.RequiresSQL(catalog) {
 		pool, err := database.New(ctx, cfg.Database)
 		if err != nil {
-			return Connexions{}, fmt.Errorf("an enabled module requires a database: %w", err)
+			return Connections{}, fmt.Errorf("an enabled module requires a database: %w", err)
 		}
 		opened.Pool = pool
 	}
@@ -94,7 +94,7 @@ func Open(ctx context.Context, cfg config.Config, catalog config.ModuleCatalog) 
 			// and a restart loop would accumulate them until the database
 			// server saturates.
 			opened.Close()
-			return Connexions{}, fmt.Errorf("an enabled module requires a cache: %w", err)
+			return Connections{}, fmt.Errorf("an enabled module requires a cache: %w", err)
 		}
 		opened.Cache = client
 	}
@@ -109,7 +109,7 @@ func Open(ctx context.Context, cfg config.Config, catalog config.ModuleCatalog) 
 // receiving an error could only ignore or log it, and the obligation to handle
 // it pushes towards writing `defer func() { _ = c.Close() }()` — hence towards
 // hiding, rather than deciding.
-func (c Connexions) Close() {
+func (c Connections) Close() {
 	if c.Pool != nil {
 		c.Pool.Close()
 	}

@@ -11,11 +11,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
-// Aides partagées par les tests du DÉPILEUR. Les aides du module lui-même sont
-// dans helpers_test.go.
+// Helpers shared by the DISPATCHER tests. The helpers of the module itself are
+// in helpers_test.go.
 
-// dispatchClock avance d'un pas fixe à chaque lecture : les durées mesurées sont
-// donc déterministes, et aucun test n'attend.
+// dispatchClock advances by a fixed step at each read: the measured durations
+// are therefore deterministic, and no test waits.
 type dispatchClock struct {
 	mu   sync.Mutex
 	at   time.Time
@@ -34,7 +34,7 @@ func (c *dispatchClock) now() time.Time {
 	return current
 }
 
-// spy enregistre ce que le dépileur a décidé.
+// spy records what the dispatcher decided.
 type spy struct {
 	mu       sync.Mutex
 	outcomes []domain.Outcome
@@ -68,32 +68,32 @@ func (s *spy) markFailed() ports.MarkFailed {
 	}
 }
 
-// lastOutcome rend le dernier compte rendu.
+// lastOutcome returns the last report.
 func (s *spy) lastOutcome(t *testing.T) domain.Outcome {
 	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.outcomes) == 0 {
-		t.Fatal("aucun compte rendu")
+		t.Fatal("no report at all")
 	}
 	return s.outcomes[len(s.outcomes)-1]
 }
 
-// lastAttempt rend le dernier échec enregistré.
+// lastAttempt returns the last recorded failure.
 func (s *spy) lastAttempt(t *testing.T) domain.FailedAttempt {
 	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.failed) == 0 {
-		t.Fatal("aucun échec enregistré")
+		t.Fatal("no recorded failure at all")
 	}
 	return s.failed[len(s.failed)-1]
 }
 
-// claimOnce rend le lot donné au premier appel, puis plus rien.
+// claimOnce returns the given batch on the first call, then nothing more.
 //
-// Sans cet épuisement, le rattrapage du dépileur boucle jusqu'à sa borne et le
-// test compterait dix fois le même message.
+// Without this exhaustion, the dispatcher's catch-up loops up to its bound and
+// the test would count the same message ten times.
 func claimOnce(messages ...domain.Message) ports.Claim {
 	var served bool
 	var mu sync.Mutex
@@ -108,7 +108,7 @@ func claimOnce(messages ...domain.Message) ports.Claim {
 	}
 }
 
-// pending forge un message en attente.
+// pending forges a pending message.
 func pending(id string, attempts int) domain.Message {
 	return domain.Message{
 		ID:       domain.MessageID(id),
@@ -119,7 +119,7 @@ func pending(id string, attempts int) domain.Message {
 	}
 }
 
-// testPolicy est une politique valide et lisible.
+// testPolicy is a valid and readable policy.
 func testPolicy() application.Policy {
 	return application.Policy{
 		BatchSize: 10,
@@ -128,17 +128,17 @@ func testPolicy() application.Policy {
 	}
 }
 
-// newDispatcher construit un dépileur sur des closures.
+// newDispatcher builds a dispatcher on top of closures.
 func newDispatcher(t *testing.T, p application.Ports, policy application.Policy) *application.Dispatcher {
 	t.Helper()
 	dispatcher, err := application.NewDispatcher(p, policy)
 	if err != nil {
-		t.Fatalf("construction du dépileur: %v", err)
+		t.Fatalf("building the dispatcher: %v", err)
 	}
 	return dispatcher
 }
 
-// dispatcherPorts assemble des ports complets autour d'un publieur donné.
+// dispatcherPorts assembles complete ports around a given publisher.
 func dispatcherPorts(s *spy, claim ports.Claim, handle ports.Handler) application.Ports {
 	return application.Ports{
 		Claim:      claim,

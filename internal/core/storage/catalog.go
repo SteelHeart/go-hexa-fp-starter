@@ -2,34 +2,36 @@ package storage
 
 import "github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// # Pourquoi ici, et pas dans internal/config
+// # Why here, and not in internal/config
 //
-// Cette table vivait dans `internal/config/modules.go`, à deux paquets de la
-// fabrique qui construit réellement les pilotes. Le commentaire qui
-// l'accompagnait avouait déjà craindre la divergence : « une faute de frappe
-// dans l'une des deux rendrait un module inactivable, avec un message qui
-// accuse la configuration de l'utilisateur ».
+// This table used to live in `internal/config/modules.go`, two packages away
+// from the factory that actually builds the drivers. The comment that came
+// with it already admitted to fearing divergence: "a typo in either of the two
+// would make a module impossible to activate, with a message that blames the
+// user's configuration".
 //
-// Elle est désormais dans le MÊME paquet que le `switch` de `New`, souvent sur
-// le même écran. La divergence ne devient pas impossible — rien ne la vérifie
-// mécaniquement, et l'ADR 014 le note comme sa faiblesse [humain] — mais elle
-// devient improbable.
+// It now lives in the SAME package as the `switch` of `New`, often on the same
+// screen. Divergence does not become impossible — nothing checks it
+// mechanically, and ADR 014 notes this as its weakness [human] — but it
+// becomes improbable.
 //
-// Dépôt d’objets, clés validées contre la traversée de répertoire.
+// Object store, keys validated against directory traversal.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut n'exige RIEN : c'est ce qui rend vrai « `go run` démarre »
-			// sans base, sans cache, sans conteneur (ADR 012).
+			// The default requires NOTHING: this is what makes "`go run`
+			// starts" true without a database, without a cache, without a
+			// container (ADR 012).
 			Default: driverDisk,
 			Drivers: map[string]config.Resources{
-				// Local au processus : rien n’est partagé entre répliques.
+				// Local to the process: nothing is shared between replicas.
 				//
-				// Les clés sont RÉFÉRENCÉES depuis le code qui les lit, jamais
-				// réécrites ici : une divergence entre les deux listes rendrait une
-				// option admise que personne ne lit, ou l'inverse (#93).
+				// The keys are REFERENCED from the code that reads them, never
+				// rewritten here: a divergence between the two lists would make
+				// an option admitted that nobody reads, or the other way round
+				// (#93).
 				driverDisk: {Options: []string{OptionBaseDir, OptionBaseURL}},
 			},
 		},

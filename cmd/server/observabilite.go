@@ -12,98 +12,97 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ce fichier est la moitié qui manquait — #13
+// This file is the half that was missing — #13
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// `telemetry.Setup` et `httpserver.NewMetricsServer` existaient, étaient testés,
-// et n'étaient appelés par AUCUN binaire. Conséquence mesurée avant correction :
+// `telemetry.Setup` and `httpserver.NewMetricsServer` existed, were tested,
+// and were called by NO binary. Consequence measured before the fix:
 //
-//	occurrences de trace_id dans les journaux : 0
-//	GET /metrics                              : aucune réponse
+//	occurrences of trace_id in the logs : 0
+//	GET /metrics                        : no answer
 //
-// `otelhttp` enveloppait pourtant déjà le routeur, et le gestionnaire slog
-// injectait déjà `trace_id` — mais sans fournisseur de traces installé, le span
-// ouvert par `otelhttp` n'est pas enregistré, son contexte est invalide, et
-// l'injection ne se déclenche jamais. Trois pièces sur quatre, donc rien.
+// `otelhttp` did already wrap the router, and the slog handler did already
+// inject `trace_id` — but with no trace provider installed, the span opened by
+// `otelhttp` is not recorded, its context is invalid, and the injection never
+// fires. Three pieces out of four, hence nothing.
 //
-// C'est le mode de défaillance que `documentation/produit/personas.md` désigne
-// comme le pire pour l'exploitant : *une configuration d'observabilité sans
-// câblage est pire qu'aucune, elle fait croire que la question est traitée.*
+// This is the failure mode that `documentation/produit/personas.md` names as
+// the worst one for the operator: *an observability configuration without
+// wiring is worse than none, it makes people believe the question is handled.*
 
-// grâceTelemetrie borne l'arrêt des exportateurs.
+// telemetryGrace bounds the shutdown of the exporters.
 //
-// Un délai fini plutôt qu'aucun : un collecteur injoignable ferait autrement
-// attendre l'arrêt indéfiniment, c'est-à-dire transformerait un incident
-// d'observabilité en incident de disponibilité.
-const graceTelemetrie = 5 * time.Second
+// A finite delay rather than none: an unreachable collector would otherwise
+// make the shutdown wait indefinitely, that is, turn an observability incident
+// into an availability incident.
+const telemetryGrace = 5 * time.Second
 
-// demarrerObservabilite installe les fournisseurs et rend la fonction d'arrêt.
+// startObservability installs the providers and returns the shutdown function.
 //
-// Désactivée — le défaut livré —, `Setup` rend un arrêt inerte : ce câblage
-// n'ajoute donc AUCUN prérequis d'infrastructure. `go run ./cmd/server` démarre
-// toujours sans collecteur, sans base et sans Docker (ADR 012).
-func demarrerObservabilite(ctx context.Context, cfg config.Config) (telemetry.Shutdown, error) {
-	arret, err := telemetry.Setup(ctx, cfg)
+// Disabled — the shipped default —, `Setup` returns an inert shutdown: this
+// wiring therefore adds NO infrastructure prerequisite. `go run ./cmd/server`
+// still starts with no collector, no database and no Docker (ADR 012).
+func startObservability(ctx context.Context, cfg config.Config) (telemetry.Shutdown, error) {
+	shutdown, err := telemetry.Setup(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("télémétrie: %w", err)
+		return nil, fmt.Errorf("telemetry: %w", err)
 	}
-	return arret, nil
+	return shutdown, nil
 }
 
-// arreterObservabilite vide les exportateurs avant de rendre la main.
+// stopObservability flushes the exporters before handing back control.
 //
-// Le contexte est délibérément DÉTACHÉ de l'annulation : à l'arrêt, `ctx` est
-// déjà annulé, et le passer tel quel ferait jeter les spans en tampon — ceux de
-// la dernière minute, c'est-à-dire précisément ceux qu'on cherchera après un
-// arrêt anormal.
-func arreterObservabilite(ctx context.Context, arret telemetry.Shutdown, logger *slog.Logger) {
-	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), graceTelemetrie)
+// The context is deliberately DETACHED from the cancellation: at shutdown time
+// `ctx` is already cancelled, and passing it as is would drop the buffered
+// spans — those of the last minute, that is, precisely the ones people will
+// look for after an abnormal shutdown.
+func stopObservability(ctx context.Context, shutdown telemetry.Shutdown, logger *slog.Logger) {
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryGrace)
 	defer cancel()
 
-	if err := arret(stopCtx); err != nil {
-		logger.ErrorContext(stopCtx, "arrêt de la télémétrie", slog.String("erreur", err.Error()))
+	if err := shutdown(stopCtx); err != nil {
+		logger.ErrorContext(stopCtx, "telemetry shutdown", slog.String("erreur", err.Error()))
 	}
 }
 
-// servirMetriques expose /metrics, et décide quoi faire quand le port est pris.
+// serveMetrics exposes /metrics, and decides what to do when the port is taken.
 //
-// # L'échec est fatal HORS développement, et c'est un arbitrage mesuré
+// # The failure is fatal OUTSIDE development, and that is a measured trade-off
 //
-// En production, un service qui tourne sans métriques est exactement ce que
-// personne ne remarque avant l'incident où l'on en a besoin. Le refus doit donc
-// être total.
+// In production, a service running without metrics is exactly what nobody
+// notices before the incident where they are needed. The refusal must
+// therefore be total.
 //
-// En développement, non — et c'est une correction, pas une tolérance. La version
-// précédente coupait partout. Or `config/env/development.yaml` active la
-// télémétrie : le port 9090 est donc ouvert par DÉFAUT en local, et 9090 est
-// occupé sur beaucoup de postes. « `go run` démarre sur une machine vierge »
-// aurait cessé d'être vrai à cause d'un port de diagnostic. Mesuré en le
-// branchant, pas anticipé.
+// In development, no — and that is a correction, not a tolerance. The previous
+// version cut everywhere. Yet `config/env/development.yaml` enables telemetry:
+// port 9090 is therefore open by DEFAULT locally, and 9090 is taken on many
+// workstations. "`go run` starts on a bare machine" would have stopped being
+// true because of a diagnostics port. Measured by wiring it, not anticipated.
 //
-// La forme suit celle déjà retenue ailleurs dans le socle — `SecurityHeaders()`
-// contre `SecurityHeadersWithoutHSTS()` : le comportement strict est le défaut,
-// et la renonciation est NOMMÉE et bornée. Ici elle est bornée à
-// `development`/`test`, et elle est bruyante.
-func servirMetriques(ctx context.Context, cfg config.Config, logger *slog.Logger, couper context.CancelFunc) {
+// The shape follows the one already retained elsewhere in the starter —
+// `SecurityHeaders()` against `SecurityHeadersWithoutHSTS()`: the strict
+// behaviour is the default, and the waiver is NAMED and bounded. Here it is
+// bounded to `development`/`test`, and it is noisy.
+func serveMetrics(ctx context.Context, cfg config.Config, logger *slog.Logger, cancel context.CancelFunc) {
 	if !cfg.Telemetry.Enabled {
 		return
 	}
-	serveur := httpserver.NewMetricsServer(cfg.Telemetry.MetricsPort, logger)
+	server := httpserver.NewMetricsServer(cfg.Telemetry.MetricsPort, logger)
 
 	go func() {
-		err := serveur.Run(ctx)
+		err := server.Run(ctx)
 		if err == nil {
 			return
 		}
-		champs := []any{
+		fields := []any{
 			slog.Int("port", cfg.Telemetry.MetricsPort),
 			slog.String("erreur", err.Error()),
 		}
 		if cfg.App.Env.IsLocal() {
-			logger.WarnContext(ctx, "métriques indisponibles — le service continue (développement)", champs...)
+			logger.WarnContext(ctx, "metrics unavailable — the service continues (development)", fields...)
 			return
 		}
-		logger.ErrorContext(ctx, "serveur de métriques — arrêt du service", champs...)
-		couper()
+		logger.ErrorContext(ctx, "metrics server — stopping the service", fields...)
+		cancel()
 	}()
 }

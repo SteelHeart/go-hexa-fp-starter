@@ -5,30 +5,30 @@ import (
 	"testing"
 )
 
-// TestUnreadableFlagIsDenied : une valeur illisible vaut « éteint ».
+// TestUnreadableFlagIsDenied: an unreadable value counts as "switched off".
 //
-// Une faute de frappe dans un drapeau ne doit jamais allumer la fonctionnalité.
-// C'est la direction du repli qui compte : se tromper vers `false` fait manquer une
-// fonctionnalité, se tromper vers `true` la livre avant l'heure.
+// A typo in a flag must never switch the feature on. It is the direction of the
+// fallback that matters: erring towards `false` makes a feature go missing,
+// erring towards `true` ships it before its time.
 func TestUnreadableFlagIsDenied(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]any{
-		"texte quelconque":  "peut-être",
-		"chaîne vide":       "",
-		"nombre hors 0 / 1": 7,
-		"faux explicite":    false,
-		"zéro":              0,
+		"arbitrary text":       "maybe",
+		"empty string":         "",
+		"number outside 0 / 1": 7,
+		"explicit false":       false,
+		"zero":                 0,
 	}
 
 	for name, value := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			mod := newFileModule(t, map[string]any{
-				"flags": map[string]any{"drapeau": value},
+				"flags": map[string]any{"flag": value},
 			})
-			if mod.IsEnabled(context.Background(), "drapeau") {
-				t.Errorf("valeur %#v ne doit pas activer le drapeau", value)
+			if mod.IsEnabled(context.Background(), "flag") {
+				t.Errorf("value %#v must not activate the flag", value)
 			}
 		})
 	}

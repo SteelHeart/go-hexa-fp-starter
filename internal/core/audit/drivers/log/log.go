@@ -1,14 +1,14 @@
-// Package log implémente l'audit vers le journal applicatif.
+// Package log implements auditing towards the application log.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **Ni requêtable** : retrouver « toutes les actions de cet acteur » exige
-//     de fouiller des logs.
-//   - **Ni inaltérable** : un log se tronque, se réécrit et s'efface.
-//   - **Ni conservé** : la rétention est celle de l'agent de journaux.
+//   - **Not queryable**: finding "every action of this actor" requires digging
+//     through logs.
+//   - **Not tamper-proof**: a log gets truncated, rewritten and erased.
+//   - **Not retained**: retention is that of the log agent.
 //
-// Convient en développement. Ne convient PAS dès qu'une preuve est attendue —
-// argent, consentement, accès à une donnée sensible.
+// Suitable in development. NOT suitable as soon as proof is expected — money,
+// consent, access to sensitive data.
 package log
 
 import (
@@ -21,11 +21,11 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/ports"
 )
 
-// New construit le pilote.
+// New builds the driver.
 func New(logger *slog.Logger, now func() time.Time) ports.Record {
 	return func(ctx context.Context, entry domain.Entry) error {
 		if !entry.IsComplete() {
-			return fmt.Errorf("%w: action=%q entité=%q", domain.ErrIncomplete, entry.Action, entry.EntityType)
+			return fmt.Errorf("%w: action=%q entity=%q", domain.ErrIncomplete, entry.Action, entry.EntityType)
 		}
 		stamped := entry.WithTime(now())
 		logger.InfoContext(ctx, "audit",

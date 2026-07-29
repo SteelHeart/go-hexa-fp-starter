@@ -1,70 +1,73 @@
-// Package domain porte le vocabulaire de l'authentification et de
-// l'autorisation, sans dépendance.
+// Package domain carries the vocabulary of authentication and authorisation,
+// with no dependency.
 //
-// # Pourquoi ce module existe
+// # Why this module exists
 //
-// Un évaluateur produit pose deux questions avant toute autre : « comment
-// j'authentifie ? » et « comment j'isole mes clients ? ». Tant que la première
-// n'a pas de réponse, aucun module métier n'est livrable — c'est le critère de
-// P1 dans documentation/produit/personas.md, et il valait « tous » avant ce
+// A product evaluator asks two questions before any other: "how do I
+// authenticate?" and "how do I isolate my customers?". As long as the first has
+// no answer, no business module is deliverable — that is the P1 criterion in
+// documentation/produit/personas.md, and it was worth "all of them" before this
 // module.
 //
-// # Ce paquet est PUR
+// # This package is PURE
 //
-// Ni horloge, ni aléa, ni I/O. L'instant et l'aléa entrent par des ports ; les
-// mots de passe n'y sont jamais hachés — le hachage est un effet coûteux et
-// paramétré, fourni par internal/infrastructure/security.
+// No clock, no randomness, no I/O. The instant and the randomness enter through
+// ports; passwords are never hashed here — hashing is a costly and
+// parameterised effect, provided by internal/infrastructure/security.
 package domain
 
 import "errors"
 
-// Erreurs sentinelles du module.
+// Sentinel errors of the module.
 //
-// # Pourquoi des sentinelles et non un Result[T, Error]
+// # Why sentinels and not a Result[T, Error]
 //
-// `internal/core/**` retourne `error`, `internal/modules/**` retourne
-// `Result[T, domain.Error]` : la frontière est nette et vérifiable, et un module
-// noyau est technique.
+// `internal/core/**` returns `error`, `internal/modules/**` returns
+// `Result[T, domain.Error]`: the boundary is sharp and checkable, and a core
+// module is technical.
 //
-// `auth` est le cas limite de cet invariant — il a bel et bien une taxonomie que
-// les surfaces doivent traduire en 401, 403 et 422. Elle passe donc par des
-// sentinelles ÉNUMÉRÉES, reconnaissables par `errors.Is`. C'est moins expressif
-// qu'un `Result`, et c'est le prix assumé de l'homogénéité du noyau (ADR 017).
+// `auth` is the borderline case of that invariant — it does have a taxonomy
+// that surfaces must translate into 401, 403 and 422. That taxonomy therefore
+// goes through ENUMERATED sentinels, recognisable by `errors.Is`. It is less
+// expressive than a `Result`, and it is the accepted price of the core's
+// homogeneity (ADR 017).
 //
-// # Ce que chaque sentinelle vaut pour une surface HTTP
+// # What each sentinel is worth to an HTTP surface
 //
-//	ErrInvalidCredentials  401 — et JAMAIS de distinction « identifiant inconnu »
-//	                             contre « mot de passe faux » : la différence dit
-//	                             à un attaquant quels comptes existent
-//	ErrTokenUnknown        401 — jeton inconnu, expiré, ou révoqué. Les trois se
-//	                             confondent DÉLIBÉRÉMENT côté client
-//	ErrForbidden           403 — authentifié, mais la permission manque
-//	ErrIncomplete          422 — la demande elle-même est mal formée
+//	ErrInvalidCredentials  401 — and NEVER a distinction between "unknown
+//	                             identifier" and "wrong password": the
+//	                             difference tells an attacker which accounts
+//	                             exist
+//	ErrTokenUnknown        401 — token unknown, expired, or revoked. All three
+//	                             are DELIBERATELY conflated on the client side
+//	ErrForbidden           403 — authenticated, but the permission is missing
+//	ErrIncomplete          422 — the request itself is malformed
 var (
-	// ErrInvalidCredentials refuse une authentification.
+	// ErrInvalidCredentials refuses an authentication.
 	//
-	// Un seul message pour « ce sujet n'existe pas » et « le secret est faux ».
-	// Les séparer transformerait le formulaire de connexion en oracle
-	// d'existence de comptes — la faute la plus répandue du domaine.
-	ErrInvalidCredentials = errors.New("identifiants invalides")
+	// A single message for "this subject does not exist" and "the secret is
+	// wrong". Separating them would turn the sign-in form into an account
+	// existence oracle — the most widespread mistake in this domain.
+	ErrInvalidCredentials = errors.New("invalid credentials")
 
-	// ErrTokenUnknown refuse un jeton.
+	// ErrTokenUnknown refuses a token.
 	//
-	// Inconnu, expiré ou révoqué : indiscernables pour l'appelant, et c'est
-	// voulu. Dire « expiré » plutôt que « inconnu » confirme qu'un jeton a
-	// existé, donc qu'un compte existe.
-	ErrTokenUnknown = errors.New("jeton inconnu ou expiré")
+	// Unknown, expired or revoked: indistinguishable to the caller, and that is
+	// intended. Saying "expired" rather than "unknown" confirms that a token
+	// existed, hence that an account exists.
+	ErrTokenUnknown = errors.New("unknown or expired token")
 
-	// ErrForbidden refuse une action à une identité pourtant authentifiée.
-	ErrForbidden = errors.New("permission refusée")
+	// ErrForbidden refuses an action to an identity that is nonetheless
+	// authenticated.
+	ErrForbidden = errors.New("permission denied")
 
-	// ErrIncomplete refuse une demande mal formée AVANT tout accès au magasin.
+	// ErrIncomplete refuses a malformed request BEFORE any access to the store.
 	//
-	// Le refus est en amont pour deux raisons : il ne coûte aucune requête, et
-	// il ne laisse pas une chaîne vide atteindre un pilote, où elle deviendrait
-	// une clé légitime.
-	ErrIncomplete = errors.New("demande incomplète")
+	// The refusal happens upstream for two reasons: it costs no query, and it
+	// does not let an empty string reach a driver, where it would become a
+	// legitimate key.
+	ErrIncomplete = errors.New("incomplete request")
 
-	// ErrSubjectTaken refuse un sujet déjà enregistré.
-	ErrSubjectTaken = errors.New("ce sujet est déjà enregistré")
+	// ErrSubjectTaken refuses an already registered subject.
+	ErrSubjectTaken = errors.New("this subject is already registered")
 )

@@ -7,26 +7,26 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/result"
 )
 
-// Bornes de longueur d'un mot de passe.
+// Length bounds of a password.
 //
-// Le minimum est volontairement haut et sans exigence de composition : une
-// longue phrase de passe résiste mieux qu'un « P@ssw0rd! » court, et les règles
-// de composition poussent à des mots de passe prévisibles.
+// The minimum is deliberately high and carries no composition requirement: a
+// long passphrase resists better than a short "P@ssw0rd!", and composition rules
+// push towards predictable passwords.
 //
-// Le maximum protège le serveur : Argon2id sur une entrée de 10 Mo est un déni
-// de service offert.
+// The maximum protects the server: Argon2id on a 10 MB input is a denial of
+// service handed over for free.
 const (
 	passwordMinLen = 12
 	passwordMaxLen = 128
 )
 
-// RawPassword est un mot de passe en clair, validé mais non haché.
+// RawPassword is a clear-text password, validated but not hashed.
 //
-// Son String() retourne un marqueur : il devient impossible de le journaliser
-// par accident, y compris via un %v sur une struct qui le contiendrait.
+// Its String() returns a marker: it becomes impossible to log it by accident,
+// including through a %v on a struct that would contain it.
 type RawPassword struct{ value string }
 
-// NewRawPassword valide un mot de passe en clair.
+// NewRawPassword validates a clear-text password.
 func NewRawPassword(raw string) result.Result[RawPassword, Error] {
 	weak := func(reason string) result.Result[RawPassword, Error] {
 		return result.Err[RawPassword, Error](
@@ -47,16 +47,16 @@ func NewRawPassword(raw string) result.Result[RawPassword, Error] {
 	return result.Ok[RawPassword, Error](RawPassword{value: raw})
 }
 
-// Expose retourne le mot de passe en clair.
+// Expose returns the clear-text password.
 //
-// Nommée ainsi délibérément : tout appel est visible en revue, et il ne doit y
-// en avoir qu'un — celui du port de hachage.
+// Named this way deliberately: every call is visible in review, and there must
+// be only one — the one made by the hashing port.
 func (p RawPassword) Expose() string { return p.value }
 
-// String masque la valeur. Empêche toute journalisation accidentelle.
+// String masks the value. Prevents any accidental logging.
 func (p RawPassword) String() string { return "[redacted]" }
 
-// distinctRunes compte les caractères distincts, en ignorant la casse.
+// distinctRunes counts the distinct characters, ignoring case.
 func distinctRunes(s string) int {
 	seen := make(map[rune]struct{}, len(s))
 	for _, r := range s {
@@ -65,17 +65,17 @@ func distinctRunes(s string) int {
 	return len(seen)
 }
 
-// PasswordHash est un condensé de mot de passe.
+// PasswordHash is a password digest.
 //
-// Il n'est pas construit par le domaine : le hachage est un effet, donc un port.
-// Le domaine ne fait que transporter le résultat.
+// It is not built by the domain: hashing is an effect, therefore a port. The
+// domain merely carries the result around.
 type PasswordHash struct{ value string }
 
-// NewPasswordHash enveloppe un condensé produit par un adaptateur.
+// NewPasswordHash wraps a digest produced by an adapter.
 func NewPasswordHash(encoded string) PasswordHash { return PasswordHash{value: encoded} }
 
-// String retourne le condensé encodé.
+// String returns the encoded digest.
 func (h PasswordHash) String() string { return h.value }
 
-// IsZero indique un condensé non construit.
+// IsZero reports a digest that was never constructed.
 func (h PasswordHash) IsZero() bool { return h.value == "" }

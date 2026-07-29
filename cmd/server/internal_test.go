@@ -13,13 +13,13 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/config"
 )
 
-// Tests des identifiants NON EXPORTÉS du composition root.
+// Tests of the NON EXPORTED identifiers of the composition root.
 //
-// `{paquet}/internal_test.go` et non `{paquet}/tests/` : `rules/tests.md` §
-// « Boîte noire, boîte blanche » réserve le second à l'API publique d'un paquet,
-// et Go interdit d'importer un paquet `main`. Un test en boîte noire de ce
-// câblage est donc impossible sans sortir le câblage du composition root — ce
-// qu'on ne veut pas, puisque c'est justement son rôle (ADR 004).
+// `{package}/internal_test.go` and not `{package}/tests/`: `rules/tests.md` §
+// "Black box, white box" reserves the latter for the public API of a package,
+// and Go forbids importing a `main` package. A black-box test of this wiring
+// is therefore impossible without taking the wiring out of the composition
+// root — which is not wanted, since that is precisely its role (ADR 004).
 
 // quietLogger returns a logger that writes nowhere.
 //
@@ -74,7 +74,7 @@ func TestDisabledTelemetryOpensNoPort(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	servirMetriques(ctx, cfg, quietLogger(), cancel)
+	serveMetrics(ctx, cfg, quietLogger(), cancel)
 
 	// Give the server the time it would need to bind: without this wait, the
 	// test would pass just as well because nothing listens as because we looked
@@ -98,7 +98,7 @@ func TestEnabledTelemetryServesMetrics(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	servirMetriques(ctx, cfg, quietLogger(), cancel)
+	serveMetrics(ctx, cfg, quietLogger(), cancel)
 
 	if !waitFor(port) {
 		t.Fatalf("/metrics does not answer on %d", port)
@@ -124,7 +124,7 @@ func TestABusyPortStopsTheServiceOutsideDevelopment(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	servirMetriques(ctx, cfg, quietLogger(), cancel)
+	serveMetrics(ctx, cfg, quietLogger(), cancel)
 
 	select {
 	case <-ctx.Done():
@@ -137,7 +137,7 @@ func TestABusyPortStopsTheServiceOutsideDevelopment(t *testing.T) {
 // service run.
 //
 // The waiver is NAMED and bounded, like `SecurityHeadersWithoutHSTS` elsewhere
-// in the socle. It exists because `config/env/development.yaml` enables
+// in the starter. It exists because `config/env/development.yaml` enables
 // telemetry: the port is therefore open by default locally, and a machine where
 // 9090 is already taken could no longer run `go run` — over a diagnostics port.
 // Measured while wiring, not anticipated.
@@ -154,7 +154,7 @@ func TestABusyPortDoesNotStopDevelopment(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	servirMetriques(ctx, cfg, quietLogger(), cancel)
+	serveMetrics(ctx, cfg, quietLogger(), cancel)
 
 	select {
 	case <-ctx.Done():

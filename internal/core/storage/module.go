@@ -1,14 +1,14 @@
-// Package storage est le module noyau de stockage d'objets.
+// Package storage is the core module of object storage.
 //
-// Composition root du module : le seul endroit qui connaît les pilotes.
+// Composition root of the module: the only place that knows the drivers.
 //
-// # Pourquoi un seul pilote livré
+// # Why only one driver is shipped
 //
-// Un pilote S3, GCS ou Azure Blob tire un SDK de plusieurs dizaines de mégaoctets
-// dans le graphe de dépendances de TOUT projet engendré, y compris ceux qui
-// n'iront jamais sur un magasin d'objets. Le règlement des pilotes tranche : les
-// pilotes lourds sont des modules Go séparés (issue #22). Ils ne sont donc pas
-// « oubliés », ils sont ailleurs — et `knownDrivers` ne liste que ce qui existe.
+// An S3, GCS or Azure Blob driver pulls an SDK of several tens of megabytes
+// into the dependency graph of EVERY generated project, including those that
+// will never go near an object store. The driver rules settle it: heavy drivers
+// are separate Go modules (issue #22). They are therefore not "forgotten", they
+// are elsewhere — and `knownDrivers` only lists what exists.
 package storage
 
 import (
@@ -23,57 +23,57 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the name of the module in config/modules.yaml.
 const Name = "storage"
 
-// Noms des pilotes de ce module.
+// Names of the drivers of this module.
 //
-// Elles existent pour que `Catalog` et le `switch` de `New` partagent le MÊME
-// identifiant. C'est ce qui rend la divergence entre les deux IMPOSSIBLE, là où
-// l'ADR 014 ne promettait que de la rendre improbable — le compilateur refuse
-// une constante qui n'existe pas, un littéral mal orthographié passe.
+// They exist so that `Catalog` and the `switch` of `New` share the SAME
+// identifier. This is what makes divergence between the two IMPOSSIBLE, where
+// ADR 014 only promised to make it improbable — the compiler refuses a
+// constant that does not exist, a misspelt literal goes through.
 //
-// Le linter `goconst` a signalé la répétition dès que le catalogue est arrivé.
-// Il avait raison, et pour une raison plus forte que la sienne.
+// The `goconst` linter reported the repetition as soon as the catalogue
+// arrived. It was right, and for a stronger reason than its own.
 const (
 	driverDisk = "disk"
 )
 
-// Clés d'options lues par le pilote disque.
+// Option keys read by the disk driver.
 //
-// Déclarées ici, RÉFÉRENCÉES par le catalogue : deux listes séparées finiraient
-// par diverger, et une option admise que personne ne lit ne se remarque jamais.
+// Declared here, REFERENCED by the catalogue: two separate lists would end up
+// diverging, and an admitted option that nobody reads is never noticed.
 const (
 	OptionBaseDir = "base_dir"
 	OptionBaseURL = "base_url"
 )
 
-// Valeurs par défaut du pilote disk.
+// Default values of the disk driver.
 const (
 	defaultBaseDir = "var/storage"
 	defaultBaseURL = "/files"
 )
 
-// Module expose les ports du stockage.
+// Module exposes the ports of storage.
 type Module struct {
 	Put    ports.Put
 	Get    ports.Get
 	Delete ports.Delete
 }
 
-// Deps porte les dépendances des pilotes.
+// Deps carries the dependencies of the drivers.
 //
-// Vide aujourd'hui : le pilote `disk` ne réclame rien d'autre que sa
-// configuration. Le type existe pour que l'ajout d'un pilote qui réclame un client
-// ne change pas la signature de New — et donc aucun appelant.
+// Empty today: the `disk` driver claims nothing beyond its configuration. The
+// type exists so that adding a driver that claims a client does not change the
+// signature of New — and therefore no caller.
 type Deps struct{}
 
-// ErrDisabled signale un appel à un module désactivé.
-var ErrDisabled = errors.New("module storage désactivé dans config/modules.yaml")
+// ErrDisabled signals a call to a disabled module.
+var ErrDisabled = errors.New("storage module disabled in config/modules.yaml")
 
-var errUnknownDriver = errors.New("pilote storage inconnu")
+var errUnknownDriver = errors.New("unknown storage driver")
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 func New(cfg config.Module, _ Deps) (Module, error) {
 	if !cfg.Enabled {
 		return disabled(), nil
@@ -87,7 +87,7 @@ func New(cfg config.Module, _ Deps) (Module, error) {
 	}
 }
 
-// fromDisk construit le pilote local.
+// fromDisk builds the local driver.
 func fromDisk(cfg config.Module) (Module, error) {
 	baseDir, err := cfg.StringOption(OptionBaseDir, defaultBaseDir)
 	if err != nil {
@@ -104,7 +104,7 @@ func fromDisk(cfg config.Module) (Module, error) {
 	return Module{Put: store.Put, Get: store.Get, Delete: store.Delete}, nil
 }
 
-// disabled retourne des ports qui refusent explicitement.
+// disabled returns ports that refuse explicitly.
 func disabled() Module {
 	return Module{
 		Put: func(context.Context, domain.Object) (domain.Located, error) {

@@ -687,7 +687,7 @@ jobs:
             echo '::error::le worker a démarré sur une outbox memory : il dépilerait un magasin vide'
             cat worker.log; exit 1
           fi
-          grep -q "non partagé entre processus" worker.log || {
+          grep -q "not shared across processes" worker.log || {
             echo "::error::le worker a échoué, mais pas pour la bonne raison"; cat worker.log; exit 1; }
           echo "refus confirmé, avec son motif"
 
@@ -737,13 +737,13 @@ jobs:
           ./bin/worker > worker-nominal.log 2>&1 &
           echo $! > worker.pid
           for i in $(seq 1 30); do
-            grep -q "dépilage en cours" worker-nominal.log && break
+            grep -q "dispatching in progress" worker-nominal.log && break
             sleep 0.5
           done
           if ! kill -0 "$(cat worker.pid)" 2>/dev/null; then
             echo "::error::le dépileur s'est arrêté au démarrage"; cat worker-nominal.log; exit 1
           fi
-          grep -q "abonnement monté" worker-nominal.log || {
+          grep -q "subscription mounted" worker-nominal.log || {
             echo "::error::aucun abonnement monté : les événements ne seraient consommés par personne"
             cat worker-nominal.log; exit 1; }
           echo "dépileur en marche, abonnement monté"

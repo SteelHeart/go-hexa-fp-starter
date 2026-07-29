@@ -1,17 +1,17 @@
-// Package postgres implémente l'audit dans une table en ajout seul.
+// Package postgres implements auditing in an append-only table.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Atomicité avec la transaction métier** : l'écriture passe par le querier
-//     du contexte. Un fait annulé ne laisse pas de trace mensongère.
-//   - **Inaltérabilité** : la migration RÉVOQUE `UPDATE` et `DELETE` sur la table
-//     pour le rôle applicatif. Ce n'est pas une intention, c'est une contrainte —
-//     un journal qu'on peut réécrire ne prouve rien.
+//   - **Atomicity with the business transaction**: the write goes through the
+//     querier of the context. A rolled back fact leaves no lying trace.
+//   - **Tamper-resistance**: the migration REVOKES `UPDATE` and `DELETE` on the
+//     table for the application role. This is not an intention, it is a
+//     constraint — a log one can rewrite proves nothing.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - La table croît sans fin. Sa rétention est une décision d'exploitation,
-//     jamais une suppression automatique.
+//   - The table grows without end. Its retention is an operations decision,
+//     never an automatic deletion.
 package postgres
 
 import (
@@ -27,30 +27,31 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/infrastructure/database"
 )
 
-// New construit le pilote.
+// New builds the driver.
 func New(pool *pgxpool.Pool, now func() time.Time) ports.Record {
 	return func(ctx context.Context, entry domain.Entry) error {
 		if !entry.IsComplete() {
-			return fmt.Errorf("%w: action=%q entité=%q", domain.ErrIncomplete, entry.Action, entry.EntityType)
+			return fmt.Errorf("%w: action=%q entity=%q", domain.ErrIncomplete, entry.Action, entry.EntityType)
 		}
-		// Une carte nil se sérialise en littéral JSON `null`, pas en `{}`.
+		// A nil map serialises to the JSON literal `null`, not to `{}`.
 		//
-		// Ça ne CASSE pas : `null` est un jsonb valide, donc la contrainte
-		// NOT NULL passe. C'est précisément ce qui rend ce défaut durable — il
-		// ne se signale jamais, contrairement à son jumeau du pilote d'outbox,
-		// qui lui refusait l'insertion (#37).
+		// This does not BREAK anything: `null` is valid jsonb, so the NOT NULL
+		// constraint passes. That is precisely what makes this defect durable —
+		// it never signals itself, unlike its twin in the outbox driver, which
+		// refused the insert (#37).
 		//
-		// L'effet réel est chez le lecteur : le journal d'audit est conservé
-		// longtemps et relu pendant un incident. Y trouver deux formes de
-		// « aucune métadonnée » — `null` et `{}` — selon la version du code qui
-		// a écrit la ligne est exactement ce qu'on ne veut pas au pire moment.
-		champs := entry.Metadata
-		if champs == nil {
-			champs = map[string]any{}
+		// The real effect is on the reader: the audit log is kept for a long
+		// time and re-read during an incident. Finding two forms of "no
+		// metadata" there — `null` and `{}` — depending on the version of the
+		// code that wrote the row is exactly what one does not want at the
+		// worst moment.
+		fields := entry.Metadata
+		if fields == nil {
+			fields = map[string]any{}
 		}
-		metadata, err := json.Marshal(champs)
+		metadata, err := json.Marshal(fields)
 		if err != nil {
-			return fmt.Errorf("sérialisation des métadonnées d'audit: %w", err)
+			return fmt.Errorf("serialising the audit metadata: %w", err)
 		}
 
 		const query = `
@@ -63,7 +64,7 @@ func New(pool *pgxpool.Pool, now func() time.Time) ports.Record {
 			stamped.Actor, stamped.Action, stamped.EntityType, stamped.EntityID,
 			metadata, stamped.At,
 		); err != nil {
-			return fmt.Errorf("écriture du journal d'audit: %w", err)
+			return fmt.Errorf("writing the audit log: %w", err)
 		}
 		return nil
 	}

@@ -4,28 +4,28 @@ import (
 	"testing"
 )
 
-// TestClockAndIDComeFromPorts : ni l'heure ni l'identifiant ne sont produits par le
-// cœur.
+// TestClockAndIDComeFromPorts: neither the time nor the identifier is produced
+// by the core.
 //
-// C'est ce qui rend ce test déterministe, et c'est aussi ce qui rend le cas d'usage
-// utilisable par un seeder : rejouer une inscription avec un identifiant et une
-// date choisis permet de reconstituer un jeu de données reproductible.
+// That is what makes this test deterministic, and it is also what makes the use
+// case usable by a seeder: replaying a registration with a chosen identifier and
+// date allows a reproducible data set to be rebuilt.
 //
-// Un `time.Now()` ou un `uuid.New()` glissé dans le pipeline casserait les deux
-// propriétés d'un coup, et le test échouerait — ce qui est exactement son rôle.
+// A `time.Now()` or a `uuid.New()` slipped into the pipeline would break both
+// properties at once, and the test would fail — which is exactly its role.
 func TestClockAndIDComeFromPorts(t *testing.T) {
 	t.Parallel()
 
-	observe := &journal{}
-	user := utilisateurDe(t, inscrit(depsNominales(observe)))
+	observed := &callLog{}
+	user := userOf(t, register(nominalDeps(observed)))
 
-	if !observe.aAppele("Now") {
-		t.Error("le port Now doit être appelé : le cœur ne lit pas l'horloge")
+	if !observed.called("Now") {
+		t.Error("the Now port must be called: the core does not read the clock")
 	}
-	if !observe.aAppele("GenerateID") {
-		t.Error("le port GenerateID doit être appelé : le cœur ne produit pas d'aléa")
+	if !observed.called("GenerateID") {
+		t.Error("the GenerateID port must be called: the core does not produce randomness")
 	}
-	if !user.CreatedAt.Equal(instantFixe()) {
-		t.Errorf("date = %v : elle ne vient pas du port", user.CreatedAt)
+	if !user.CreatedAt.Equal(fixedInstant()) {
+		t.Errorf("date = %v: it does not come from the port", user.CreatedAt)
 	}
 }

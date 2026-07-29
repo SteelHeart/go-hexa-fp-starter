@@ -5,69 +5,69 @@ import (
 	"strings"
 )
 
-// recipientMaxLen borne la longueur d'une adresse.
+// recipientMaxLen bounds the length of an address.
 //
-// 254 octets, la limite d'une adresse de courriel selon la RFC 5321.
+// 254 bytes, the limit of an email address according to RFC 5321.
 const recipientMaxLen = 254
 
-// Recipient est l'adresse d'un destinataire, normalisée et validée.
+// Recipient is a recipient's address, normalised and validated.
 //
-// # Le champ est privé, et c'est la garantie
+// # The field is private, and that is the guarantee
 //
-// Il est IMPOSSIBLE de fabriquer un destinataire non normalisé hors de ce
-// paquet. Sans cela, `Alice@X.COM` et `alice@x.com` seraient deux destinataires,
-// et une déduplication d'envois laisserait passer le doublon.
+// It is IMPOSSIBLE to build a non-normalised recipient outside this package.
+// Without that, `Alice@X.COM` and `alice@x.com` would be two recipients, and a
+// send deduplication would let the duplicate through.
 //
-// # Pourquoi ce type existe alors que `auth` et `user_registration` en ont un
+// # Why this type exists although `auth` and `user_registration` have one
 //
-// Parce qu'un module noyau ne peut importer ni l'un ni l'autre : `internal/core`
-// ne connaît aucun module métier (arch-go), et deux modules noyau ne se partagent
-// pas un domaine. La répétition est le prix de l'indépendance — c'est elle qui
-// permettra d'extraire `internal/core` en module Go séparé (ADR 012).
+// Because a core module can import neither: `internal/core` knows no business
+// module (arch-go), and two core modules do not share a domain. The repetition
+// is the price of independence — it is what will allow extracting
+// `internal/core` into a separate Go module (ADR 012).
 type Recipient struct{ value string }
 
-// NewRecipient normalise puis valide une adresse.
+// NewRecipient normalises then validates an address.
 //
-// # La validation est délibérément MINIMALE
+// # The validation is deliberately MINIMAL
 //
-// Non vide, une seule arobase, du texte de part et d'autre, pas d'espace. Aucune
-// expression rationnelle « conforme RFC 5322 » : elles rejettent des adresses
-// valides — les apostrophes, les caractères accentués, les sous-adresses `+` —
-// et un destinataire refusé à tort ne reçoit jamais rien, sans que personne s'en
-// aperçoive. Le seul verdict fiable sur une adresse est un envoi réussi.
+// Non-empty, a single at-sign, text on both sides, no whitespace. No
+// "RFC 5322 compliant" regular expression: they reject valid addresses —
+// apostrophes, accented characters, `+` sub-addresses — and a recipient wrongly
+// refused never receives anything, without anyone noticing. The only reliable
+// verdict on an address is a successful send.
 func NewRecipient(raw string) (Recipient, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 
 	local, domain, found := strings.Cut(normalized, "@")
 	switch {
 	case normalized == "":
-		return Recipient{}, fmt.Errorf("%w: le destinataire est obligatoire", ErrIncomplete)
+		return Recipient{}, fmt.Errorf("%w: the recipient is required", ErrIncomplete)
 	case len(normalized) > recipientMaxLen:
-		return Recipient{}, fmt.Errorf("%w: l'adresse dépasse %d octets", ErrIncomplete, recipientMaxLen)
+		return Recipient{}, fmt.Errorf("%w: the address exceeds %d bytes", ErrIncomplete, recipientMaxLen)
 	case strings.ContainsAny(normalized, " \t\n"):
-		return Recipient{}, fmt.Errorf("%w: l'adresse ne peut pas contenir d'espace", ErrIncomplete)
+		return Recipient{}, fmt.Errorf("%w: the address cannot contain whitespace", ErrIncomplete)
 	case !found || local == "" || domain == "":
-		return Recipient{}, fmt.Errorf("%w: adresse %q — attendu `local@domaine`", ErrIncomplete, raw)
+		return Recipient{}, fmt.Errorf("%w: address %q — expected `local@domain`", ErrIncomplete, raw)
 	case strings.Contains(domain, "@"):
-		return Recipient{}, fmt.Errorf("%w: adresse %q — une seule arobase", ErrIncomplete, raw)
+		return Recipient{}, fmt.Errorf("%w: address %q — a single at-sign", ErrIncomplete, raw)
 	}
 
 	return Recipient{value: normalized}, nil
 }
 
-// String rend l'adresse normalisée. À n'appeler que pour la remettre au
-// fournisseur — jamais pour la journaliser.
+// String returns the normalised address. To be called only to hand it over to
+// the provider — never to log it.
 func (r Recipient) String() string { return r.value }
 
-// IsZero indique un destinataire non construit.
+// IsZero reports a recipient that was never built.
 func (r Recipient) IsZero() bool { return r.value == "" }
 
-// Masked rend une forme masquée, destinée aux journaux.
+// Masked returns a masked form, intended for logs.
 //
-// Une adresse est une donnée personnelle : elle ne se journalise jamais en clair
-// (rules/securite.md §5). Le domaine reste lisible parce qu'il sert au
-// diagnostic — « tous les échecs vont vers le même domaine » est l'information
-// qu'on cherche pendant un incident — et parce qu'il n'identifie personne.
+// An address is personal data: it is never logged in clear
+// (rules/securite.md §5). The domain stays readable because it serves diagnosis
+// — "every failure goes towards the same domain" is the information one looks
+// for during an incident — and because it identifies nobody.
 func (r Recipient) Masked() string {
 	local, domain, found := strings.Cut(r.value, "@")
 	if !found || local == "" {

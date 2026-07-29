@@ -1,9 +1,9 @@
-// Package tests contient les tests en BOÎTE NOIRE du module audit : ils
-// n'utilisent que l'API publique, exactement comme un appelant.
+// Package tests holds the BLACK BOX tests of the audit module: they only use
+// the public API, exactly like a caller would.
 //
-// Convention du dépôt (rules/tests.md) : `{paquet}/tests/` pour la boîte noire,
-// `{paquet}/internal_test.go` pour les identifiants non exportés. Un fichier par
-// test — le nom du fichier dit ce qui est vérifié, sans avoir à l'ouvrir.
+// Repository convention (rules/tests.md): `{package}/tests/` for black box,
+// `{package}/internal_test.go` for unexported identifiers. One file per test —
+// the file name says what is verified, without having to open it.
 package tests
 
 import (
@@ -18,14 +18,14 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit/domain"
 )
 
-// recordedAt est l'instant injecté. Aucun test n'appelle time.Now : un journal
-// d'audit doit être reproductible à la seconde près.
+// recordedAt is the injected instant. No test calls time.Now: an audit log must
+// be reproducible to the second.
 func recordedAt() time.Time {
 	return time.Date(2026, time.July, 25, 12, 30, 0, 0, time.UTC)
 }
 
-// newLogModule construit le module sur son pilote par défaut et rend le tampon
-// où le journal est écrit, pour pouvoir l'inspecter.
+// newLogModule builds the module on its default driver and returns the buffer
+// the log is written to, so that it can be inspected.
 func newLogModule(t *testing.T) (audit.Module, *bytes.Buffer) {
 	t.Helper()
 	var buf bytes.Buffer
@@ -35,12 +35,12 @@ func newLogModule(t *testing.T) (audit.Module, *bytes.Buffer) {
 		audit.Deps{Logger: logger, Now: recordedAt},
 	)
 	if err != nil {
-		t.Fatalf("construction du module: %v", err)
+		t.Fatalf("building the module: %v", err)
 	}
 	return mod, &buf
 }
 
-// completeEntry est une entrée valide, à altérer champ par champ dans les tests.
+// completeEntry is a valid entry, to be altered field by field in the tests.
 func completeEntry() domain.Entry {
 	return domain.Entry{
 		Actor:      "user-42",
@@ -51,12 +51,12 @@ func completeEntry() domain.Entry {
 	}
 }
 
-// decodeJournal lit la ligne écrite par le pilote log.
-func decodeJournal(t *testing.T, buf *bytes.Buffer) map[string]any {
+// decodeLogLine reads the line written by the log driver.
+func decodeLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	t.Helper()
 	var line map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
-		t.Fatalf("journal illisible (%q): %v", buf.String(), err)
+		t.Fatalf("unreadable log (%q): %v", buf.String(), err)
 	}
 	return line
 }

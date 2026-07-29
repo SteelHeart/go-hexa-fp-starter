@@ -1,19 +1,19 @@
-// Package memory implémente l'outbox en mémoire.
+// Package memory implements the outbox in memory.
 //
-// # NON-GARANTIES — à lire avant de l'utiliser
+// # NON-GUARANTEES — read before using it
 //
-//   - **Aucune durabilité.** Tout est perdu au redémarrage du processus.
-//   - **Aucun partage entre répliques.** Chaque instance a sa propre file.
-//   - **Aucune atomicité avec la transaction métier.** Un `Enqueue` réussi
-//     survit à un rollback de la base — exactement le défaut que l'outbox
-//     transactionnel existe pour éliminer.
+//   - **No durability.** Everything is lost when the process restarts.
+//   - **No sharing between replicas.** Each instance has its own queue.
+//   - **No atomicity with the business transaction.** A successful `Enqueue`
+//     survives a database rollback — exactly the defect that the transactional
+//     outbox exists to eliminate.
 //
-// C'est donc le bon pilote en développement, en test unitaire et pour une CLI.
-// Ce n'est JAMAIS le bon pilote en production dès qu'un événement compte.
+// It is therefore the right driver in development, in unit tests and for a CLI.
+// It is NEVER the right driver in production as soon as an event matters.
 //
-// Il n'est pas un bouchon pour autant : il respecte le même contrat que le
-// pilote `postgres`, y compris l'exclusivité de `Claim`, et passe la même suite
-// de conformité.
+// It is not a stub for all that: it honours the same contract as the `postgres`
+// driver, including the exclusivity of `Claim`, and passes the same conformance
+// suite.
 package memory
 
 import (
@@ -25,21 +25,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// Store est la file en mémoire.
+// Store is the in-memory queue.
 type Store struct {
 	mu       sync.Mutex
 	messages map[domain.MessageID]*domain.Message
-	// claimed marque les messages réservés par un Claim non encore résolu, pour
-	// que deux appels concurrents ne retournent jamais le même message.
+	// claimed marks the messages claimed by a Claim not yet resolved, so that two
+	// concurrent calls never return the same message.
 	claimed map[domain.MessageID]struct{}
 	order   []domain.MessageID
 	nextID  uint64
 	now     func() time.Time
 }
 
-// New construit le magasin.
+// New builds the store.
 //
-// `now` est injecté : un test de politique de réessai ne doit pas attendre.
+// `now` is injected: a retry policy test must not wait.
 func New(now func() time.Time) *Store {
 	if now == nil {
 		now = time.Now
@@ -51,10 +51,10 @@ func New(now func() time.Time) *Store {
 	}
 }
 
-// Enqueue implémente ports.Enqueue.
+// Enqueue implements ports.Enqueue.
 func (s *Store) Enqueue(ctx context.Context, msg domain.NewMessage) (domain.MessageID, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("mise en file annulée: %w", err)
+		return "", fmt.Errorf("enqueueing cancelled: %w", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -77,12 +77,13 @@ func (s *Store) Enqueue(ctx context.Context, msg domain.NewMessage) (domain.Mess
 	return id, nil
 }
 
-// Claim implémente ports.Claim.
+// Claim implements ports.Claim.
 //
-// L'ordre suit l'insertion, comme le `ORDER BY available_at` du pilote postgres.
+// The order follows insertion, like the `ORDER BY available_at` of the postgres
+// driver.
 func (s *Store) Claim(ctx context.Context, limit int) ([]domain.Message, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("réservation annulée: %w", err)
+		return nil, fmt.Errorf("claiming cancelled: %w", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -106,28 +107,28 @@ func (s *Store) Claim(ctx context.Context, limit int) ([]domain.Message, error) 
 	return out, nil
 }
 
-// MarkDone implémente ports.MarkDone.
+// MarkDone implements ports.MarkDone.
 func (s *Store) MarkDone(_ context.Context, id domain.MessageID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	msg, found := s.messages[id]
 	if !found {
-		return fmt.Errorf("message %s inconnu", id)
+		return fmt.Errorf("unknown message %s", id)
 	}
 	msg.Status = domain.StatusDone
 	delete(s.claimed, id)
 	return nil
 }
 
-// MarkFailed implémente ports.MarkFailed.
+// MarkFailed implements ports.MarkFailed.
 func (s *Store) MarkFailed(_ context.Context, attempt domain.FailedAttempt) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	msg, found := s.messages[attempt.ID]
 	if !found {
-		return fmt.Errorf("message %s inconnu", attempt.ID)
+		return fmt.Errorf("unknown message %s", attempt.ID)
 	}
 	msg.Attempts = attempt.Attempts
 	msg.Status = attempt.Status
@@ -136,7 +137,7 @@ func (s *Store) MarkFailed(_ context.Context, attempt domain.FailedAttempt) erro
 	return nil
 }
 
-// PendingCount implémente ports.PendingCount.
+// PendingCount implements ports.PendingCount.
 func (s *Store) PendingCount(_ context.Context) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,6 +151,6 @@ func (s *Store) PendingCount(_ context.Context) (int64, error) {
 	return count, nil
 }
 
-// Le magasin n'expose PAS de méthode qui rendrait ses cinq ports d'un coup :
-// `revive: function-result-limit` la refuserait, et à juste titre. C'est
-// module.go qui assemble la struct Module champ par champ.
+// The store does NOT expose a method that would return its five ports at once:
+// `revive: function-result-limit` would refuse it, and rightly so. It is
+// module.go that assembles the Module struct field by field.

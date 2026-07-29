@@ -7,73 +7,73 @@ import (
 	"strings"
 )
 
-// permissionShape contraint la forme d'une permission.
+// permissionShape constrains the shape of a permission.
 //
-// `domaine.ressource.action`, en minuscules. Trois segments exactement — ni deux,
-// ni quatre.
+// `domain.resource.action`, in lowercase. Exactly three segments — neither two,
+// nor four.
 //
-// La contrainte n'est pas cosmétique : une permission est une chaîne, donc rien
-// n'empêche d'écrire `admin` d'un côté et `Admin` de l'autre. Les deux
-// coexisteraient, l'une accorderait, l'autre pas, et le défaut se manifesterait
-// comme un « il a le droit mais ça refuse » — impossible à diagnostiquer sans
-// comparer deux chaînes à l'œil.
+// The constraint is not cosmetic: a permission is a string, so nothing prevents
+// writing `admin` on one side and `Admin` on the other. Both would coexist, one
+// would grant, the other would not, and the defect would show up as a "they
+// have the right but it refuses" — impossible to diagnose without comparing two
+// strings by eye.
 var permissionShape = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2}$`)
 
-// Permission nomme une action précise, jamais un rôle.
+// Permission names a precise action, never a role.
 //
-// C'est la décision 4 de l'ADR 017, portée par le TYPE : le port d'autorisation
-// n'accepte qu'une Permission, donc le compilateur refuse `authorize(id, role)`.
-// Avec des rôles testés dans le code, ajouter un rôle est un déploiement ; avec
-// des permissions, c'est une donnée.
+// This is decision 4 of ADR 017, carried by the TYPE: the authorisation port
+// only accepts a Permission, so the compiler refuses `authorize(id, role)`.
+// With roles tested in the code, adding a role is a deployment; with
+// permissions, it is a piece of data.
 type Permission struct{ value string }
 
-// NewPermission valide et normalise une permission.
+// NewPermission validates and normalises a permission.
 //
-// C'est le SEUL chemin de construction : le champ est privé, donc une Permission
-// invalide ne peut pas exister hors de ce paquet.
+// This is the ONLY construction path: the field is private, so an invalid
+// Permission cannot exist outside this package.
 func NewPermission(raw string) (Permission, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	if !permissionShape.MatchString(normalized) {
 		return Permission{}, fmt.Errorf(
-			"%w: permission %q — attendu `domaine.ressource.action` en minuscules", ErrIncomplete, raw)
+			"%w: permission %q — expected `domain.resource.action` in lowercase", ErrIncomplete, raw)
 	}
 	return Permission{value: normalized}, nil
 }
 
-// String rend la permission normalisée.
+// String returns the normalised permission.
 func (p Permission) String() string { return p.value }
 
-// IsZero indique une permission non construite.
+// IsZero reports a permission that was never built.
 func (p Permission) IsZero() bool { return p.value == "" }
 
-// Role est un nom qui PORTE des permissions.
+// Role is a name that CARRIES permissions.
 //
-// Le rôle existe pour être administré — on donne « comptable » à quelqu'un, pas
-// dix-sept permissions une par une. Il n'apparaît jamais dans une décision
-// d'autorisation.
+// The role exists in order to be administered — you give someone "accountant",
+// not seventeen permissions one by one. It never appears in an authorisation
+// decision.
 type Role struct {
 	Name        string
 	Permissions []Permission
 }
 
-// NewRole valide un rôle et trie ses permissions.
+// NewRole validates a role and sorts its permissions.
 //
-// Le tri rend l'égalité de deux rôles observable et les messages comparables
-// d'une exécution à l'autre — un ordre de map change à chaque parcours.
+// Sorting makes the equality of two roles observable and the messages
+// comparable from one run to the next — a map's order changes on every walk.
 //
-// Les doublons sont ABSORBÉS plutôt que refusés : deux fois la même permission
-// exprime la même intention, et refuser ferait échouer un import de données pour
-// une redondance sans conséquence.
+// Duplicates are ABSORBED rather than refused: the same permission twice
+// expresses the same intent, and refusing would fail a data import over a
+// harmless redundancy.
 func NewRole(name string, permissions []Permission) (Role, error) {
 	trimmed := strings.ToLower(strings.TrimSpace(name))
 	if trimmed == "" {
-		return Role{}, fmt.Errorf("%w: le nom du rôle est obligatoire", ErrIncomplete)
+		return Role{}, fmt.Errorf("%w: the role name is mandatory", ErrIncomplete)
 	}
 
 	unique := make(map[string]Permission, len(permissions))
 	for _, permission := range permissions {
 		if permission.IsZero() {
-			return Role{}, fmt.Errorf("%w: le rôle %q porte une permission non construite", ErrIncomplete, trimmed)
+			return Role{}, fmt.Errorf("%w: role %q carries a permission that was never built", ErrIncomplete, trimmed)
 		}
 		unique[permission.String()] = permission
 	}
@@ -87,11 +87,11 @@ func NewRole(name string, permissions []Permission) (Role, error) {
 	return Role{Name: trimmed, Permissions: kept}, nil
 }
 
-// Grants indique si le rôle accorde une permission.
+// Grants reports whether the role grants a permission.
 //
-// Comparaison exacte, sans joker. Un `billing.*` ferait gagner quelques lignes de
-// configuration et rendrait impossible de répondre à « qui peut annuler une
-// facture ? » autrement qu'en exécutant le code.
+// Exact comparison, no wildcard. A `billing.*` would save a few lines of
+// configuration and make it impossible to answer "who can cancel an invoice?"
+// otherwise than by running the code.
 func (r Role) Grants(permission Permission) bool {
 	for _, granted := range r.Permissions {
 		if granted == permission {

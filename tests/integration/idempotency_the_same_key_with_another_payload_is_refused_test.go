@@ -11,51 +11,52 @@ import (
 	pgidem "github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/drivers/postgres"
 )
 
-// TestIdempotencyTheSameKeyWithAnotherPayloadIsRefused : une clé ne couvre
-// qu'UNE requête.
+// TestIdempotencyTheSameKeyWithAnotherPayloadIsRefused: one key covers only ONE
+// request.
 //
-// Le mode de défaillance évité est discret et grave. Un client réutilise sa clé
-// d'idempotence — par recopie, par génération fautive, ou par malveillance —
-// avec une charge utile différente. Sans cette vérification, le socle rendrait
-// la réponse mémorisée de la PREMIÈRE requête pour la SECONDE. Le client
-// croirait son second virement effectué ; il ne l'aurait jamais été.
+// The failure mode avoided is quiet and serious. A client reuses its
+// idempotency key — by copying it, by faulty generation, or maliciously — with
+// a different payload. Without this check, the starter would return the
+// memorised response of the FIRST request for the SECOND. The client would
+// believe its second transfer carried out; it would never have been.
 //
-// Le refus doit donc être explicite, et distinct de « déjà en cours ».
+// The refusal must therefore be explicit, and distinct from "already in
+// flight".
 func TestIdempotencyTheSameKeyWithAnotherPayloadIsRefused(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
 	store := pgidem.New(p, time.Hour)
 
-	key := domain.Key(unique(t, "integration-conflit"))
+	key := domain.Key(unique(t, "integration-conflict"))
 	t.Cleanup(func() {
 		_, _ = p.Exec(ctxTest(t), "DELETE FROM platform.idempotency_keys WHERE key = $1", key.String())
 	})
 
-	premiere := domain.Request{Key: key, Fingerprint: domain.Fingerprint(map[string]int{"montant": 100})}
-	if _, err := store.Reserve(ctx, premiere); err != nil {
-		t.Fatalf("première réservation: %v", err)
+	first := domain.Request{Key: key, Fingerprint: domain.Fingerprint(map[string]int{"amount": 100})}
+	if _, err := store.Reserve(ctx, first); err != nil {
+		t.Fatalf("first reservation: %v", err)
 	}
 	if err := store.Complete(ctx, key, []byte(`{"ok":true}`)); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 
-	// Rejeu à l'identique : la réponse mémorisée revient, et l'opération ne doit
-	// PAS être réexécutée.
-	rejeu, err := store.Reserve(ctx, premiere)
+	// Identical replay: the memorised response comes back, and the operation
+	// must NOT be run again.
+	replay, err := store.Reserve(ctx, first)
 	if err != nil {
-		t.Fatalf("rejeu à l'identique: %v", err)
+		t.Fatalf("identical replay: %v", err)
 	}
-	if !rejeu.Replayed {
-		t.Fatal("un rejeu à l'identique doit être signalé comme rejeu, sinon l'opération se réexécute")
+	if !replay.Replayed {
+		t.Fatal("an identical replay must be reported as a replay, otherwise the operation runs again")
 	}
-	if string(rejeu.Response) != `{"ok":true}` {
-		t.Errorf("réponse mémorisée = %q", rejeu.Response)
+	if string(replay.Response) != `{"ok":true}` {
+		t.Errorf("memorised response = %q", replay.Response)
 	}
 
-	// Même clé, AUTRE charge utile : refus.
-	seconde := domain.Request{Key: key, Fingerprint: domain.Fingerprint(map[string]int{"montant": 999})}
-	if _, err := store.Reserve(ctx, seconde); !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("erreur = %v, attendu ErrConflict — la réponse d'une AUTRE requête "+
-			"serait rendue au client, qui croirait son opération effectuée", err)
+	// Same key, OTHER payload: refusal.
+	second := domain.Request{Key: key, Fingerprint: domain.Fingerprint(map[string]int{"amount": 999})}
+	if _, err := store.Reserve(ctx, second); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("error = %v, want ErrConflict — the response of ANOTHER request "+
+			"would be returned to the client, who would believe its operation carried out", err)
 	}
 }

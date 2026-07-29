@@ -12,20 +12,19 @@ import (
 	pgidem "github.com/SteelHeart/go-hexa-fp-starter/internal/core/idempotency/drivers/postgres"
 )
 
-// TestIdempotencyOnlyOneConcurrentReservationWins éprouve l'exclusivité contre
-// un vrai moteur.
+// TestIdempotencyOnlyOneConcurrentReservationWins exercises exclusivity against
+// a real engine.
 //
-// Le pilote `memory` a vingt-quatre tests qui prouvent cette propriété — avec
-// un mutex, dans un seul processus. Le pilote `postgres` la confie à
-// `ON CONFLICT … DO UPDATE … WHERE expires_at < now()`, une construction dont
-// la justesse ne se déduit pas : elle se constate.
+// The `memory` driver has twenty-four tests proving this property — with a
+// mutex, in a single process. The `postgres` driver entrusts it to
+// `ON CONFLICT … DO UPDATE … WHERE expires_at < now()`, a construct whose
+// correctness cannot be deduced: it can only be observed.
 //
-// Ce que ça garde : un client mobile qui réémet sa requête sur un réseau
-// instable, et deux répliques qui la reçoivent en même temps. Si les deux
-// obtiennent la réservation, l'opération s'exécute deux fois. Sur un paiement,
-// c'est un débit en double.
+// What this guards: a mobile client re-emitting its request over an unstable
+// network, and two replicas receiving it at the same time. If both obtain the
+// reservation, the operation runs twice. On a payment, that is a double debit.
 //
-// Seize appels concurrents sur la MÊME clé ; exactement un doit gagner.
+// Sixteen concurrent calls on the SAME key; exactly one must win.
 func TestIdempotencyOnlyOneConcurrentReservationWins(t *testing.T) {
 	ctx := ctxTest(t)
 	p := pool(t)
@@ -38,48 +37,49 @@ func TestIdempotencyOnlyOneConcurrentReservationWins(t *testing.T) {
 		_, _ = p.Exec(ctxTest(t), "DELETE FROM platform.idempotency_keys WHERE key = $1", key.String())
 	})
 
-	const appels = 16
+	const calls = 16
 	var (
-		attente  sync.WaitGroup
+		wg       sync.WaitGroup
 		mu       sync.Mutex
-		gagnants int
-		enCours  int
-		autres   []error
-		depart   = make(chan struct{})
+		winners  int
+		inFlight int
+		others   []error
+		start    = make(chan struct{})
 	)
 
-	for range appels {
-		attente.Add(1)
+	for range calls {
+		wg.Add(1)
 		go func() {
-			defer attente.Done()
-			// Tous partent au même instant : sans cette barrière, les appels
-			// s'enchaîneraient et la concurrence ne serait jamais éprouvée.
-			<-depart
+			defer wg.Done()
+			// They all leave at the same instant: without this barrier, the
+			// calls would run one after another and concurrency would never be
+			// exercised.
+			<-start
 
 			res, err := store.Reserve(ctx, req)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
 			case err == nil && !res.Replayed:
-				gagnants++
+				winners++
 			case errors.Is(err, domain.ErrInFlight):
-				enCours++
+				inFlight++
 			default:
-				autres = append(autres, err)
+				others = append(others, err)
 			}
 		}()
 	}
-	close(depart)
-	attente.Wait()
+	close(start)
+	wg.Wait()
 
-	if len(autres) > 0 {
-		t.Fatalf("%d appel(s) ont échoué autrement qu'en « déjà en cours » : %v", len(autres), autres)
+	if len(others) > 0 {
+		t.Fatalf("%d call(s) failed other than with \"already in flight\": %v", len(others), others)
 	}
-	if gagnants != 1 {
-		t.Fatalf("%d réservations obtenues sur %d appels concurrents, attendu exactement 1 — "+
-			"l'opération s'exécuterait %d fois", gagnants, appels, gagnants)
+	if winners != 1 {
+		t.Fatalf("%d reservations obtained out of %d concurrent calls, want exactly 1 — "+
+			"the operation would run %d times", winners, calls, winners)
 	}
-	if enCours != appels-1 {
-		t.Errorf("%d appel(s) refusés en « déjà en cours », attendu %d", enCours, appels-1)
+	if inFlight != calls-1 {
+		t.Errorf("%d call(s) refused as \"already in flight\", want %d", inFlight, calls-1)
 	}
 }

@@ -5,22 +5,22 @@ import (
 	"testing"
 )
 
-// TestTruthyFlagSpellings : tous les pilotes doivent répondre pareil à ces
-// écritures.
+// TestTruthyFlagSpellings: every driver must answer the same way to these
+// spellings.
 //
-// C'est possible parce que l'interprétation vit dans le domaine
-// (domain.ParseFlag) et nulle part ailleurs. Un pilote qui referait ce décodage
-// divergerait au premier `"TRUE"` : changer de pilote changerait alors le
-// comportement de l'application, et la substituabilité serait perdue.
+// This is possible because the interpretation lives in the domain
+// (domain.ParseFlag) and nowhere else. A driver that redid this decoding would
+// diverge at the first `"TRUE"`: changing driver would then change the
+// behaviour of the application, and substitutability would be lost.
 func TestTruthyFlagSpellings(t *testing.T) {
 	t.Parallel()
 
 	for _, value := range []any{true, "true", "TRUE", "True", "t", "1", 1} {
 		mod := newFileModule(t, map[string]any{
-			"flags": map[string]any{"drapeau": value},
+			"flags": map[string]any{"flag": value},
 		})
-		if !mod.IsEnabled(context.Background(), "drapeau") {
-			t.Errorf("valeur %#v devrait activer le drapeau", value)
+		if !mod.IsEnabled(context.Background(), "flag") {
+			t.Errorf("value %#v should activate the flag", value)
 		}
 	}
 }

@@ -7,17 +7,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/ports"
 )
 
-// NewAuthorize compose la vérification d'une permission.
+// NewAuthorize composes the checking of a permission.
 //
-// # C'est la fonction qui porte toute l'ADR 017
+// # This is the function that carries the whole of ADR 017
 //
-// Elle interroge `Grants`, c'est-à-dire l'état PERSISTÉ, à chaque appel. Elle ne
-// lit aucune revendication portée par un jeton, et ne met rien en cache.
+// It queries `Grants`, that is to say the PERSISTED state, on every call. It
+// reads no claim carried by a token, and caches nothing.
 //
-// Trois lignes, et c'est le point : il n'y a nulle part où glisser une
-// optimisation qui rendrait un droit révoqué encore actif. Le jour où le coût de
-// cet appel deviendra un goulot, la réponse sera un décorateur de cache EXPLICITE
-// et borné sur ce port — pas des permissions dans le jeton.
+// Three lines, and that is the point: there is nowhere to slip in an
+// optimisation that would keep a revoked right active. The day the cost of this
+// call becomes a bottleneck, the answer will be an EXPLICIT and bounded cache
+// decorator on this port — not permissions inside the token.
 func NewAuthorize(deps Deps) ports.Authorize {
 	return func(ctx context.Context, identity domain.IdentityID, permission domain.Permission) error {
 		if identity == "" || permission.IsZero() {

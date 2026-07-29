@@ -1,32 +1,31 @@
-// Package log implémente la notification vers le journal applicatif.
+// Package log implements notification towards the application log.
 //
-// # Pourquoi ce pilote existe
+// # Why this driver exists
 //
-// Il n'est pas un bouchon de test : c'est le pilote PAR DÉFAUT, et c'est lui qui
-// rend vraie la promesse du socle — `hexa new` puis `go run` fait partir la
-// chaîne complète, **inscription → outbox → relais → notification**, sans
-// serveur SMTP, sans compte chez un fournisseur, sans Docker.
+// It is not a test stub: it is the DEFAULT driver, and it is what makes the
+// starter's promise true — `hexa new` then `go run` starts the complete chain,
+// **registration → outbox → relay → notification**, without an SMTP server,
+// without a provider account, without Docker.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Le corps n'est PAS journalisé par défaut.** Un corps de notification
-//     transporte régulièrement un secret — lien de confirmation, jeton de
-//     réinitialisation, code à usage unique. Ce sont des identifiants au
-//     porteur : qui les lit peut s'en servir.
-//   - **L'adresse est masquée**, toujours, y compris quand le corps est écrit.
-//     Une adresse est une donnée personnelle (rules/securite.md §5), et c'est le
-//     journal applicatif qu'on exporte le plus volontiers vers un tiers.
-//   - **Aucune erreur n'est inventée.** Écrire dans un journal n'échoue pas ici,
-//     donc ce pilote rend toujours nil.
+//   - **The body is NOT logged by default.** A notification body regularly
+//     carries a secret — confirmation link, reset token, one-time code. These
+//     are bearer credentials: whoever reads them can use them.
+//   - **The address is masked**, always, including when the body is written. An
+//     address is personal data (rules/securite.md §5), and the application log
+//     is what one exports the most willingly to a third party.
+//   - **No error is invented.** Writing to a log does not fail here, so this
+//     driver always returns nil.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **Personne ne reçoit rien.** C'est un pilote d'OBSERVATION : le message
-//     est écrit, pas envoyé. L'utiliser ailleurs qu'en développement ferait
-//     croire que les courriels partent — et le défaut ne se verrait qu'au
-//     premier client qui affirme n'avoir rien reçu.
-//   - **Aucun réessai, aucune file.** Il n'en a pas besoin ; un pilote SMTP en
-//     aura, et ce sera son affaire.
+//   - **Nobody receives anything.** This is an OBSERVATION driver: the message
+//     is written, not sent. Using it anywhere but in development would make one
+//     believe the emails are going out — and the defect would only show at the
+//     first customer claiming they received nothing.
+//   - **No retry, no queue.** It does not need them; an SMTP driver will have
+//     them, and that will be its own business.
 package log
 
 import (
@@ -37,47 +36,48 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification/ports"
 )
 
-// New construit le pilote SANS journaliser le corps.
+// New builds the driver WITHOUT logging the body.
 //
-// C'est le constructeur par défaut, et le sûr. Deux constructeurs nommés plutôt
-// qu'un paramètre booléen : `New(logger, false)` ne se lit pas sur l'appel, et
-// `New(logger, true)` se glisse dans une relecture sans qu'on le remarque. Le
-// dépôt a déjà éclaté `SecurityHeaders(secure bool)` pour cette raison.
+// This is the default constructor, and the safe one. Two named constructors
+// rather than a boolean parameter: `New(logger, false)` does not read at the
+// call site, and `New(logger, true)` slips through a review unnoticed. The
+// repository has already split `SecurityHeaders(secure bool)` for this reason.
 func New(logger *slog.Logger) ports.Deliver {
 	return func(ctx context.Context, message domain.Message) error {
-		logger.InfoContext(ctx, "notification", champs(message)...)
+		logger.InfoContext(ctx, "notification", fields(message)...)
 		return nil
 	}
 }
 
-// NewIncludingBody construit le pilote EN journalisant le corps.
+// NewIncludingBody builds the driver logging the body.
 //
-// # À ne demander qu'en développement, et le nom le dit
+// # To be asked for in development only, and the name says so
 //
-// Sans le corps, on ne peut pas récupérer le lien de confirmation d'un compte de
-// test — et le développement devient assez pénible pour que quelqu'un finisse
-// par ajouter un `fmt.Println` mal placé, qui lui ne sera jamais retiré. Le
-// compromis est donc réel dans les deux sens ; ce qui compte est que la position
-// dangereuse se DEMANDE, au lieu d'être le défaut.
+// Without the body, one cannot retrieve the confirmation link of a test account
+// — and development becomes painful enough that someone eventually adds a
+// misplaced `fmt.Println`, which will never be removed. The trade-off is
+// therefore real in both directions; what matters is that the dangerous position
+// must be ASKED FOR, instead of being the default.
 func NewIncludingBody(logger *slog.Logger) ports.Deliver {
 	return func(ctx context.Context, message domain.Message) error {
-		// L'avertissement voyage dans le MÊME enregistrement que le corps : qui
-		// lit le second lit le premier. Dans deux lignes séparées, la première
-		// se perd au tri.
-		avec := append(champs(message),
+		// The warning travels in the SAME record as the body: whoever reads the
+		// second reads the first. In two separate lines, the first gets lost in
+		// the sorting.
+		withBody := append(fields(message),
 			slog.String("body", message.Body),
-			slog.String("avertissement", "corps journalisé — développement uniquement"),
+			slog.String("warning", "body logged — development only"),
 		)
-		logger.InfoContext(ctx, "notification", avec...)
+		logger.InfoContext(ctx, "notification", withBody...)
 		return nil
 	}
 }
 
-// champs rend ce qui est journalisé dans TOUS les cas.
+// fields returns what is logged in ALL cases.
 //
-// L'adresse y est masquée et le corps réduit à sa taille — utile au diagnostic
-// (« les messages partent-ils vides ? ») sans rien révéler de leur contenu.
-func champs(message domain.Message) []any {
+// The address is masked there and the body reduced to its size — useful for
+// diagnosis ("are the messages going out empty?") without revealing anything of
+// their content.
+func fields(message domain.Message) []any {
 	return []any{
 		slog.String("channel", string(message.Channel)),
 		slog.String("to", message.To.Masked()),

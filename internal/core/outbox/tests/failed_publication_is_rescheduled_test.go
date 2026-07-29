@@ -8,17 +8,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/domain"
 )
 
-// TestFailedPublicationIsRescheduled : un courtier injoignable n'est pas une perte.
+// TestFailedPublicationIsRescheduled: an unreachable broker is not a loss.
 //
-// Le message reste `pending`, son compteur monte, et sa date de disponibilité est
-// repoussée. Marquer `done` un message non publié serait la perte silencieuse que
-// tout le patron outbox existe pour empêcher.
+// The message stays `pending`, its counter goes up, and its availability date
+// is pushed back. Marking an unpublished message `done` would be the silent
+// loss that the whole outbox pattern exists to prevent.
 func TestFailedPublicationIsRescheduled(t *testing.T) {
 	t.Parallel()
 
 	observed := &spy{}
-	panne := errors.New("courtier injoignable")
-	handle := func(context.Context, domain.Message) error { return panne }
+	outage := errors.New("broker unreachable")
+	handle := func(context.Context, domain.Message) error { return outage }
 
 	dispatcher := newDispatcher(t,
 		dispatcherPorts(observed, claimOnce(pending("m-1", 0)), handle), testPolicy())
@@ -28,21 +28,21 @@ func TestFailedPublicationIsRescheduled(t *testing.T) {
 	}
 
 	if len(observed.done) != 0 {
-		t.Error("un message non publié ne doit JAMAIS être marqué comme traité")
+		t.Error("an unpublished message must NEVER be marked as processed")
 	}
 
 	attempt := observed.lastAttempt(t)
 	if attempt.Status != domain.StatusPending {
-		t.Errorf("statut = %q, attendu %q : le message doit rester rejouable",
+		t.Errorf("status = %q, want %q: the message must stay replayable",
 			attempt.Status, domain.StatusPending)
 	}
 	if attempt.Attempts != 1 {
-		t.Errorf("tentatives = %d, attendu 1", attempt.Attempts)
+		t.Errorf("attempts = %d, want 1", attempt.Attempts)
 	}
 	if !attempt.AvailableAt.After(fixedNow()) {
-		t.Error("le prochain essai doit être repoussé dans le futur")
+		t.Error("the next try must be pushed into the future")
 	}
 	if got := observed.lastOutcome(t).Event; got != domain.EventRetryScheduled {
-		t.Errorf("événement = %q, attendu %q", got, domain.EventRetryScheduled)
+		t.Errorf("event = %q, want %q", got, domain.EventRetryScheduled)
 	}
 }

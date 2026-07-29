@@ -11,112 +11,112 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/notification"
 )
 
-// TestADisabledModuleRefusesItNeverSwallows garde le pire silence possible.
+// TestADisabledModuleRefusesItNeverSwallows guards the worst possible silence.
 //
-// # Le défaut que ce test empêche
+// # The defect this test prevents
 //
-// Un module de notification désactivé qui rendrait `nil` ferait compter chaque
-// message comme envoyé. Rien n'échouerait, aucun journal ne dirait rien, et le
-// défaut ne se verrait qu'au premier client affirmant n'avoir jamais reçu son
-// courriel — des semaines plus tard, sans aucune trace pour remonter.
+// A disabled notification module returning `nil` would make every message count
+// as sent. Nothing would fail, no log would say anything, and the defect would
+// only show at the first customer claiming they never received their email —
+// weeks later, without any trace to go back on.
 //
-// C'est la forme la plus coûteuse d'un défaut : celle qui ressemble en tout
-// point au succès.
+// It is the costliest form of a defect: the one that looks exactly like success.
 func TestADisabledModuleRefusesItNeverSwallows(t *testing.T) {
 	t.Parallel()
 
 	mod, err := notification.New(config.Module{Enabled: false}, notification.Deps{})
 	if err != nil {
-		t.Fatalf("un module désactivé doit se monter : %v", err)
+		t.Fatalf("a disabled module must mount: %v", err)
 	}
 
 	if err := mod.Send(context.Background(), message(t)); !errors.Is(err, notification.ErrDisabled) {
-		t.Fatalf("attendu ErrDisabled, obtenu %v", err)
+		t.Fatalf("want ErrDisabled, got %v", err)
 	}
 }
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique.
+// TestUnknownDriverRefusesStartup: deny by default all the way into the factory.
 //
-// `smtp`, `mailjet` et `ses` figurent dans le catalogue d'intentions et ne sont
-// PAS construits. Le refus doit être franc : un repli silencieux sur `log`
-// ferait tourner une production qui écrit ses courriels dans un journal au lieu
-// de les envoyer — et rien ne le signalerait.
+// `smtp`, `mailjet` and `ses` appear in the catalogue of intentions and are NOT
+// built. The refusal must be plain: a silent fallback to `log` would run a
+// production that writes its emails to a log instead of sending them — and
+// nothing would report it.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
-	j := newJournal()
+	logs := newLogCapture()
 	for _, driver := range []string{"smtp", "mailjet", "ses", "sendgrid", "journal"} {
 		_, err := notification.New(
 			config.Module{Enabled: true, Driver: driver},
-			notification.Deps{Logger: j.logger},
+			notification.Deps{Logger: logs.logger},
 		)
 		if err == nil {
-			t.Errorf("le pilote %q n'est pas construit : il doit refuser le démarrage", driver)
+			t.Errorf("driver %q is not built: it must refuse startup", driver)
 		}
 	}
 }
 
-// TestMissingLoggerRefusesStartup fait échouer le montage, pas la production.
+// TestMissingLoggerRefusesStartup fails the assembly, not production.
 //
-// Sans ce refus, le premier message produirait une déréférence de pointeur nil —
-// donc en production, et sur un chemin asynchrone où la panique du consommateur
-// se confondrait avec un message mal formé.
+// Without this refusal, the first message would produce a nil pointer
+// dereference — hence in production, and on an asynchronous path where the
+// consumer's panic would be confused with a malformed message.
 func TestMissingLoggerRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	_, err := notification.New(config.Module{Enabled: true, Driver: "log"}, notification.Deps{})
 	if !errors.Is(err, notification.ErrMissingDependency) {
-		t.Fatalf("attendu ErrMissingDependency, obtenu %v", err)
+		t.Fatalf("want ErrMissingDependency, got %v", err)
 	}
 }
 
-// TestEmptyDriverFallsBackToTheDefault : ne rien préciser prend `log`.
+// TestEmptyDriverFallsBackToTheDefault: specifying nothing takes `log`.
 //
-// C'est ce qui rend vraie la promesse « `hexa new` puis `go run` » sur la chaîne
-// COMPLÈTE — inscription, outbox, relais, notification — sans serveur SMTP ni
-// compte chez un fournisseur.
+// That is what makes the "`hexa new` then `go run`" promise true on the COMPLETE
+// chain — registration, outbox, relay, notification — without an SMTP server nor
+// an account at a provider.
 func TestEmptyDriverFallsBackToTheDefault(t *testing.T) {
 	t.Parallel()
 
-	j := newJournal()
-	mod, err := notification.New(config.Module{Enabled: true}, notification.Deps{Logger: j.logger})
+	logs := newLogCapture()
+	mod, err := notification.New(config.Module{Enabled: true}, notification.Deps{Logger: logs.logger})
 	if err != nil {
-		t.Fatalf("sans pilote précisé, le défaut doit s'appliquer : %v", err)
+		t.Fatalf("with no driver specified, the default must apply: %v", err)
 	}
 	if err := mod.Send(context.Background(), message(t)); err != nil {
-		t.Fatalf("envoi sur le pilote par défaut : %v", err)
+		t.Fatalf("send on the default driver: %v", err)
 	}
-	if j.texte() == "" {
-		t.Fatal("le pilote par défaut doit être le pilote `log`")
+	if logs.text() == "" {
+		t.Fatal("the default driver must be the `log` driver")
 	}
 }
 
-// TestAMessageNeverPrintsItsBody couvre les DEUX verbes de formatage.
+// TestAMessageNeverPrintsItsBody covers BOTH formatting verbs.
 //
-// `%v` passe par `String()`, `%#v` par `GoString()`. Couvrir l'un laisse l'autre
-// fuiter, et `%#v` est précisément ce qu'on écrit dans un journal de débogage —
-// donc le jour d'un incident, donc le jour où les journaux partent chez un tiers.
+// `%v` goes through `String()`, `%#v` through `GoString()`. Covering one leaves
+// the other leaking, and `%#v` is precisely what one writes in a debug log —
+// hence on the day of an incident, hence on the day the logs go to a third
+// party.
 //
-// ⚠️ Le test formate DÉLIBÉRÉMENT plutôt que d'appeler `String()` : c'est le
-// chemin de fuite réel qui est éprouvé. Appeler la méthode laisserait le test
-// vert si quelqu'un retirait le `Stringer`.
+// ⚠️ The test formats DELIBERATELY rather than calling `String()`: it is the real
+// leak path that is exercised. Calling the method would leave the test green if
+// someone removed the `Stringer`.
 func TestAMessageNeverPrintsItsBody(t *testing.T) {
 	t.Parallel()
 
 	msg := message(t)
-	for _, rendu := range []string{
-		fmt.Sprintf("%v", msg),  //nolint:gocritic // c'est le chemin de fuite testé
-		fmt.Sprintf("%#v", msg), // par GoString — l'autre moitié du masque
-		fmt.Sprint(msg),         //nolint:gocritic // idem, sans verbe
+	for _, rendered := range []string{
+		fmt.Sprintf("%v", msg),  //nolint:gocritic // this is the leak path under test
+		fmt.Sprintf("%#v", msg), // through GoString — the other half of the mask
+		fmt.Sprint(msg),         //nolint:gocritic // likewise, without a verb
 	} {
-		if strings.Contains(rendu, secretInBody) {
-			t.Fatalf("le corps fuite dans %q", rendu)
+		if strings.Contains(rendered, secretInBody) {
+			t.Fatalf("the body leaks in %q", rendered)
 		}
-		if strings.Contains(rendu, recipient) {
-			t.Fatalf("l'adresse en clair fuite dans %q", rendu)
+		if strings.Contains(rendered, recipient) {
+			t.Fatalf("the address in clear leaks in %q", rendered)
 		}
-		if !strings.Contains(rendu, "***") {
-			t.Fatalf("le masque doit être visible dans %q", rendu)
+		if !strings.Contains(rendered, "***") {
+			t.Fatalf("the mask must be visible in %q", rendered)
 		}
 	}
 }

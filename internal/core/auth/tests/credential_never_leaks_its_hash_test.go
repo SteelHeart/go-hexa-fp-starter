@@ -10,20 +10,21 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// TestCredentialNeverLeaksItsHash couvre les DEUX verbes de formatage.
+// TestCredentialNeverLeaksItsHash covers BOTH formatting verbs.
 //
-// # Pourquoi deux, et pas un
+// # Why two, and not one
 //
-// `%v` passe par `String()`, `%#v` par `GoString()`. Couvrir l'un laisse l'autre
-// fuiter, et `%#v` est précisément ce qu'on écrit dans un journal de débogage —
-// donc le jour d'un incident, donc le jour où les journaux partent chez un tiers.
+// `%v` goes through `String()`, `%#v` through `GoString()`. Covering one leaves
+// the other leaking, and `%#v` is precisely what one writes in a debug log —
+// hence on the day of an incident, hence on the day the logs go to a third
+// party.
 //
-// Un condensé Argon2id n'est pas un mot de passe, mais il se casse hors ligne :
-// le publier transforme une fuite de journaux en fuite de comptes.
+// An Argon2id digest is not a password, but it can be cracked offline:
+// publishing it turns a log leak into an account leak.
 //
-// ⚠️ Le test formate DÉLIBÉRÉMENT avec `%v` et `%#v` plutôt que d'appeler
-// `String()` : c'est le chemin de fuite réel qui est éprouvé. Appeler la méthode
-// laisserait le test vert si quelqu'un retirait le `Stringer`.
+// ⚠️ The test DELIBERATELY formats with `%v` and `%#v` rather than calling
+// `String()`: it is the real leak path that is exercised. Calling the method
+// would leave the test green if someone removed the `Stringer`.
 func TestCredentialNeverLeaksItsHash(t *testing.T) {
 	t.Parallel()
 
@@ -31,72 +32,72 @@ func TestCredentialNeverLeaksItsHash(t *testing.T) {
 
 	subj, err := domain.NewSubject(subject)
 	if err != nil {
-		t.Fatalf("sujet: %v", err)
+		t.Fatalf("subject: %v", err)
 	}
 	identity, err := domain.NewIdentity("id-1", subj, nil, time.Now())
 	if err != nil {
-		t.Fatalf("identité: %v", err)
+		t.Fatalf("identity: %v", err)
 	}
 	credential, err := domain.NewCredential(identity, hash)
 	if err != nil {
-		t.Fatalf("créance: %v", err)
+		t.Fatalf("credential: %v", err)
 	}
 
 	for _, rendered := range []string{
-		fmt.Sprintf("%v", credential),  //nolint:gocritic // c'est le chemin de fuite testé
-		fmt.Sprintf("%#v", credential), // par GoString — l'autre moitié du masque
-		fmt.Sprintf("%s", credential),  //nolint:gocritic,staticcheck // idem, par String
-		fmt.Sprint(credential),         //nolint:gocritic // idem, sans verbe
+		fmt.Sprintf("%v", credential),  //nolint:gocritic // this is the leak path under test
+		fmt.Sprintf("%#v", credential), // through GoString — the other half of the mask
+		fmt.Sprintf("%s", credential),  //nolint:gocritic,staticcheck // idem, through String
+		fmt.Sprint(credential),         //nolint:gocritic // idem, without a verb
 	} {
 		if strings.Contains(rendered, hash) {
-			t.Fatalf("le condensé fuite dans %q", rendered)
+			t.Fatalf("the digest leaks in %q", rendered)
 		}
 		if !strings.Contains(rendered, "***") {
-			t.Fatalf("le masque doit être visible dans %q", rendered)
+			t.Fatalf("the mask must be visible in %q", rendered)
 		}
 	}
 
-	// Le condensé reste ACCESSIBLE, par un accesseur nommé : un accès se voit
-	// alors en relecture, et se cherche en une commande.
+	// The digest stays ACCESSIBLE, through a named accessor: an access is then
+	// visible on review, and can be searched for in a single command.
 	if credential.SecretHash() != hash {
-		t.Fatal("le condensé doit rester accessible pour comparaison")
+		t.Fatal("the digest must stay accessible for comparison")
 	}
 }
 
-// TestCredentialRefusesAnIncompleteAssembly garde les bornes du type.
+// TestCredentialRefusesAnIncompleteAssembly guards the type's bounds.
 //
-// Deux `string` de suite — « le sujet » et « le condensé » — s'inversent
-// silencieusement, et l'inversion produirait une comparaison qui réussit toujours.
-// Le type existe pour rendre l'inversion impossible ; le refus garde ses bornes.
+// Two `string` in a row — "the subject" and "the digest" — get silently
+// swapped, and the swap would produce a comparison that always succeeds. The
+// type exists to make the swap impossible; the refusal guards its bounds.
 func TestCredentialRefusesAnIncompleteAssembly(t *testing.T) {
 	t.Parallel()
 
 	subj, err := domain.NewSubject(subject)
 	if err != nil {
-		t.Fatalf("sujet: %v", err)
+		t.Fatalf("subject: %v", err)
 	}
 	identity, err := domain.NewIdentity("id-1", subj, nil, time.Now())
 	if err != nil {
-		t.Fatalf("identité: %v", err)
+		t.Fatalf("identity: %v", err)
 	}
 
-	if _, err := domain.NewCredential(domain.Identity{}, "condensé"); !errors.Is(err, domain.ErrIncomplete) {
-		t.Errorf("sans identité : attendu ErrIncomplete, obtenu %v", err)
+	if _, err := domain.NewCredential(domain.Identity{}, "digest"); !errors.Is(err, domain.ErrIncomplete) {
+		t.Errorf("without an identity: want ErrIncomplete, got %v", err)
 	}
 	if _, err := domain.NewCredential(identity, ""); !errors.Is(err, domain.ErrIncomplete) {
-		t.Errorf("sans condensé : attendu ErrIncomplete, obtenu %v", err)
+		t.Errorf("without a digest: want ErrIncomplete, got %v", err)
 	}
 }
 
-// TestTokenComparesInConstantTime éprouve la propriété par son CONTRAT.
+// TestTokenComparesInConstantTime exercises the property through its CONTRACT.
 //
-// La constance du temps ne se mesure pas honnêtement dans un test unitaire — un
-// ordonnanceur, un ramasse-miettes ou une machine partagée y ajoutent plus de
-// bruit que le canal recherché n'en produit de signal. Ce que le test garde, c'est
-// la CORRECTION de `Equals` : le jour où quelqu'un remplacerait
-// `subtle.ConstantTimeCompare` par `==` en pensant simplifier, la revue est le
-// seul filet — et un test qui exige `Equals` d'exister empêche au moins que la
-// méthode disparaisse au profit d'une comparaison directe chez l'appelant.
+// Constant time is not measured honestly in a unit test — a scheduler, a
+// garbage collector or a shared machine add more noise to it than the channel
+// under study produces signal. What the test guards is the CORRECTNESS of
+// `Equals`: the day someone replaced `subtle.ConstantTimeCompare` with `==`
+// thinking they were simplifying, review is the only net — and a test that
+// requires `Equals` to exist at least prevents the method from disappearing in
+// favour of a direct comparison at the caller.
 func TestTokenComparesInConstantTime(t *testing.T) {
 	t.Parallel()
 
@@ -104,30 +105,30 @@ func TestTokenComparesInConstantTime(t *testing.T) {
 
 	token, err := domain.NewToken(raw)
 	if err != nil {
-		t.Fatalf("jeton: %v", err)
+		t.Fatalf("token: %v", err)
 	}
 	same, err := domain.NewToken(raw)
 	if err != nil {
-		t.Fatalf("jeton: %v", err)
+		t.Fatalf("token: %v", err)
 	}
 	other, err := domain.NewToken(strings.Repeat("a", 43))
 	if err != nil {
-		t.Fatalf("jeton: %v", err)
+		t.Fatalf("token: %v", err)
 	}
 
 	if !token.Equals(same) {
-		t.Error("deux jetons identiques doivent être égaux")
+		t.Error("two identical tokens must be equal")
 	}
 	if token.Equals(other) {
-		t.Error("deux jetons différents ne doivent pas être égaux")
+		t.Error("two different tokens must not be equal")
 	}
 	if token.Equals(domain.Token{}) {
-		t.Error("un jeton non construit ne doit égaler aucun jeton")
+		t.Error("a token that was never built must equal no token")
 	}
 
-	// Un jeton trop court est refusé À LA CONSTRUCTION : la borne vit dans le
-	// domaine, donc elle vaut quel que soit le port qui a produit la chaîne.
+	// A token that is too short is refused AT CONSTRUCTION: the bound lives in
+	// the domain, so it holds whatever port produced the string.
 	if _, err := domain.NewToken(strings.Repeat("a", 42)); !errors.Is(err, domain.ErrIncomplete) {
-		t.Errorf("jeton de 42 caractères : attendu ErrIncomplete, obtenu %v", err)
+		t.Errorf("42-character token: want ErrIncomplete, got %v", err)
 	}
 }

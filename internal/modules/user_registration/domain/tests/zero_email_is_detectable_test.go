@@ -6,24 +6,25 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestZeroEmailIsDetectable : une adresse non construite se reconnaît.
+// TestZeroEmailIsDetectable: an address that was never constructed is
+// recognisable.
 //
-// Le type interdit de FABRIQUER une adresse invalide, mais pas d'en déclarer une
-// vide — `var e Email` reste légal en Go. `IsZero` est ce qui permet à un
-// adaptateur de refuser une valeur qui n'est jamais passée par `NewEmail`, plutôt
-// que d'écrire une chaîne vide en base.
+// The type forbids FABRICATING an invalid address, but not declaring an empty
+// one — `var e Email` remains legal in Go. `IsZero` is what allows an adapter to
+// refuse a value that never went through `NewEmail`, rather than writing an
+// empty string into the database.
 func TestZeroEmailIsDetectable(t *testing.T) {
 	t.Parallel()
 
-	var jamaisConstruite domain.Email
-	if !jamaisConstruite.IsZero() {
-		t.Error("une adresse non construite doit être détectable")
+	var neverConstructed domain.Email
+	if !neverConstructed.IsZero() {
+		t.Error("an address that was never constructed must be detectable")
 	}
-	if jamaisConstruite.String() != "" {
-		t.Errorf("adresse non construite = %q, attendu vide", jamaisConstruite.String())
+	if neverConstructed.String() != "" {
+		t.Errorf("address never constructed = %q, want empty", neverConstructed.String())
 	}
 
-	if emailValide(t, "alice@example.com").IsZero() {
-		t.Error("une adresse construite ne doit pas être vue comme vide")
+	if validEmail(t, "alice@example.com").IsZero() {
+		t.Error("a constructed address must not be seen as empty")
 	}
 }

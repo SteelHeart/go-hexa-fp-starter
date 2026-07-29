@@ -8,16 +8,16 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf"
 )
 
-// TestFileDriverNeedsNothing verrouille la promesse de l'ADR 012 : le pilote par
-// défaut ne réclame ni base, ni journal, ni horloge.
+// TestFileDriverNeedsNothing locks down the promise of ADR 012: the default
+// driver claims neither a database, nor a logger, nor a clock.
 func TestFileDriverNeedsNothing(t *testing.T) {
 	t.Parallel()
 
 	mod, err := dynconf.New(config.Module{Enabled: true, Driver: "file"}, dynconf.Deps{})
 	if err != nil {
-		t.Fatalf("le pilote par défaut ne doit réclamer aucune dépendance: %v", err)
+		t.Fatalf("the default driver must claim no dependency: %v", err)
 	}
-	if mod.IsEnabled(context.Background(), "quelconque") {
-		t.Error("sans valeur déclarée, tout drapeau doit être inactif")
+	if mod.IsEnabled(context.Background(), "anything") {
+		t.Error("with no declared value, every flag must be inactive")
 	}
 }

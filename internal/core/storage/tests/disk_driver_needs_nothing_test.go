@@ -8,12 +8,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/storage"
 )
 
-// TestDiskDriverNeedsNothing verrouille la promesse de l'ADR 012 : le pilote par
-// défaut ne réclame ni base, ni bucket, ni client de fournisseur.
+// TestDiskDriverNeedsNothing locks down the promise of ADR 012: the default
+// driver claims neither a database, nor a bucket, nor a provider client.
 //
-// Le répertoire de base est créé au démarrage plutôt qu'au premier téléversement :
-// découvrir un magasin inutilisable quand un utilisateur envoie son premier
-// fichier serait le pire moment.
+// The base directory is created at startup rather than at the first upload:
+// discovering an unusable store when a user sends their first file would be the
+// worst moment.
 func TestDiskDriverNeedsNothing(t *testing.T) {
 	t.Parallel()
 
@@ -23,10 +23,10 @@ func TestDiskDriverNeedsNothing(t *testing.T) {
 		Options: map[string]any{"base_dir": t.TempDir()},
 	}, storage.Deps{})
 	if err != nil {
-		t.Fatalf("le pilote par défaut ne doit réclamer aucune dépendance: %v", err)
+		t.Fatalf("the default driver must claim no dependency: %v", err)
 	}
 
-	if _, err := mod.Put(context.Background(), object("premier.txt", "contenu")); err != nil {
-		t.Errorf("Put sur le pilote disk: %v", err)
+	if _, err := mod.Put(context.Background(), object("first.txt", "content")); err != nil {
+		t.Errorf("Put on the disk driver: %v", err)
 	}
 }

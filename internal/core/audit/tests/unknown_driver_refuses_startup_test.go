@@ -7,12 +7,12 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/audit"
 )
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique.
+// TestUnknownDriverRefusesStartup: deny by default, right down to the factory.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	_, err := audit.New(config.Module{Enabled: true, Driver: "syslog"}, audit.Deps{})
 	if err == nil {
-		t.Fatal("un pilote inconnu doit refuser le démarrage")
+		t.Fatal("an unknown driver must refuse to start")
 	}
 }

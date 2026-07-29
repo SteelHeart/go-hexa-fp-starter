@@ -11,10 +11,10 @@ import (
 func TestPostgresDriverRefusesWithoutPool(t *testing.T) {
 	t.Parallel()
 
-	// Refus au DÉMARRAGE, pas à la première requête : un service à moitié
-	// configuré échoue plus tard, ailleurs, et pour une raison sans rapport.
+	// Refusal at STARTUP, not at the first query: a half-configured service
+	// fails later, elsewhere, and for an unrelated reason.
 	_, err := outbox.New(config.Module{Enabled: true, Driver: "postgres"}, outbox.Deps{})
 	if !errors.Is(err, outbox.ErrPoolRequired) {
-		t.Errorf("attendu ErrPoolRequired, obtenu: %v", err)
+		t.Errorf("want ErrPoolRequired, got: %v", err)
 	}
 }

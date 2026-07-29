@@ -1,22 +1,22 @@
-// Package inproc implémente l'élection à l'intérieur d'un seul processus.
+// Package inproc implements the election inside a single process.
 //
-// # NON-GARANTIES — à lire avant de l'utiliser
+// # NON-GUARANTEES — to be read before using it
 //
-//   - **Aucune élection entre répliques.** C'est LA non-garantie, et elle annule
-//     la raison d'être du module : deux instances exécuteront la tâche deux fois.
-//     Un rappel envoyé deux fois se voit chez le client ; une facture émise deux
-//     fois se voit en comptabilité.
-//   - **Aucune persistance.** Un redémarrage pendant une exécution laisse la tâche
-//     inachevée, sans trace.
+//   - **No election between replicas.** This is THE non-guarantee, and it
+//     cancels out the reason the module exists: two instances will run the task
+//     twice. A reminder sent twice is visible to the customer; an invoice issued
+//     twice is visible in the accounts.
+//   - **No persistence.** A restart during an execution leaves the task
+//     unfinished, with no trace.
 //
-// Ce qu'il garantit, en revanche, et qui n'est pas rien : **aucun recouvrement**.
-// Une tâche encore en cours quand le tick suivant arrive n'est pas relancée. Sans
-// ça, une tâche plus lente que sa période empilerait les exécutions jusqu'à
-// saturer le processus.
+// What it does guarantee, on the other hand, and it is not nothing: **no
+// overlap**. A task still in progress when the next tick arrives is not
+// relaunched. Without that, a task slower than its period would pile executions
+// up until the process was saturated.
 //
-// Convient en développement, en test, pour une CLI et pour tout déploiement à UNE
-// seule réplique. Ne convient PAS dès qu'il y en a deux — passer alors au pilote
-// `advisory-lock`, sans toucher au code appelant.
+// Suitable in development, in test, for a CLI and for any deployment with ONE
+// single replica. NOT suitable as soon as there are two — move then to the
+// `advisory-lock` driver, without touching the calling code.
 package inproc
 
 import (
@@ -26,22 +26,22 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// Elector accorde l'exécution dans le processus courant.
+// Elector grants the execution within the current process.
 type Elector struct {
 	mu      sync.Mutex
 	running map[domain.TaskName]struct{}
 }
 
-// New construit l'électeur.
+// New builds the elector.
 func New() *Elector {
 	return &Elector{running: make(map[domain.TaskName]struct{})}
 }
 
-// Acquire implémente ports.Acquire.
+// Acquire implements ports.Acquire.
 //
-// Rend `false` si la tâche est déjà en cours dans ce processus. Le verrou est tenu
-// pendant toute la décision : le tester puis le poser en deux temps laisserait deux
-// goroutines l'obtenir.
+// Returns `false` if the task is already in progress in this process. The lock
+// is held throughout the decision: testing it then setting it in two steps
+// would let two goroutines obtain it.
 func (e *Elector) Acquire(_ context.Context, task domain.TaskName) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -53,7 +53,7 @@ func (e *Elector) Acquire(_ context.Context, task domain.TaskName) (bool, error)
 	return true, nil
 }
 
-// Release implémente ports.Release.
+// Release implements ports.Release.
 func (e *Elector) Release(_ context.Context, task domain.TaskName) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()

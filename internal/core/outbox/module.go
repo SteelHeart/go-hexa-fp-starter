@@ -1,7 +1,7 @@
-// Package outbox est le module noyau de publication garantie.
+// Package outbox is the core module for guaranteed publication.
 //
-// C'est le composition root du module : le SEUL endroit qui connaît les pilotes.
-// Un appelant reçoit des types fonction et ignore lequel est branché
+// It is the module's composition root: the ONLY place that knows the drivers.
+// A caller receives function types and ignores which one is wired
 // ([ADR 012](../../../documentation/adr/012-anatomie-d-un-module-et-pilotes.md)).
 package outbox
 
@@ -20,19 +20,19 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/outbox/ports"
 )
 
-// Name est le nom du module dans config/modules.yaml.
+// Name is the module's name in config/modules.yaml.
 const Name = "outbox"
 
-// Pilotes de l'outbox.
+// Outbox drivers.
 //
-// Nommés une fois pour que le montage et la table de partage
-// (SharedAcrossProcesses) ne puissent pas parler de pilotes différents.
+// Named once so that the wiring and the sharing table
+// (SharedAcrossProcesses) cannot speak of different drivers.
 const (
 	driverMemory   = "memory"
 	driverPostgres = "postgres"
 )
 
-// Module expose les ports de l'outbox.
+// Module exposes the outbox ports.
 type Module struct {
 	Enqueue      ports.Enqueue
 	Claim        ports.Claim
@@ -41,30 +41,30 @@ type Module struct {
 	PendingCount ports.PendingCount
 }
 
-// Deps porte les dépendances que les pilotes peuvent réclamer.
+// Deps carries the dependencies the drivers may claim.
 //
-// Pool peut être nil : le pilote `memory` n'en a pas besoin, et c'est
-// précisément ce qui permet de démarrer sans base.
+// Pool may be nil: the `memory` driver does not need one, and that is precisely
+// what allows starting without a database.
 type Deps struct {
 	Pool *pgxpool.Pool
 	Now  func() time.Time
 }
 
-// ErrDisabled signale un appel à un module désactivé.
+// ErrDisabled signals a call to a disabled module.
 //
-// Un module désactivé échoue explicitement plutôt que de se rabattre sur un
-// comportement inerte : un événement silencieusement ignoré est le pire défaut
-// possible, parce qu'il ne se signale jamais.
-var ErrDisabled = errors.New("module outbox désactivé dans config/modules.yaml")
+// A disabled module fails explicitly rather than falling back on inert
+// behaviour: a silently ignored event is the worst possible defect, because it
+// never signals itself.
+var ErrDisabled = errors.New("outbox module disabled in config/modules.yaml")
 
-// ErrPoolRequired signale un pilote qui exige une base absente.
-var ErrPoolRequired = errors.New("le pilote postgres exige une connexion à la base")
+// ErrPoolRequired signals a driver that requires an absent database.
+var ErrPoolRequired = errors.New("the postgres driver requires a database connection")
 
-// New construit le module selon la configuration.
+// New builds the module according to the configuration.
 //
-// Un pilote inconnu refuse le démarrage : la validation de configuration l'a
-// déjà rejeté, et ce second refus garantit qu'aucun chemin ne contourne le
-// premier.
+// An unknown driver refuses startup: configuration validation has already
+// rejected it, and this second refusal guarantees that no path bypasses the
+// first.
 func New(cfg config.Module, deps Deps) (Module, error) {
 	if !cfg.Enabled {
 		return disabled(), nil
@@ -99,9 +99,9 @@ func New(cfg config.Module, deps Deps) (Module, error) {
 	}
 }
 
-var errUnknownDriver = errors.New("pilote outbox inconnu")
+var errUnknownDriver = errors.New("unknown outbox driver")
 
-// disabled retourne des ports qui refusent explicitement.
+// disabled returns ports that refuse explicitly.
 func disabled() Module {
 	return Module{
 		Enqueue: func(context.Context, domain.NewMessage) (domain.MessageID, error) {

@@ -7,36 +7,36 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth"
 )
 
-// TestUnknownDriverRefusesStartup : deny par défaut jusque dans la fabrique.
+// TestUnknownDriverRefusesStartup: deny by default all the way into the
+// factory.
 //
-// `postgres` et `oidc` sont annoncés par l'ADR 017 et ne sont PAS construits. Le
-// refus doit être franc : un repli silencieux sur `memory` ferait tourner
-// l'authentification d'une production sur un magasin volatile, qui EFFACE LES
-// COMPTES au redémarrage — et rien ne le signalerait avant le premier
-// redéploiement.
+// `postgres` and `oidc` are announced by ADR 017 and are NOT built. The refusal
+// must be blunt: a silent fallback on `memory` would run a production's
+// authentication on a volatile store, which ERASES THE ACCOUNTS on restart —
+// and nothing would report it before the first redeployment.
 func TestUnknownDriverRefusesStartup(t *testing.T) {
 	t.Parallel()
 
 	c := newClock()
-	for _, driver := range []string{"postgres", "oidc", "keycloak", "ldap", "memoire"} {
+	for _, driver := range []string{"postgres", "oidc", "keycloak", "ldap", "memoy"} {
 		if _, err := auth.New(
 			config.Module{Enabled: true, Driver: driver}, deps(c),
 		); err == nil {
-			t.Errorf("le pilote %q n'est pas construit : il doit refuser le démarrage", driver)
+			t.Errorf("driver %q is not built: it must refuse startup", driver)
 		}
 	}
 }
 
-// TestEmptyDriverFallsBackToTheDefault : ne rien préciser prend le pilote par
-// défaut, et ce défaut n'exige aucune infrastructure.
+// TestEmptyDriverFallsBackToTheDefault: specifying nothing takes the default
+// driver, and that default demands no infrastructure.
 //
-// C'est ce qui rend vraie la promesse « `hexa new` puis `go run`, ça démarre » —
-// y compris avec l'authentification ACTIVE.
+// That is what makes the promise "`hexa new` then `go run`, and it starts"
+// true — including with authentication ENABLED.
 func TestEmptyDriverFallsBackToTheDefault(t *testing.T) {
 	t.Parallel()
 
 	c := newClock()
 	if _, err := auth.New(config.Module{Enabled: true}, deps(c)); err != nil {
-		t.Fatalf("sans pilote précisé, le défaut doit s'appliquer : %v", err)
+		t.Fatalf("with no driver specified, the default must apply: %v", err)
 	}
 }

@@ -401,7 +401,7 @@ tasks:
             tail -30 "$bac/check.log" >&2
             exit 1
           }
-          grep -E "cliquet|périmètre|cœur|code produit" "$bac/check.log" | sed 's/^/  /'
+          grep -E "unit scope|core \(domain|product code" "$bac/check.log" | sed 's/^/  /'
           echo "    task check dans le projet généré : 0"
 
   ci:images:

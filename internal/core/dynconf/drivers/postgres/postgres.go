@@ -1,28 +1,27 @@
-// Package postgres implémente la configuration dynamique sur PostgreSQL.
+// Package postgres implements dynamic configuration on PostgreSQL.
 //
-// # GARANTIES
+// # GUARANTEES
 //
-//   - **Modifiable à chaud** : c'est la raison d'être du module, et le seul pilote
-//     livré qui la tienne.
-//   - **Partagé entre répliques** : une écriture est visible par toutes.
+//   - **Changeable at run time**: this is the reason the module exists, and the
+//     only shipped driver that holds it.
+//   - **Shared between replicas**: a write is visible to all of them.
 //
-// # NON-GARANTIES
+// # NON-GUARANTEES
 //
-//   - **La propagation prend jusqu'à un TTL.** `Set` ne purge que le cache LOCAL ;
-//     les autres répliques gardent la valeur précédente jusqu'à expiration. Un
-//     drapeau éteint en urgence met donc au plus `ttl` à s'éteindre partout.
-//     L'alternative — un canal d'invalidation — se justifiera le jour où ce délai
-//     deviendra inacceptable.
-//   - **Une panne de base éteint les drapeaux**, par conception (voir
-//     ports.IsEnabled). Le pilote la journalise, puisqu'il ne peut pas la
-//     retourner.
-//   - **Les absences sont mises en cache** au même titre que les présences : sans
-//     ça, une clé jamais posée coûterait une requête par évaluation.
+//   - **Propagation takes up to one TTL.** `Set` only purges the LOCAL cache;
+//     the other replicas keep the previous value until it expires. A flag
+//     switched off in an emergency therefore takes at most `ttl` to go off
+//     everywhere. The alternative — an invalidation channel — will be justified
+//     the day that delay becomes unacceptable.
+//   - **A database outage switches the flags off**, by design (see
+//     ports.IsEnabled). The driver logs it, since it cannot return it.
+//   - **Absences are cached** just like presences: without that, a key never set
+//     would cost one query per evaluation.
 //
-// # État
+// # State
 //
-// Écrit, JAMAIS exécuté contre une base : la migration de
-// `platform.dynamic_config` n'existe pas encore (issue #2).
+// Written, NEVER run against a database: the migration of
+// `platform.dynamic_config` does not exist yet (issue #2).
 package postgres
 
 import (
@@ -39,17 +38,17 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/domain"
 )
 
-// cached est une valeur mémorisée, présente ou absente.
+// cached is a memorised value, present or absent.
 type cached struct {
 	value   string
 	found   bool
 	expires time.Time
 }
 
-// Store lit les valeurs dynamiques avec un cache mémoire court.
+// Store reads the dynamic values with a short in-memory cache.
 //
-// Le cache est indispensable, pas une optimisation : un drapeau évalué dans une
-// boucle produirait sinon une requête par itération.
+// The cache is indispensable, not an optimisation: a flag evaluated in a loop
+// would otherwise produce one query per iteration.
 type Store struct {
 	pool   *pgxpool.Pool
 	logger *slog.Logger
@@ -60,7 +59,7 @@ type Store struct {
 	values map[string]cached
 }
 
-// New construit le magasin.
+// New builds the store.
 func New(pool *pgxpool.Pool, logger *slog.Logger, ttl time.Duration, now func() time.Time) *Store {
 	if now == nil {
 		now = time.Now
@@ -74,7 +73,7 @@ func New(pool *pgxpool.Pool, logger *slog.Logger, ttl time.Duration, now func() 
 	}
 }
 
-// Flag implémente ports.IsEnabled.
+// Flag implements ports.IsEnabled.
 func (s *Store) Flag(ctx context.Context, key domain.FlagKey) bool {
 	entry := s.lookup(ctx, domain.KindFlag, string(key))
 	if !entry.Found {
@@ -83,12 +82,12 @@ func (s *Store) Flag(ctx context.Context, key domain.FlagKey) bool {
 	return domain.ParseFlag(entry.Value)
 }
 
-// Setting implémente ports.GetSetting.
+// Setting implements ports.GetSetting.
 func (s *Store) Setting(ctx context.Context, key domain.SettingKey) domain.Setting {
 	return s.lookup(ctx, domain.KindSetting, string(key))
 }
 
-// lookup applique l'ordre : cache vivant, puis base.
+// lookup applies the order: live cache, then database.
 func (s *Store) lookup(ctx context.Context, kind domain.Kind, key string) domain.Setting {
 	full := domain.Qualify(kind, key)
 	now := s.now()
@@ -107,11 +106,11 @@ func (s *Store) lookup(ctx context.Context, kind domain.Kind, key string) domain
 	return domain.Setting{Value: value, Found: found}
 }
 
-// load lit la valeur en base.
+// load reads the value from the database.
 //
-// Une panne donne « absent », donc drapeau éteint. Elle est journalisée ici parce
-// que le contrat du port interdit de la retourner : sans cette trace, une base
-// injoignable éteindrait les fonctionnalités masquées en silence.
+// An outage gives "absent", hence a switched-off flag. It is logged here
+// because the contract of the port forbids returning it: without that trace, an
+// unreachable database would switch the hidden features off in silence.
 func (s *Store) load(ctx context.Context, kind domain.Kind, key string) (string, bool) {
 	const query = `SELECT value FROM platform.dynamic_config WHERE kind = $1 AND key = $2`
 
@@ -123,7 +122,7 @@ func (s *Store) load(ctx context.Context, kind domain.Kind, key string) (string,
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", false
 	default:
-		s.logger.ErrorContext(ctx, "configuration dynamique illisible, repli sur l'absence",
+		s.logger.ErrorContext(ctx, "dynamic configuration unreadable, falling back on absence",
 			slog.String("kind", string(kind)),
 			slog.String("key", key),
 			slog.String("error", err.Error()),
@@ -132,7 +131,7 @@ func (s *Store) load(ctx context.Context, kind domain.Kind, key string) (string,
 	}
 }
 
-// Set implémente ports.Set.
+// Set implements ports.Set.
 func (s *Store) Set(ctx context.Context, change domain.Change) error {
 	if !change.IsValid() {
 		return fmt.Errorf("%w: %s", domain.ErrInvalidChange, change.Describe())
@@ -146,13 +145,13 @@ func (s *Store) Set(ctx context.Context, change domain.Change) error {
 
 	_, err := s.pool.Exec(ctx, query, string(change.Kind), change.Key, change.Value)
 	if err != nil {
-		return fmt.Errorf("écriture de la configuration dynamique %s: %w", change.Describe(), err)
+		return fmt.Errorf("writing the dynamic configuration %s: %w", change.Describe(), err)
 	}
 	s.Invalidate()
 	return nil
 }
 
-// Invalidate implémente ports.Invalidate.
+// Invalidate implements ports.Invalidate.
 func (s *Store) Invalidate() {
 	s.mu.Lock()
 	s.values = make(map[string]cached)

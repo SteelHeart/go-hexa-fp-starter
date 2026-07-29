@@ -1,19 +1,19 @@
-// Package domain porte les règles métier de l'inscription, sous forme de
-// fonctions pures et de valeurs immuables.
+// Package domain carries the business rules of registration, in the form of
+// pure functions and immutable values.
 //
-// Ce paquet n'importe NI transport, NI persistance, NI logger. Il ne lit pas
-// l'horloge et ne génère pas d'aléa : ces effets sont des ports, injectés.
-// Vérifié par arch-go.yml et depguard.
+// This package imports NEITHER transport, NOR persistence, NOR a logger. It does
+// not read the clock and does not generate randomness: those effects are ports,
+// injected. Enforced by arch-go.yml and depguard.
 package domain
 
-// ErrorCode énumère les issues d'erreur possibles de la feature.
+// ErrorCode enumerates the possible error outcomes of the feature.
 //
-// L'ensemble est FERMÉ : tout switch sur ErrorCode est vérifié exhaustif par le
-// linter `exhaustive`. Ajouter un code force donc à traiter sa traduction dans
-// toutes les surfaces — c'est l'effet recherché.
+// The set is CLOSED: every switch on ErrorCode is checked for exhaustiveness by
+// the `exhaustive` linter. Adding a code therefore forces its translation to be
+// handled in every surface — that is the intended effect.
 type ErrorCode string
 
-// Les codes d'erreur de la feature.
+// The error codes of the feature.
 const (
 	CodeInvalidEmail       ErrorCode = "invalid_email"
 	CodeWeakPassword       ErrorCode = "weak_password"
@@ -22,52 +22,52 @@ const (
 	CodeInternal           ErrorCode = "internal"
 )
 
-// Error est une erreur métier. C'est une VALEUR, pas une interface : le cœur ne
-// dépend d'aucun contrat ouvert, et l'ensemble des erreurs reste énumérable.
+// Error is a business error. It is a VALUE, not an interface: the core depends
+// on no open contract, and the set of errors stays enumerable.
 type Error struct {
-	// Code identifie l'issue. C'est lui que les surfaces traduisent.
+	// Code identifies the outcome. It is what surfaces translate.
 	Code ErrorCode
-	// Message est destiné à l'utilisateur : aucun détail technique, aucune
-	// donnée sensible.
+	// Message is intended for the user: no technical detail, no sensitive
+	// data.
 	Message string
-	// Field nomme le champ fautif, pour une erreur de validation.
+	// Field names the faulty field, for a validation error.
 	Field string
-	// cause porte le détail technique. Journalisée, JAMAIS retournée à
-	// l'appelant : une erreur SQL renvoyée au client est une fuite de structure.
+	// cause carries the technical detail. Logged, NEVER returned to the
+	// caller: an SQL error sent back to the client is a structure leak.
 	cause error
 }
 
-// Ack signale un effet accompli qui n'a aucune valeur à rendre.
+// Ack reports a completed effect that has no value to return.
 //
-// Existe pour que `ports/` ne contienne AUCUNE déclaration de structure, pas même
-// le `struct{}` anonyme de `Result[struct{}, Error]` — la règle d'architecture le
-// refuse, et elle a raison : un port doit se lire comme une signature, pas comme un
-// type. Le gain est aussi à l'appel, où `domain.Ack{}` se lit mieux que
-// `struct{}{}`.
+// It exists so that `ports/` contains NO structure declaration, not even the
+// anonymous `struct{}` of `Result[struct{}, Error]` — the architecture rule
+// refuses it, and it is right: a port must read like a signature, not like a
+// type. The gain also shows at the call site, where `domain.Ack{}` reads better
+// than `struct{}{}`.
 type Ack struct{}
 
-// NewError construit une erreur métier.
+// NewError builds a business error.
 func NewError(code ErrorCode, message string) Error {
 	return Error{Code: code, Message: message}
 }
 
-// WithField précise le champ fautif et retourne une nouvelle erreur.
+// WithField states the faulty field and returns a new error.
 func (e Error) WithField(field string) Error {
 	e.Field = field
 	return e
 }
 
-// WithCause attache un détail technique et retourne une nouvelle erreur.
+// WithCause attaches a technical detail and returns a new error.
 func (e Error) WithCause(cause error) Error {
 	e.cause = cause
 	return e
 }
 
-// Cause expose le détail technique, pour la journalisation uniquement.
+// Cause exposes the technical detail, for logging only.
 func (e Error) Cause() error { return e.cause }
 
-// Error rend Error compatible avec l'interface error, ce qui simplifie les
-// frontières. Le message technique n'y apparaît pas.
+// Error makes Error satisfy the error interface, which simplifies boundaries.
+// The technical message does not appear in it.
 func (e Error) Error() string {
 	if e.Field != "" {
 		return string(e.Code) + " (" + e.Field + "): " + e.Message

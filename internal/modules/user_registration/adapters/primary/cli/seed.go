@@ -8,55 +8,55 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/pkg/exit"
 )
 
-// Profils de peuplement connus.
+// Known seeding profiles.
 //
-// Une table close plutôt qu'une chaîne libre : un profil mal orthographié doit
-// REFUSER, jamais se rabattre sur le plus petit. Se rabattre créerait deux
-// comptes là où l'on en attendait mille, et le défaut ne se verrait qu'au moment
-// où un test de charge rendrait des chiffres flatteurs.
-func profils() map[string]int {
+// A closed table rather than a free string: a misspelled profile must REFUSE,
+// never fall back on the smallest one. Falling back would create two accounts
+// where a thousand were expected, and the defect would only show up the moment a
+// load test returned flattering numbers.
+func profiles() map[string]int {
 	return map[string]int{
-		// dev : de quoi cliquer dans une interface sans attendre.
+		// dev: enough to click through an interface without waiting.
 		"dev": 3,
-		// demo : de quoi montrer une liste paginée qui pagine vraiment.
+		// demo: enough to show a paginated list that really paginates.
 		"demo": 25,
 	}
 }
 
-// secretDeSeed est le mot de passe des comptes engendrés.
+// seedSecret is the password of the generated accounts.
 //
-// # Pourquoi une constante ici est acceptable, et seulement ici
+// # Why a constant is acceptable here, and only here
 //
-// Parce que `seed` REFUSE de s'exécuter hors développement et test — le garde
-// est dans le composition root, avec son test. Ces comptes n'existent donc que
-// sur des machines où ils ne protègent rien.
+// Because `seed` REFUSES to run outside development and test — the guard is in
+// the composition root, with its test. These accounts therefore only exist on
+// machines where they protect nothing.
 //
-// Ce serait inacceptable partout ailleurs : un secret par défaut dans un
-// artefact versionné est un secret déployé. C'est la raison pour laquelle
-// l'amorçage de `auth` ENGENDRE le sien (ADR 017 §6) — là, le compte survit à
-// l'environnement où il est né.
+// It would be unacceptable anywhere else: a default secret in a versioned
+// artefact is a deployed secret. That is the reason why the bootstrap of `auth`
+// GENERATES its own (ADR 017 §6) — there, the account outlives the environment
+// in which it was born.
 //
-//nolint:gosec // mot de passe de peuplement : `seed` REFUSE hors développement et test
-const secretDeSeed = "graine-de-developpement"
+//nolint:gosec // seeding password: `seed` REFUSES outside development and test
+const seedSecret = "graine-de-developpement"
 
-// Seed peuple le socle par les CAS D'USAGE, jamais par un `INSERT`.
+// Seed seeds the starter through the USE CASES, never through an `INSERT`.
 //
-// # Pourquoi le passage par les cas d'usage n'est pas négociable
+// # Why going through the use cases is not negotiable
 //
-// Un jeu de données fabriqué en SQL contourne les règles du domaine. Il produit
-// des comptes que le code n'aurait jamais laissé naître : mots de passe non
-// hachés, adresses non normalisées, statuts impossibles. Le jour où un test
-// s'appuie dessus, il valide un état que la production ne peut pas atteindre —
-// et il restera vert en cachant une vraie régression.
+// A data set fabricated in SQL bypasses the rules of the domain. It produces
+// accounts the code would never have let come into existence: unhashed
+// passwords, unnormalised addresses, impossible statuses. The day a test relies
+// on them, it validates a state production cannot reach — and it will stay green
+// while hiding a real regression.
 //
-// Le corollaire coûte : peupler par les cas d'usage est LENT, parce que chaque
-// compte paie un hachage Argon2id. C'est assumé — la lenteur est le prix de la
-// représentativité, et un profil `perf` qui exigerait mille comptes demanderait
-// un chemin distinct, pas un contournement de celui-ci.
+// The corollary has a cost: seeding through the use cases is SLOW, because every
+// account pays an Argon2id hash. That is accepted — slowness is the price of
+// representativeness, and a `perf` profile requiring a thousand accounts would
+// call for a distinct path, not for a bypass of this one.
 func (c Command) Seed(ctx context.Context, args []string) int {
 	fs := flag.NewFlagSet("seed", flag.ContinueOnError)
 	fs.SetOutput(c.Err)
-	profil := fs.String("profile", "dev", "profil de peuplement: dev, demo")
+	profile := fs.String("profile", "dev", "seeding profile: dev, demo")
 	fs.Usage = func() {
 		fmt.Fprintln(c.Err, "usage: hexa-cli seed --profile <dev|demo>")
 		fs.PrintDefaults()
@@ -66,31 +66,32 @@ func (c Command) Seed(ctx context.Context, args []string) int {
 		return exit.Usage
 	}
 
-	combien, connu := profils()[*profil]
-	if !connu {
-		fmt.Fprintf(c.Err, "erreur: profil inconnu %q — attendu dev ou demo\n", *profil)
+	count, known := profiles()[*profile]
+	if !known {
+		fmt.Fprintf(c.Err, "error: unknown profile %q — expected dev or demo\n", *profile)
 		return exit.Usage
 	}
 
-	return c.peupler(ctx, *profil, combien)
+	return c.populate(ctx, *profile, count)
 }
 
-// peupler crée les comptes du profil et rend le premier code d'échec.
+// populate creates the accounts of the profile and returns the first failure
+// code.
 //
-// # S'arrêter au premier échec, plutôt que continuer
+// # Stopping on the first failure, rather than carrying on
 //
-// Un peuplement à moitié fait est pire qu'un peuplement refusé : on ne sait pas
-// ce qui existe. S'arrêter net laisse un état incomplet mais CONNU — le compte
-// rendu dit combien ont été créés — là où continuer produirait des trous
-// silencieux au milieu du jeu de données.
-func (c Command) peupler(ctx context.Context, profil string, combien int) int {
-	for i := 1; i <= combien; i++ {
-		email := fmt.Sprintf("%s-%02d@example.test", profil, i)
-		if code := c.inscrire(ctx, email, secretDeSeed); code != exit.OK {
-			fmt.Fprintf(c.Err, "peuplement interrompu après %d compte(s) sur %d\n", i-1, combien)
+// A half-done seeding is worse than a refused one: one does not know what
+// exists. Stopping dead leaves an incomplete but KNOWN state — the report says
+// how many were created — where carrying on would produce silent holes in the
+// middle of the data set.
+func (c Command) populate(ctx context.Context, profile string, count int) int {
+	for i := 1; i <= count; i++ {
+		email := fmt.Sprintf("%s-%02d@example.test", profile, i)
+		if code := c.registerAccount(ctx, email, seedSecret); code != exit.OK {
+			fmt.Fprintf(c.Err, "seeding interrupted after %d account(s) out of %d\n", i-1, count)
 			return code
 		}
 	}
-	fmt.Fprintf(c.Err, "profil %s : %d compte(s) créé(s)\n", profil, combien)
+	fmt.Fprintf(c.Err, "profile %s: %d account(s) created\n", profile, count)
 	return exit.OK
 }

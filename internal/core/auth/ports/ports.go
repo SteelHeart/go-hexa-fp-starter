@@ -1,25 +1,25 @@
-// Package ports déclare les contrats de l'authentification.
+// Package ports declares the contracts of authentication.
 //
-// Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface. Un port est un type fonction — la plus petite interface possible,
-// donc rien à ségréguer (ADR 003).
+// This package contains ONLY type declarations: no struct, no function, no
+// interface. A port is a function type — the smallest possible interface, so
+// there is nothing to segregate (ADR 003).
 //
-// # Pourquoi `error` et non `Result[T, domain.Error]`
+// # Why `error` and not `Result[T, domain.Error]`
 //
-// `internal/core/**` utilise `error`, `internal/modules/**` utilise `Result` :
-// la frontière est nette et vérifiable. `auth` est le cas limite — il a une
-// taxonomie que les surfaces traduisent en 401, 403 et 422 — et elle passe par
-// des sentinelles énumérées, reconnaissables par `errors.Is` (ADR 017).
+// `internal/core/**` uses `error`, `internal/modules/**` uses `Result`: the
+// boundary is sharp and checkable. `auth` is the borderline case — it has a
+// taxonomy that surfaces translate into 401, 403 and 422 — and that taxonomy
+// goes through enumerated sentinels, recognisable by `errors.Is` (ADR 017).
 //
-// # Le protocole, en trois appels
+// # The protocol, in three calls
 //
-//	token, err := authenticate(ctx, subject, secret)   // 401 si ErrInvalidCredentials
-//	identity, err := verify(ctx, token)                // 401 si ErrTokenUnknown
-//	err := authorize(ctx, identity, permission)        // 403 si ErrForbidden
+//	token, err := authenticate(ctx, subject, secret)   // 401 if ErrInvalidCredentials
+//	identity, err := verify(ctx, token)                // 401 if ErrTokenUnknown
+//	err := authorize(ctx, identity, permission)        // 403 if ErrForbidden
 //
-// `verify` et `authorize` sont DEUX appels et non un seul, délibérément : le
-// jeton authentifie, il n'autorise pas. Les fusionner ramènerait les permissions
-// dans le jeton par la porte de derrière.
+// `verify` and `authorize` are TWO calls and not one, deliberately: the token
+// authenticates, it does not authorise. Merging them would bring permissions
+// back into the token through the back door.
 package ports
 
 import (
@@ -29,173 +29,174 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/auth/domain"
 )
 
-// ─── Ports primaires : ce que le monde extérieur peut demander ───────────────
+// ─── Primary ports: what the outside world may ask for ───────────────────────
 
-// Authenticate échange un secret contre une session.
+// Authenticate exchanges a secret for a session.
 //
-// Erreurs : `domain.ErrIncomplete` si la demande est mal formée,
-// `domain.ErrInvalidCredentials` sinon — et JAMAIS de distinction entre « sujet
-// inconnu » et « secret faux » : la différence dirait à un attaquant quels comptes
-// existent.
+// Errors: `domain.ErrIncomplete` if the request is malformed,
+// `domain.ErrInvalidCredentials` otherwise — and NEVER a distinction between
+// "unknown subject" and "wrong secret": the difference would tell an attacker
+// which accounts exist.
 type Authenticate = func(
 	ctx context.Context,
 	subject string,
 	secret string,
 ) (domain.Session, error)
 
-// Verify résout un jeton en identité.
+// Verify resolves a token into an identity.
 //
-// Erreurs : `domain.ErrTokenUnknown` pour un jeton inconnu, expiré OU révoqué —
-// les trois se confondent pour l'appelant, et c'est voulu.
+// Errors: `domain.ErrTokenUnknown` for a token that is unknown, expired OR
+// revoked — all three are conflated for the caller, and that is intended.
 type Verify = func(ctx context.Context, token domain.Token) (domain.Identity, error)
 
-// Authorize vérifie qu'une identité détient une permission.
+// Authorize checks that an identity holds a permission.
 //
-// # Le contrat qui porte toute l'ADR 017
+// # The contract that carries the whole of ADR 017
 //
-// L'implémentation interroge l'état PERSISTÉ à chaque appel. Elle ne lit pas de
-// revendication portée par un jeton, et ne met rien en cache sans que ce cache
-// soit un décorateur explicite et borné.
+// The implementation queries the PERSISTED state on every call. It does not
+// read a claim carried by a token, and caches nothing unless that cache is an
+// explicit and bounded decorator.
 //
-// Le paramètre est une `domain.Permission`, jamais un rôle : le compilateur
-// interdit donc `authorize(ctx, id, "admin")`.
+// The parameter is a `domain.Permission`, never a role: the compiler therefore
+// forbids `authorize(ctx, id, "admin")`.
 //
-// Erreurs : `domain.ErrForbidden` si la permission manque.
+// Errors: `domain.ErrForbidden` if the permission is missing.
 type Authorize = func(
 	ctx context.Context,
 	identity domain.IdentityID,
 	permission domain.Permission,
 ) error
 
-// Revoke invalide une session immédiatement.
+// Revoke invalidates a session immediately.
 //
-// Révoquer un jeton déjà inconnu n'est PAS une erreur : l'opération est
-// idempotente, parce qu'un client qui se déconnecte deux fois n'a rien fait de mal.
+// Revoking an already unknown token is NOT an error: the operation is
+// idempotent, because a client who signs out twice has done nothing wrong.
 type Revoke = func(ctx context.Context, token domain.Token) error
 
-// Register crée une identité et son secret.
+// Register creates an identity and its secret.
 //
-// Erreurs : `domain.ErrSubjectTaken` si le sujet existe déjà.
+// Errors: `domain.ErrSubjectTaken` if the subject already exists.
 type Register = func(ctx context.Context, subject, secret string) (domain.Identity, error)
 
-// DefineRole crée ou remplace un rôle et ses permissions.
+// DefineRole creates or replaces a role and its permissions.
 //
-// Sans ce port, aucune permission ne peut jamais être accordée : `Authorize`
-// refuserait tout, et le module serait inerte tout en ayant l'air de fonctionner.
+// Without this port, no permission can ever be granted: `Authorize` would
+// refuse everything, and the module would be inert while looking like it works.
 //
-// REMPLACE plutôt qu'ajoute : retirer une permission d'un rôle doit être aussi
-// simple que d'en ajouter une. Une API qui n'offrirait que l'ajout ferait écrire
-// le retrait à la main, donc mal.
+// REPLACES rather than adds: removing a permission from a role must be as
+// simple as adding one. An API that offered only addition would make removal be
+// written by hand, hence badly.
 type DefineRole = func(ctx context.Context, name string, permissions []string) error
 
-// AssignRoles remplace les rôles d'une identité.
+// AssignRoles replaces an identity's roles.
 //
-// Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+// Errors: `domain.ErrInvalidCredentials` if the identity is unknown.
 type AssignRoles = func(ctx context.Context, id domain.IdentityID, roles []string) error
 
-// Deactivate ferme un compte, IMMÉDIATEMENT.
+// Deactivate closes an account, IMMEDIATELY.
 //
-// C'est le geste qu'on fait quand on découvre qu'un compte est compromis, et
-// c'est donc le seul moment où la latence compte vraiment. L'identité cesse de
-// s'authentifier, ses jetons déjà émis cessent de valoir, et ses permissions
-// cessent d'être accordées — les trois au prochain appel, sans expiration.
+// This is the gesture you make when you discover an account is compromised, and
+// it is therefore the only moment where latency really matters. The identity
+// stops authenticating, its already issued tokens stop being worth anything,
+// and its permissions stop being granted — all three on the next call, without
+// waiting for an expiry.
 //
-// Idempotent : désactiver un compte déjà fermé n'est pas une erreur. Deux
-// administrateurs qui réagissent au même incident ne doivent pas s'annuler.
+// Idempotent: deactivating an already closed account is not an error. Two
+// administrators reacting to the same incident must not cancel each other out.
 //
-// Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+// Errors: `domain.ErrInvalidCredentials` if the identity is unknown.
 type Deactivate = func(ctx context.Context, id domain.IdentityID) error
 
-// Reactivate rouvre un compte fermé.
+// Reactivate reopens a closed account.
 //
-// Existe parce que la désactivation est parfois une erreur, et qu'un module qui
-// ne saurait que fermer ferait réparer cela à la main dans le magasin — donc mal,
-// et sans trace.
+// Exists because deactivation is sometimes a mistake, and a module that only
+// knew how to close would have that repaired by hand in the store — hence
+// badly, and without a trace.
 //
-// Erreurs : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+// Errors: `domain.ErrInvalidCredentials` if the identity is unknown.
 type Reactivate = func(ctx context.Context, id domain.IdentityID) error
 
-// ─── Ports secondaires : ce dont le cœur a besoin du monde ───────────────────
+// ─── Secondary ports: what the core needs from the world ─────────────────────
 
-// SaveIdentity persiste une identité et le condensé de son secret.
+// SaveIdentity persists an identity and the digest of its secret.
 //
-// Contrat d'erreur : `domain.ErrSubjectTaken` si le sujet existe déjà. C'est
-// l'implémentation qui tranche, pas le cas d'usage : entre une vérification et
-// une écriture il existe une fenêtre que deux demandes simultanées franchissent
-// toutes les deux.
+// Error contract: `domain.ErrSubjectTaken` if the subject already exists. It is
+// the implementation that decides, not the use case: between a check and a
+// write there is a window that two simultaneous requests both cross.
 type SaveIdentity = func(ctx context.Context, credential domain.Credential) error
 
-// FindBySubject retrouve une identité et son condensé.
+// FindBySubject looks up an identity and its digest.
 //
-// Contrat d'erreur : `domain.ErrInvalidCredentials` pour un sujet inconnu — et
-// non une erreur « introuvable ». Le cas d'usage doit être INCAPABLE de
-// distinguer « ce sujet n'existe pas » de « le secret est faux », sinon il
-// finirait par le dire au client.
+// Error contract: `domain.ErrInvalidCredentials` for an unknown subject — and
+// not a "not found" error. The use case must be UNABLE to tell "this subject
+// does not exist" from "the secret is wrong", otherwise it would end up saying
+// so to the client.
 type FindBySubject = func(ctx context.Context, subject domain.Subject) (domain.Credential, error)
 
-// FindIdentity retrouve une identité par son identifiant.
+// FindIdentity looks up an identity by its identifier.
 type FindIdentity = func(ctx context.Context, id domain.IdentityID) (domain.Identity, error)
 
-// SaveSession persiste une session émise.
+// SaveSession persists an issued session.
 type SaveSession = func(ctx context.Context, session domain.Session) error
 
-// FindSession retrouve une session par son jeton.
+// FindSession looks up a session by its token.
 //
-// Contrat d'erreur : `domain.ErrTokenUnknown`.
+// Error contract: `domain.ErrTokenUnknown`.
 type FindSession = func(ctx context.Context, token domain.Token) (domain.Session, error)
 
-// DeleteSession révoque une session. Idempotente.
+// DeleteSession revokes a session. Idempotent.
 type DeleteSession = func(ctx context.Context, token domain.Token) error
 
-// SaveRole persiste un rôle et ses permissions.
+// SaveRole persists a role and its permissions.
 type SaveRole = func(ctx context.Context, role domain.Role) error
 
-// BindRoles remplace les rôles d'une identité dans le magasin.
+// BindRoles replaces an identity's roles in the store.
 type BindRoles = func(ctx context.Context, id domain.IdentityID, roles []string) error
 
-// UpdateIdentity remplace l'identité retenue, sans toucher au condensé du secret.
+// UpdateIdentity replaces the stored identity, without touching the secret's
+// digest.
 //
-// Le condensé n'est PAS un paramètre, délibérément : une signature qui le
-// reprendrait obligerait chaque appelant à le transporter, donc à le lire, donc à
-// pouvoir le journaliser. Fermer un compte n'a aucune raison de faire circuler un
-// condensé.
+// The digest is NOT a parameter, deliberately: a signature that took it back
+// would force every caller to carry it, hence to read it, hence to be able to
+// log it. Closing an account has no reason to make a digest circulate.
 //
-// Contrat d'erreur : `domain.ErrInvalidCredentials` si l'identité est inconnue.
+// Error contract: `domain.ErrInvalidCredentials` if the identity is unknown.
 type UpdateIdentity = func(ctx context.Context, identity domain.Identity) error
 
-// Grants interroge l'état PERSISTÉ des permissions d'une identité.
+// Grants queries the PERSISTED state of an identity's permissions.
 //
-// Rend un booléen et non une erreur : « ne détient pas la permission » n'est pas
-// une panne, c'est une réponse. C'est le cas d'usage qui la traduit en
+// Returns a boolean and not an error: "does not hold the permission" is not an
+// outage, it is an answer. It is the use case that translates it into
 // `domain.ErrForbidden`.
 type Grants = func(ctx context.Context, id domain.IdentityID, permission domain.Permission) bool
 
-// HashSecret produit le condensé d'un secret.
+// HashSecret produces the digest of a secret.
 //
-// C'est un port PRÉCISÉMENT parce que le hachage est un effet coûteux et
-// paramétré : le domaine ne doit ni le choisir, ni le régler. L'implémentation
-// vient de `internal/infrastructure/security` (Argon2id).
+// It is a port PRECISELY because hashing is a costly and parameterised effect:
+// the domain must neither choose it, nor tune it. The implementation comes from
+// `internal/infrastructure/security` (Argon2id).
 type HashSecret = func(plain string) (string, error)
 
-// VerifySecret compare un secret à son condensé.
+// VerifySecret compares a secret against its digest.
 //
-// L'implémentation DOIT comparer en temps constant. Une comparaison qui s'arrête
-// au premier octet différent laisse mesurer combien de caractères sont corrects.
+// The implementation MUST compare in constant time. A comparison that stops at
+// the first differing byte lets one measure how many characters are correct.
 type VerifySecret = func(plain, encoded string) (bool, error)
 
-// ─── Ports d'effets purs : l'horloge et l'aléa ───────────────────────────────
+// ─── Pure effect ports: the clock and the randomness ─────────────────────────
 
-// Now retourne l'instant courant.
+// Now returns the current instant.
 //
-// Port pour que les tests soient déterministes : l'expiration d'une session se
-// vérifie en avançant une variable, pas en attendant.
+// A port so that tests are deterministic: a session's expiry is checked by
+// advancing a variable, not by waiting.
 type Now = func() time.Time
 
-// NewToken produit un jeton opaque.
+// NewToken produces an opaque token.
 //
-// L'implémentation DOIT tirer d'une source cryptographiquement sûre. Un jeton
-// prévisible est une authentification contournée, et `math/rand` en produit.
+// The implementation MUST draw from a cryptographically secure source. A
+// predictable token is a bypassed authentication, and `math/rand` produces
+// those.
 type NewToken = func() (domain.Token, error)
 
-// NewIdentityID produit un identifiant d'identité.
+// NewIdentityID produces an identity identifier.
 type NewIdentityID = func() domain.IdentityID

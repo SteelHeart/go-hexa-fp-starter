@@ -9,35 +9,35 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/modules/user_registration/domain"
 )
 
-// TestEventNeverCarriesThePasswordHash : l'événement porte le strict nécessaire.
+// TestEventNeverCarriesThePasswordHash: the event carries the strict minimum.
 //
-// Y mettre l'utilisateur entier exposerait le condensé de mot de passe dans
-// l'outbox — une table lue par des humains en incident, répliquée vers un courtier,
-// et souvent conservée bien plus longtemps que la donnée d'origine.
+// Putting the whole user in it would expose the password digest in the outbox —
+// a table read by humans during an incident, replicated towards a broker, and
+// often kept much longer than the original data.
 //
-// Un condensé Argon2id n'est pas un mot de passe, mais c'est un matériau
-// d'attaque hors ligne : il n'a rien à faire dans un message.
+// An Argon2id digest is not a password, but it is offline attack material: it
+// has no business being in a message.
 func TestEventNeverCarriesThePasswordHash(t *testing.T) {
 	t.Parallel()
 
-	const condense = "$argon2id$v=19$m=65536,t=3,p=2$c2VjcmV0$Y29uZGVuc2U"
+	const digest = "$argon2id$v=19$m=65536,t=3,p=2$c2VjcmV0$Y29uZGVuc2U"
 	user := domain.NewUser(
 		"user-42",
-		emailValide(t, "alice@example.com"),
-		domain.NewPasswordHash(condense),
+		validEmail(t, "alice@example.com"),
+		domain.NewPasswordHash(digest),
 		time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC),
 	)
 
 	event := domain.NewUserRegistered(user)
 	encoded, err := json.Marshal(event)
 	if err != nil {
-		t.Fatalf("sérialisation de l'événement: %v", err)
+		t.Fatalf("serialising the event: %v", err)
 	}
 
-	if strings.Contains(string(encoded), condense) {
-		t.Errorf("l'événement transporte le condensé de mot de passe: %s", encoded)
+	if strings.Contains(string(encoded), digest) {
+		t.Errorf("the event carries the password digest: %s", encoded)
 	}
 	if !strings.Contains(string(encoded), "user-42") {
-		t.Error("l'événement doit porter l'identifiant : sans lui, il est inexploitable")
+		t.Error("the event must carry the identifier: without it, it is unusable")
 	}
 }

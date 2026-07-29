@@ -1,24 +1,26 @@
-// Package file implémente la configuration dynamique depuis les valeurs
-// versionnées du dépôt.
+// Package file implements dynamic configuration from the versioned values of
+// the repository.
 //
-// Les valeurs viennent des `options` du module dans `config/modules.yaml`, et non
-// d'un fichier à part : le chargeur refuse toute clé inconnue dans `config/*.yaml`
-// (`KnownFields(true)`), donc un nouveau fichier casserait le démarrage sans
-// modifier le type `Config`. Les options, elles, sont volontairement non typées.
+// The values come from the `options` of the module in `config/modules.yaml`,
+// and not from a separate file: the loader refuses any unknown key in
+// `config/*.yaml` (`KnownFields(true)`), so a new file would break startup
+// without modifying the `Config` type. The options, for their part, are
+// deliberately untyped.
 //
-// # NON-GARANTIES — à lire avant de l'utiliser
+// # NON-GUARANTEES — to be read before using it
 //
-//   - **PAS modifiable à chaud.** C'est LA non-garantie du pilote, et elle
-//     contredit la raison d'être du module. Changer un drapeau exige un
-//     redéploiement. En développement, `config/local.yaml` — non versionné —
-//     surcharge n'importe quelle valeur par fusion, sans toucher au dépôt.
-//   - **`Set` refuse toujours** (`domain.ErrReadOnly`). Écrire dans un fichier
-//     versionné à l'exécution créerait une divergence entre le dépôt et ce qui
-//     tourne, que le prochain déploiement écraserait sans prévenir.
+//   - **NOT changeable at run time.** This is THE non-guarantee of the driver,
+//     and it contradicts the reason the module exists. Changing a flag requires
+//     a redeployment. In development, `config/local.yaml` — not versioned —
+//     overrides any value by merging, without touching the repository.
+//   - **`Set` always refuses** (`domain.ErrReadOnly`). Writing into a versioned
+//     file at run time would create a divergence between the repository and
+//     what is running, which the next deployment would overwrite without
+//     warning.
 //
-// Convient en développement, en test, et en production tant que les drapeaux
-// changent au rythme des déploiements. Dès qu'il faut éteindre une fonctionnalité
-// sans redéployer, passer au pilote `postgres`.
+// Suitable in development, in test, and in production as long as flags change
+// at the rhythm of deployments. As soon as a feature must be switched off
+// without redeploying, move to the `postgres` driver.
 package file
 
 import (
@@ -30,20 +32,18 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/dynconf/domain"
 )
 
-// Store est le magasin en lecture seule.
+// Store is the read-only store.
 //
-// Aucun verrou : la carte est construite une fois puis jamais modifiée. C'est
-// l'immuabilité qui rend le magasin utilisable depuis plusieurs goroutines, pas
-// un mutex.
+// No lock: the map is built once then never modified. It is immutability that
+// makes the store usable from several goroutines, not a mutex.
 type Store struct {
 	values map[string]string
 }
 
-// New construit le magasin depuis les options du pilote.
+// New builds the store from the options of the driver.
 //
-// Une valeur non scalaire refuse le démarrage : `flags: {a: {b: 1}}` est une faute
-// de frappe, pas une intention, et la laisser passer donnerait un drapeau
-// silencieusement inactif.
+// A non-scalar value refuses to start: `flags: {a: {b: 1}}` is a typo, not an
+// intention, and letting it through would give a silently inactive flag.
 func New(flags, settings map[string]any) (*Store, error) {
 	values := make(map[string]string, len(flags)+len(settings))
 	if err := fill(values, domain.KindFlag, "flags", flags); err != nil {
@@ -55,7 +55,7 @@ func New(flags, settings map[string]any) (*Store, error) {
 	return &Store{values: values}, nil
 }
 
-// fill convertit un groupe d'options en valeurs textuelles qualifiées.
+// fill converts a group of options into qualified textual values.
 func fill(dst map[string]string, kind domain.Kind, label string, src map[string]any) error {
 	for key, raw := range src {
 		text, err := scalar(raw)
@@ -67,13 +67,14 @@ func fill(dst map[string]string, kind domain.Kind, label string, src map[string]
 	return nil
 }
 
-// errNotScalar refuse une valeur qui n'est pas une valeur.
-var errNotScalar = errors.New("valeur non scalaire")
+// errNotScalar refuses a value that is not a value.
+var errNotScalar = errors.New("non-scalar value")
 
-// scalar rend la forme textuelle d'une option.
+// scalar returns the textual form of an option.
 //
-// Tout passe par du texte : c'est ce qui permet au pilote `postgres`, qui lit une
-// colonne `text`, d'être substituable à celui-ci sans que l'appelant le sache.
+// Everything goes through text: that is what allows the `postgres` driver,
+// which reads a `text` column, to be substitutable for this one without the
+// caller knowing.
 func scalar(raw any) (string, error) {
 	switch value := raw.(type) {
 	case string:
@@ -91,7 +92,7 @@ func scalar(raw any) (string, error) {
 	}
 }
 
-// Flag implémente ports.IsEnabled.
+// Flag implements ports.IsEnabled.
 func (s *Store) Flag(_ context.Context, key domain.FlagKey) bool {
 	raw, found := s.values[domain.Qualify(domain.KindFlag, string(key))]
 	if !found {
@@ -100,16 +101,16 @@ func (s *Store) Flag(_ context.Context, key domain.FlagKey) bool {
 	return domain.ParseFlag(raw)
 }
 
-// Setting implémente ports.GetSetting.
+// Setting implements ports.GetSetting.
 func (s *Store) Setting(_ context.Context, key domain.SettingKey) domain.Setting {
 	raw, found := s.values[domain.Qualify(domain.KindSetting, string(key))]
 	return domain.Setting{Value: raw, Found: found}
 }
 
-// Set implémente ports.Set en refusant.
+// Set implements ports.Set by refusing.
 //
-// Vérifie tout de même la validité de la modification : un appelant qui corrigera
-// son pilote doit d'abord apprendre que sa modification était mal formée.
+// It still checks the validity of the change: a caller who is going to fix
+// their driver must first learn that their change was malformed.
 func (s *Store) Set(_ context.Context, change domain.Change) error {
 	if !change.IsValid() {
 		return fmt.Errorf("%w: %s", domain.ErrInvalidChange, change.Describe())
@@ -117,6 +118,6 @@ func (s *Store) Set(_ context.Context, change domain.Change) error {
 	return fmt.Errorf("%w: %s", domain.ErrReadOnly, change.Describe())
 }
 
-// Invalidate implémente ports.Invalidate. Sans effet : rien n'est mis en cache,
-// puisque tout est déjà en mémoire et immuable.
+// Invalidate implements ports.Invalidate. Without effect: nothing is cached,
+// since everything is already in memory and immutable.
 func (s *Store) Invalidate() {}

@@ -9,44 +9,44 @@ import (
 	"github.com/SteelHeart/go-hexa-fp-starter/internal/core/scheduler/domain"
 )
 
-// TestElectionFailureNeverExecutes : dans le doute, on n'exécute pas.
+// TestElectionFailureNeverExecutes: when in doubt, do not run.
 //
-// Une base injoignable ne dit pas « personne ne tient la tâche », elle ne dit rien.
-// Exécuter quand même reviendrait à supposer qu'on est seul — supposition fausse
-// dès qu'il y a deux répliques, et qui produit exactement la double exécution que
-// le module existe pour empêcher.
+// An unreachable database does not say "nobody holds the task", it says
+// nothing. Running anyway would amount to assuming one is alone — a false
+// assumption as soon as there are two replicas, and one that produces exactly
+// the double execution the module exists to prevent.
 //
-// Le repli va donc dans le sens sûr : ne pas exécuter est bénin, exécuter deux fois
-// ne l'est pas.
+// The fallback therefore goes in the safe direction: not running is benign,
+// running twice is not.
 func TestElectionFailureNeverExecutes(t *testing.T) {
 	t.Parallel()
 
-	panne := errors.New("base injoignable")
-	acquire := func(context.Context, domain.TaskName) (bool, error) { return false, panne }
+	outage := errors.New("database unreachable")
+	acquire := func(context.Context, domain.TaskName) (bool, error) { return false, outage }
 	release := func(context.Context, domain.TaskName) error {
-		t.Error("Release ne doit pas être appelée quand l'élection est en panne")
+		t.Error("Release must not be called when the election is down")
 		return nil
 	}
 
 	var executed bool
-	log := &journal{}
+	log := &reportLog{}
 	runner := newRunner(t, acquire, release, log)
 	runner.RunOnce(context.Background(), application.Scheduled{
-		Task: task("facturation"),
+		Task: task("billing"),
 		Job:  func(context.Context) error { executed = true; return nil },
 	})
 
 	if executed {
-		t.Error("une élection en panne ne doit PAS mener à une exécution")
+		t.Error("an election that is down must NOT lead to an execution")
 	}
 	outcome, found := log.last()
 	if !found {
-		t.Fatal("une panne d'élection doit être signalée, jamais avalée")
+		t.Fatal("an election outage must be reported, never swallowed")
 	}
 	if outcome.Event != domain.EventElectionFailed {
-		t.Errorf("événement = %q, attendu %q", outcome.Event, domain.EventElectionFailed)
+		t.Errorf("event = %q, want %q", outcome.Event, domain.EventElectionFailed)
 	}
-	if !errors.Is(outcome.Err, panne) {
-		t.Errorf("cause = %v, attendu la panne d'origine", outcome.Err)
+	if !errors.Is(outcome.Err, outage) {
+		t.Errorf("cause = %v, want the original outage", outcome.Err)
 	}
 }
