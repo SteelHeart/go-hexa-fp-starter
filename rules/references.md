@@ -92,6 +92,14 @@ accentué, un identifiant puisant dans une liste close de mots français, un com
 français écrit comme le français l'est. La liste de mots **se complète à chaque faute trouvée en
 revue** : c'est le mécanisme prévu, pas un aveu.
 
+**Il ne regarde que les fichiers `.go`.** L'ADR 018 énumère ce qui doit être en anglais et ne
+mentionne jamais les scripts shell : `tools/*.sh` s'adresse à l'équipe, exactement comme `rules/`,
+et n'est jamais publié avec le code. `tools/covergate`, écrit en Go, reste dans le champ.
+
+**Il vide les chaînes littérales** avant de chercher un identifiant. Ce qui vit entre guillemets est
+une DONNÉE — un nom de document, un message destiné à l'utilisateur — et une donnée peut
+légitimement être en français.
+
 Il ne regarde que les lignes ajoutées parce que la traduction se livre en **tranches** : un garde
 rouge jusqu'à la dernière serait ignoré, donc désarmé. Il empêche la dette de croître pendant qu'on
 la résorbe.

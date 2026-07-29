@@ -29,9 +29,22 @@
 # il empêche la dette de croître pendant qu'on la résorbe.
 set -eu
 
-# Les zones de CODE. `tools/` en fait partie : l'outillage tient aux mêmes
-# limites de forme que le reste (règle arch-go sur `tools/**`).
+# Les zones de CODE, et les fichiers **Go** seulement.
+#
+# ⚠️ Le `.go` n'est pas un détail de commodité. L'ADR 018 énumère ce qui doit
+# être en anglais — identifiants Go, godoc, messages d'erreur internes, contenu
+# des tests — et ne mentionne **jamais** les scripts shell. Ce garde a d'abord
+# balayé tout `tools/`, et il a immédiatement accusé ses propres frères : les
+# gardes sont commentés en français, comme le règlement qu'ils font respecter.
+#
+# La ligne de partage de l'ADR est « ce qui est publié AVEC le code » : le godoc
+# le sera, un commentaire de `verifie-inertie.sh` ne le sera jamais. Ces scripts
+# s'adressent à l'équipe, exactement comme `rules/`.
+#
+# `tools/covergate`, écrit en Go, reste donc dans le champ — c'est du code
+# produit par le dépôt, pas de la prose d'outillage.
 ZONES='internal cmd tools'
+EXTENSIONS='*.go'
 
 # Marques diacritiques — écrites par leurs octets UTF-8, jamais en clair.
 #
@@ -86,7 +99,11 @@ lignes_ajoutees() {
     base=$1
     head=$2
 
+    # Le pathspec combine les zones et l'extension : `internal/**/*.go`, etc.
     set --
+    for zone in $ZONES; do
+        set -- "$@" ":(glob)$zone/**/$EXTENSIONS"
+    done
     while IFS=' ' read -r chemin _; do
         [ -n "$chemin" ] || continue
         set -- "$@" ":(exclude)$chemin"
@@ -96,8 +113,7 @@ FIN
 
     # Le diff est capturé AVANT d'être filtré : dans un tube, l'échec de `git`
     # serait masqué par le succès du dernier `grep`.
-    # shellcheck disable=SC2086 # ZONES est une liste de chemins, l'éclatement est voulu
-    if ! diff_brut=$(git diff "$base" "$head" -- $ZONES "$@"); then
+    if ! diff_brut=$(git diff "$base" "$head" -- "$@"); then
         echo "  git diff a échoué sur '$base'..'$head' — le garde n'a rien pu lire" >&2
         return 1
     fi
@@ -105,13 +121,24 @@ FIN
     printf '%s\n' "$diff_brut" | grep -E '^\+' | grep -Ev '^\+\+\+' || true
 }
 
-# declarations ne garde que les lignes qui DÉCLARENT un identifiant Go.
+# declarations ne garde que les lignes qui DÉCLARENT un identifiant Go, et vide
+# les chaînes littérales qu'elles contiennent.
 #
-# Un identifiant se déclare, il ne s'invente pas au milieu d'une expression :
-# ne regarder que les déclarations évite d'accuser l'appel d'une fonction d'une
+# Un identifiant se déclare, il ne s'invente pas au milieu d'une expression : ne
+# regarder que les déclarations évite d'accuser l'appel d'une fonction d'une
 # dépendance, et rend le garde silencieux sur tout ce qui n'est pas à nous.
+#
+# Le vidage n'est pas cosmétique. Sans lui, la ligne
+#
+#	if guard := read(t, filepath.Join(dir, "AMORCAGE.md")); ... {
+#
+# se faisait accuser pour le mot français d'un CHEMIN DE FICHIER. Un identifiant
+# ne vit jamais entre guillemets ; ce qui s'y trouve est une donnée, et une
+# donnée peut légitimement être en français — un nom de document, un message
+# destiné à l'utilisateur (ADR 018, hors champ).
 declarations() {
-    grep -E '^\+[[:space:]]*(func|type|var|const)[[:space:]]|:=' || true
+    grep -E '^\+[[:space:]]*(func|type|var|const)[[:space:]]|:=' \
+        | sed -e 's/"[^"]*"/""/g' -e "s/\`[^\`]*\`/\`\`/g" || true
 }
 
 commentaires() {
