@@ -10,40 +10,40 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestAnIncompleteMountIsRefused : un pilote inconnu et une dépendance absente
-// refusent la construction, chacun en se nommant.
+// TestAnIncompleteMountIsRefused: an unknown driver and a missing dependency
+// both refuse the construction, each one naming itself.
 //
-// Deny par défaut. Une faute de frappe dans un pilote ne se résout jamais en
-// « le plus proche » ; et une dépendance oubliée doit échouer au MONTAGE, pas à
-// la première requête réelle — c'est-à-dire en production, avec une trace de
-// pointeur nil qui ne dit pas laquelle manquait.
+// Deny by default. A typo in a driver name is never resolved into "the closest
+// one"; and a forgotten dependency must fail at MOUNT time, not on the first
+// real request — that is, in production, with a nil pointer stack trace that
+// does not say which one was missing.
 func TestAnIncompleteMountIsRefused(t *testing.T) {
 	t.Parallel()
 
-	completes := {{.Package}}.Deps{
+	complete := {{.Package}}.Deps{
 		GenerateID: func() domain.RecordID { return "id-1" },
 		Now:        func() time.Time { return time.Unix(0, 0).UTC() },
 	}
 
-	if _, err := {{.Package}}.New("cassandre", completes); err == nil {
-		t.Error("un pilote inconnu devait refuser le montage")
+	if _, err := {{.Package}}.New("cassandre", complete); err == nil {
+		t.Error("an unknown driver should have refused the mount")
 	}
 
-	if _, err := {{.Package}}.New("", {{.Package}}.Deps{Now: completes.Now}); !errors.Is(err, {{.Package}}.ErrMissingDependency) {
-		t.Errorf("une dépendance absente devait être refusée, obtenu: %v", err)
+	if _, err := {{.Package}}.New("", {{.Package}}.Deps{Now: complete.Now}); !errors.Is(err, {{.Package}}.ErrMissingDependency) {
+		t.Errorf("a missing dependency should have been refused, got: %v", err)
 	}
 
-	// Le module désactivé, lui, se monte TOUJOURS et refuse à l'appel : c'est ce
-	// qui permet à une surface d'exister et de répondre clairement, plutôt que de
-	// faire échouer le démarrage entier pour un module que personne n'a activé.
+	// The disabled module, for its part, ALWAYS mounts and refuses when called:
+	// that is what lets a surface exist and answer clearly, rather than failing
+	// the whole start-up for a module nobody enabled.
 	_, err, ok := {{.Package}}.Disabled().Create(context.Background(), "ABC-123").Get()
 	if ok {
-		t.Fatal("un module désactivé devait refuser")
+		t.Fatal("a disabled module should have refused")
 	}
 	if err.Code != domain.CodeUnavailable {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeUnavailable)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeUnavailable)
 	}
 	if !errors.Is(err.Cause(), {{.Package}}.ErrDisabled) {
-		t.Error("le refus doit nommer sa cause, sinon l'exploitant cherche une panne")
+		t.Error("the refusal must name its cause, otherwise the operator hunts for an outage")
 	}
 }

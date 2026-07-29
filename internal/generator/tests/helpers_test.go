@@ -1,16 +1,15 @@
-// Package tests contient les tests en BOÎTE NOIRE du générateur : ils
-// n'utilisent que son API publique, exactement comme `cmd/hexa`.
+// Package tests holds the BLACK BOX tests of the generator: they only use its
+// public API, exactly like `cmd/hexa` does.
 //
-// # Pourquoi ces tests existaient ailleurs, et mal
+// # Why these tests used to live elsewhere, and badly
 //
-// Ils vivaient à la racine de `cmd/hexa`, en `package main`. C'était le seul
-// emplacement possible — Go interdit d'importer un paquet `main` — mais ce
-// n'était ni la boîte noire ni `internal_test.go`, les deux seuls que
-// `rules/tests.md` prévoit. Sortir la logique dans `internal/generator` a rendu
-// cet emplacement-ci possible (#96).
+// They lived at the root of `cmd/hexa`, in `package main`. That was the only
+// possible location — Go forbids importing a `main` package — but it was neither
+// the black box nor `internal_test.go`, the only two `rules/tests.md` provides
+// for. Moving the logic into `internal/generator` made this location possible
+// (#96).
 //
-// Un fichier par test, nommé d'après lui, aides partagées ici et nulle part
-// ailleurs.
+// One file per test, named after it, shared helpers here and nowhere else.
 package tests
 
 import (
@@ -19,18 +18,18 @@ import (
 	"testing"
 )
 
-// archGoWithOneRule est le contenu minimal qu'attend `PlanFeature`.
+// archGoWithOneRule is the minimal content `PlanFeature` expects.
 //
-// Il porte des commentaires DE PART ET D'AUTRE du point d'insertion : c'est ce
-// qui permet de vérifier que l'insertion ne les efface pas.
+// It carries comments ON BOTH SIDES of the insertion point: that is what allows
+// checking the insertion does not wipe them.
 const archGoWithOneRule = `dependenciesRules:
-  # Un commentaire qui doit SURVIVRE à l'insertion.
+  # A comment that must SURVIVE the insertion.
   - package: "**.internal.modules.user_registration.**"
     shouldNotDependsOn:
       internal:
         - "**.internal.modules.!(user_registration).**"
 
-  # Un second commentaire, après le point d'ancrage.
+  # A second comment, after the anchor point.
   - package: "**.internal.core.**"
     shouldNotDependsOn:
       internal:

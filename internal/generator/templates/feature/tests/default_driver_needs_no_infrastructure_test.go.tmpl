@@ -1,8 +1,8 @@
-// Package tests éprouve le module {{.Dir}} en BOÎTE NOIRE, par sa composition
-// root, exactement comme le fera le composition root du binaire.
+// Package tests exercises the {{.Dir}} module as a BLACK BOX, through its
+// composition root, exactly like the composition root of the binary will.
 //
-// Ces tests sont le dernier filet : ils vérifient ce qu'aucun test de domaine ni
-// de cas d'usage ne peut voir, à savoir que le MONTAGE lui-même est correct.
+// These tests are the last net: they verify what no domain test and no use case
+// test can see, namely that the MOUNTING itself is correct.
 package tests
 
 import (
@@ -14,13 +14,13 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestDefaultDriverNeedsNoInfrastructure : le module se monte et fonctionne sans
-// base, sans cache, sans conteneur.
+// TestDefaultDriverNeedsNoInfrastructure: the module mounts and works with no
+// database, no cache, no container.
 //
-// C'est la promesse centrale du socle, et elle ne vaut que si elle est vérifiée
-// à CHAQUE module : il suffit d'un module dont le pilote par défaut exigerait
-// PostgreSQL pour que `hexa new` puis `go run` cesse de démarrer — et cela se
-// découvrirait chez l'utilisateur, pas ici.
+// This is the central promise of the starter, and it only holds if it is
+// verified on EVERY module: one single module whose default driver required
+// PostgreSQL is enough for `hexa new` then `go run` to stop starting — and that
+// would be discovered at the user's, not here.
 func TestDefaultDriverNeedsNoInfrastructure(t *testing.T) {
 	t.Parallel()
 
@@ -29,20 +29,20 @@ func TestDefaultDriverNeedsNoInfrastructure(t *testing.T) {
 		Now:        func() time.Time { return time.Unix(0, 0).UTC() },
 	})
 	if err != nil {
-		t.Fatalf("le pilote par défaut doit se monter sans infrastructure: %v", err)
+		t.Fatalf("the default driver must mount with no infrastructure: %v", err)
 	}
 
-	record, echec, ok := module.Create(context.Background(), "abc-123").Get()
+	record, failure, ok := module.Create(context.Background(), "abc-123").Get()
 	if !ok {
-		t.Fatalf("création refusée: %v", echec)
+		t.Fatalf("creation refused: %v", failure)
 	}
 	if record.Reference.String() != "ABC-123" {
-		t.Errorf("référence = %q, attendu la forme normalisée", record.Reference)
+		t.Errorf("reference = %q, want the normalised form", record.Reference)
 	}
 
-	// Le second appel sur la même référence doit être refusé par le PILOTE :
-	// c'est lui qui détient le verrou, donc lui seul peut trancher.
+	// The second call on the same reference must be refused by the DRIVER: it
+	// is the one holding the lock, so it alone can settle it.
 	if _, _, ok := module.Create(context.Background(), "ABC-123").Get(); ok {
-		t.Error("un doublon de référence devait être refusé")
+		t.Error("a duplicate reference should have been refused")
 	}
 }

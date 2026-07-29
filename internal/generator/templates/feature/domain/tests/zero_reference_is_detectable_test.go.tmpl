@@ -6,24 +6,24 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestZeroReferenceIsDetectable : la valeur zéro se reconnaît.
+// TestZeroReferenceIsDetectable: the zero value is recognisable.
 //
-// Go ne permet pas d'interdire `var r domain.Reference`. La seule protection est
-// que cet état soit DÉTECTABLE, sinon un oubli de construction se propage
-// jusqu'au stockage sans jamais se signaler — et l'enregistrement fautif est
-// écrit avant que quiconque s'en aperçoive.
+// Go offers no way to forbid `var r domain.Reference`. The only protection is
+// for that state to be DETECTABLE, otherwise a forgotten construction
+// propagates all the way to storage without ever signalling itself — and the
+// faulty record is written before anybody notices.
 func TestZeroReferenceIsDetectable(t *testing.T) {
 	t.Parallel()
 
 	var zero domain.Reference
 	if !zero.IsZero() {
-		t.Error("la valeur zéro doit se reconnaître")
+		t.Error("the zero value must be recognisable")
 	}
 	if zero.String() != "" {
-		t.Errorf("String() = %q, attendu la chaîne vide", zero.String())
+		t.Errorf("String() = %q, want the empty string", zero.String())
 	}
 
-	if referenceValide(t, "ABC-123").IsZero() {
-		t.Error("une référence construite n'est pas la valeur zéro")
+	if validReference(t, "ABC-123").IsZero() {
+		t.Error("a constructed reference is not the zero value")
 	}
 }

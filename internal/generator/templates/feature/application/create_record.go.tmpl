@@ -1,8 +1,8 @@
-// Package application compose les cas d'usage de {{.Dir}}.
+// Package application composes the use cases of {{.Dir}}.
 //
-// Il ne journalise pas et ne lit pas l'horloge : il rend compte par un port et
-// reçoit son instant. C'est ce qui le garde testable sans analyser de journaux,
-// et déterministe sans attendre.
+// It does not log and it does not read the clock: it reports through a port and
+// receives its instant. That is what keeps it testable without analysing logs,
+// and deterministic without waiting.
 package application
 
 import (
@@ -13,11 +13,11 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// Deps porte les ports secondaires du cas d'usage.
+// Deps carries the secondary ports of the use case.
 //
-// Un type plutôt que quatre paramètres : au-delà de deux, des paramètres de même
-// nature s'inversent silencieusement — et la règle `arch-go` maxParameters le
-// refuserait de toute façon.
+// A type rather than four parameters: beyond two, parameters of the same nature
+// get swapped silently — and the `arch-go` maxParameters rule would refuse it
+// anyway.
 type Deps struct {
 	ReferenceIsTaken ports.ReferenceIsTaken
 	SaveRecord       ports.SaveRecord
@@ -25,15 +25,15 @@ type Deps struct {
 	Now              ports.Now
 }
 
-// NewCreateRecord compose le cas d'usage de création.
+// NewCreateRecord composes the creation use case.
 //
-// L'ORDRE des étapes est la décision, et il se lit dans le code : valider, puis
-// vérifier l'unicité, puis seulement écrire. Une inversion ferait écrire avant
-// de valider — c'est-à-dire persister une saisie fautive.
+// The ORDER of the steps is the decision, and it reads straight from the code:
+// validate, then check uniqueness, then and only then write. An inversion would
+// write before validating — that is, persist a faulty input.
 //
-// Le pipeline court-circuite : `FlatMap` n'appelle l'étape suivante que sur un
-// `Ok`. Aucun port n'est donc touché quand l'entrée est invalide, et c'est
-// vérifié par un test plutôt que supposé.
+// The pipeline short circuits: `FlatMap` only calls the next step on an `Ok`.
+// No port is therefore touched when the input is invalid, and that is verified
+// by a test rather than assumed.
 func NewCreateRecord(deps Deps) ports.CreateRecord {
 	return func(ctx context.Context, rawReference string) result.Result[domain.Record, domain.Error] {
 		return result.FlatMap(
@@ -53,19 +53,19 @@ func NewCreateRecord(deps Deps) ports.CreateRecord {
 	}
 }
 
-// build fabrique l'agrégat à partir des ports d'effets purs.
+// build makes the aggregate out of the pure effect ports.
 //
-// Isolée pour que `NewCreateRecord` reste sous le seuil de lignes d'`arch-go`,
-// et parce qu'elle nomme le seul endroit du module où l'identifiant et l'instant
-// entrent dans le domaine.
+// Isolated so that `NewCreateRecord` stays under the `arch-go` line threshold,
+// and because it names the single place in the module where the identifier and
+// the instant enter the domain.
 func (d Deps) build(reference domain.Reference) domain.Record {
 	return domain.NewRecord(d.GenerateID(), reference, d.Now())
 }
 
-// referenceTaken nomme le refus d'unicité.
+// referenceTaken names the uniqueness refusal.
 //
-// Le champ est renseigné : une surface HTTP doit pouvoir dire QUEL champ est en
-// cause, sinon l'utilisateur reçoit « conflit » et devine.
+// The field is filled in: an HTTP surface must be able to say WHICH field is at
+// fault, otherwise the user receives "conflict" and has to guess.
 func referenceTaken() domain.Error {
 	return domain.NewError(
 		domain.CodeReferenceTaken,

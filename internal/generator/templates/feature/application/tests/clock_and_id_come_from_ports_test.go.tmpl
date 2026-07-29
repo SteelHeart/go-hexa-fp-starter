@@ -8,30 +8,30 @@ import (
 	"{{.Module}}/internal/modules/{{.Dir}}/domain"
 )
 
-// TestClockAndIDComeFromPorts : l'instant et l'identifiant viennent des ports,
-// jamais du paquet `time` ni d'un générateur caché.
+// TestClockAndIDComeFromPorts: the instant and the identifier come from the
+// ports, never from the `time` package nor from a hidden generator.
 //
-// C'est ce qui rend le cas d'usage déterministe : le test fixe les deux et
-// compare des valeurs exactes, sans tolérance ni `time.Since`. Un test qui doit
-// tolérer une marge est un test qui échouera un jour sur une machine chargée.
+// That is what makes the use case deterministic: the test fixes both and
+// compares exact values, with no tolerance and no `time.Since`. A test that has
+// to tolerate a margin is a test that will fail one day on a loaded machine.
 //
-// Et c'est la règle d'or du socle rendue vérifiable : `application/` ne lit pas
-// l'horloge.
+// And it is the golden rule of the starter made verifiable: `application/` does
+// not read the clock.
 func TestClockAndIDComeFromPorts(t *testing.T) {
 	t.Parallel()
 
-	record := succes(t, application.NewCreateRecord(depsQuiPassent())(context.Background(), "abc-123"))
+	record := successOf(t, application.NewCreateRecord(passingDeps())(context.Background(), "abc-123"))
 
-	if record.ID != domain.RecordID("id-fixe") {
-		t.Errorf("ID = %q, attendu celui rendu par le port", record.ID)
+	if record.ID != domain.RecordID("fixed-id") {
+		t.Errorf("ID = %q, want the one returned by the port", record.ID)
 	}
-	if !record.CreatedAt.Equal(instantFixe) {
-		t.Errorf("CreatedAt = %v, attendu l'instant injecté %v", record.CreatedAt, instantFixe)
+	if !record.CreatedAt.Equal(fixedInstant) {
+		t.Errorf("CreatedAt = %v, want the injected instant %v", record.CreatedAt, fixedInstant)
 	}
 	if record.Reference.String() != "ABC-123" {
-		t.Errorf("la référence doit être normalisée par le domaine, obtenu %q", record.Reference)
+		t.Errorf("the reference must be normalised by the domain, got %q", record.Reference)
 	}
 	if record.Status != domain.StatusPending {
-		t.Errorf("status = %q, attendu %q", record.Status, domain.StatusPending)
+		t.Errorf("status = %q, want %q", record.Status, domain.StatusPending)
 	}
 }

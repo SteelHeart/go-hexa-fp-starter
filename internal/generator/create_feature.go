@@ -14,22 +14,22 @@ import (
 	"text/template"
 )
 
-// featureTemplates porte l'anatomie d'un module métier.
+// featureTemplates carries the anatomy of a business module.
 //
-// Embarquée plutôt que lue sur le disque : le binaire `hexa` doit fonctionner
-// depuis n'importe où, y compris installé hors du dépôt.
+// Embedded rather than read from disk: the `hexa` binary must work from
+// anywhere, including installed outside the repository.
 //
-// Les fichiers portent le suffixe `.tmpl` pour une raison mécanique : nommés
-// `.go`, ils seraient compilés avec le reste du paquet, et un gabarit ne compile
-// pas — il contient `{{.Module}}`.
+// The files carry the `.tmpl` suffix for a mechanical reason: named `.go`, they
+// would be compiled along with the rest of the package, and a template does not
+// compile — it holds `{{.Module}}`.
 //
 //go:embed all:templates/feature
 var featureTemplates embed.FS
 
-// featureTemplateRoot est le préfixe à retirer des chemins embarqués.
+// featureTemplateRoot is the prefix to strip from the embedded paths.
 const featureTemplateRoot = "templates/feature"
 
-// CreateFeature rend le gabarit, durcit l'architecture, puis ÉPROUVE.
+// CreateFeature renders the template, hardens the architecture, then EXERCISES.
 func CreateFeature(ctx context.Context, p FeaturePlan) error {
 	if err := RenderFeature(p); err != nil {
 		return err
@@ -40,7 +40,7 @@ func CreateFeature(ctx context.Context, p FeaturePlan) error {
 	return proveFeature(ctx, p)
 }
 
-// RenderFeature écrit l'arborescence du module.
+// RenderFeature writes the module's tree.
 func RenderFeature(p FeaturePlan) error {
 	walk := fs.WalkDir(featureTemplates, featureTemplateRoot,
 		func(path string, entry fs.DirEntry, err error) error {
@@ -52,55 +52,54 @@ func RenderFeature(p FeaturePlan) error {
 			return renderOne(path, target, p)
 		})
 	if walk != nil {
-		return fmt.Errorf("rendu du gabarit de module: %w", walk)
+		return fmt.Errorf("rendering the module template: %w", walk)
 	}
 	return nil
 }
 
-// renderOne écrit un fichier du gabarit, formaté.
+// renderOne writes one file of the template, formatted.
 func renderOne(path, target string, p FeaturePlan) error {
 	rendered, err := render(path, p)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-		return fmt.Errorf("création de %s: %w", filepath.Dir(target), err)
+		return fmt.Errorf("creating %s: %w", filepath.Dir(target), err)
 	}
 	if err := os.WriteFile(target, rendered, 0o600); err != nil {
-		return fmt.Errorf("écriture de %s: %w", target, err)
+		return fmt.Errorf("writing %s: %w", target, err)
 	}
 	return nil
 }
 
-// render applique le gabarit, puis FORMATE le résultat s'il est en Go.
+// render applies the template, then FORMATS the result if it is Go.
 //
-// # Pourquoi le formatage est ici et non dans les gabarits
+// # Why formatting lives here rather than in the templates
 //
-// Un gabarit ne peut pas être `gofmt`-propre par construction : la largeur des
-// identifiants change avec le nom du module, donc tout alignement écrit à la main
-// est faux pour tous les noms sauf un. Mesuré — la première version produisait
-// trois fichiers que `go fmt` réécrivait, et l'étape `fmt` de la barrière du
-// projet généré les signalait.
+// A template cannot be `gofmt`-clean by construction: identifier widths change
+// with the module name, so any hand-written alignment is wrong for every name
+// but one. Measured — the first version produced three files that `go fmt`
+// rewrote, and the `fmt` step of the generated project's barrier flagged them.
 //
-// `format.Source` supprime la classe entière : aucun futur remaniement d'un
-// gabarit ne peut plus produire du code mal formaté. Et un gabarit devenu
-// syntaxiquement faux ne s'écrit plus en silence — il refuse ici, avec sa
-// position, au lieu d'échouer plus tard sur un `go build` du projet.
+// `format.Source` removes the entire class: no future reshuffle of a template
+// can produce badly formatted code any more. And a template turned
+// syntactically wrong no longer writes itself silently — it refuses here, with
+// its position, instead of failing later on a `go build` of the project.
 func render(path string, p FeaturePlan) ([]byte, error) {
 	raw, err := fs.ReadFile(featureTemplates, path)
 	if err != nil {
-		return nil, fmt.Errorf("lecture du gabarit %s: %w", path, err)
+		return nil, fmt.Errorf("reading template %s: %w", path, err)
 	}
-	// `missingkey=error` : un gabarit qui référencerait une clé absente écrirait
-	// `<no value>` dans du code Go. Mieux vaut refuser bruyamment.
+	// `missingkey=error`: a template referencing a missing key would write
+	// `<no value>` into Go code. Better to refuse loudly.
 	model, err := template.New(path).Option("missingkey=error").Parse(string(raw))
 	if err != nil {
-		return nil, fmt.Errorf("gabarit %s illisible: %w", path, err)
+		return nil, fmt.Errorf("template %s is unreadable: %w", path, err)
 	}
 
 	var buffer bytes.Buffer
 	if rendered := model.Execute(&buffer, p); rendered != nil {
-		return nil, fmt.Errorf("rendu de %s: %w", path, rendered)
+		return nil, fmt.Errorf("rendering %s: %w", path, rendered)
 	}
 	if !strings.HasSuffix(path, ".go.tmpl") {
 		return buffer.Bytes(), nil
@@ -108,22 +107,22 @@ func render(path string, p FeaturePlan) ([]byte, error) {
 
 	formatted, err := format.Source(buffer.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("le gabarit %s ne produit pas du Go valide: %w", path, err)
+		return nil, fmt.Errorf("template %s does not produce valid Go: %w", path, err)
 	}
 	return formatted, nil
 }
 
-// proveFeature compile le projet ENTIER et exécute TOUS ses tests.
+// proveFeature builds the WHOLE project and runs ALL its tests.
 //
-// La vérification fait partie de la commande, elle n'est pas laissée à
-// l'utilisateur : un module généré qui ne compile pas doit le dire lui-même.
+// Verification is part of the command, it is not left to the user: a generated
+// module that does not build must say so itself.
 //
-// Le projet entier plutôt que les seuls paquets du module neuf, pour deux
-// raisons. La première est de fond : un module qui casse le reste du projet est
-// un module fautif, et ne le constater qu'au `task check` suivant ferait porter
-// le doute sur la mauvaise modification. La seconde est mécanique — `gosec`
-// refuse à juste titre une commande dont un argument est une variable, et une
-// dérogation motivée coûterait plus cher que la vérification plus large.
+// The whole project rather than only the new module's packages, for two reasons.
+// The first is substantive: a module that breaks the rest of the project is a
+// faulty module, and only noticing it at the next `task check` would cast doubt
+// on the wrong change. The second is mechanical — `gosec` rightly refuses a
+// command one of whose arguments is a variable, and a motivated exemption would
+// cost more than the wider check.
 func proveFeature(ctx context.Context, p FeaturePlan) error {
 	steps := []*exec.Cmd{
 		exec.CommandContext(ctx, "go", "build", "./..."),
@@ -132,8 +131,8 @@ func proveFeature(ctx context.Context, p FeaturePlan) error {
 	for _, cmd := range steps {
 		cmd.Dir = p.Root
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("le module généré ne passe pas `%s` — la génération est "+
-				"fautive, pas le module :\n%s", strings.Join(cmd.Args, " "), out)
+			return fmt.Errorf("the generated module does not pass `%s` — the generation "+
+				"is at fault, not the module:\n%s", strings.Join(cmd.Args, " "), out)
 		}
 	}
 	return nil

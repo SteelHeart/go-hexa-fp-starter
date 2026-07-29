@@ -2,23 +2,22 @@ package {{.Package}}
 
 import "{{.Module}}/internal/config"
 
-// Catalog déclare les pilotes de ce module — ADR 014.
+// Catalog declares the drivers of this module — ADR 014.
 //
-// Aucun fichier du framework ne nomme {{.Dir}} : le catalogue est construit ici,
-// à côté de la fabrique `New`, et il PARTAGE ses constantes avec le `switch` de
-// celle-ci. La divergence entre ce qui est déclarable et ce qui est
-// constructible devient donc impossible, là où deux tables séparées ne la
-// rendaient qu'improbable.
+// No file of the framework names {{.Dir}}: the catalogue is built here, next to
+// the `New` factory, and it SHARES its constants with that factory's `switch`.
+// Divergence between what is declarable and what is constructible therefore
+// becomes impossible, where two separate tables only made it improbable.
 //
-// Ce fichier part avec le module en cas de `rm -rf`.
+// This file leaves with the module on an `rm -rf`.
 func Catalog() config.ModuleCatalog {
 	return config.ModuleCatalog{
 		Name: {
-			// Le défaut DOIT être le pilote qui n'exige rien : c'est ce qui rend
-			// vraie la promesse « `hexa new` puis `go run`, ça démarre ».
+			// The default MUST be the driver that requires nothing: this is what
+			// makes the promise "`hexa new` then `go run`, and it starts" true.
 			Default: DriverMemory,
 			Drivers: map[string]config.Resources{
-				// Perdu au redémarrage, et local au processus.
+				// Lost on restart, and local to the process.
 				DriverMemory: {},
 			},
 		},

@@ -1,13 +1,12 @@
-// Package ports déclare les contrats du module {{.Dir}}.
+// Package ports declares the contracts of the {{.Dir}} module.
 //
-// Ce paquet ne contient QUE des déclarations de types : ni struct, ni fonction,
-// ni interface (vérifié par arch-go.yml). Un port est un type fonction — la plus
-// petite interface possible, donc rien à ségréguer (ADR 003).
+// This package contains ONLY type declarations: no struct, no function, no
+// interface (verified by arch-go.yml). A port is a function type — the smallest
+// possible interface, therefore nothing left to segregate (ADR 003).
 //
-// Chaque port secondaire porte son CONTRAT D'ERREUR en commentaire. C'est la
-// forme opérationnelle de la substituabilité : deux pilotes qui rendraient des
-// codes différents sur la même faute ne seraient pas interchangeables, quelle
-// que soit leur signature.
+// Every secondary port carries its ERROR CONTRACT in a comment. That is the
+// operational form of substitutability: two drivers returning different codes
+// on the same fault would not be interchangeable, whatever their signature.
 package ports
 
 import (
@@ -18,51 +17,51 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// ─── Ports primaires : ce que le monde extérieur peut demander ───────────────
+// ─── Primary ports: what the outside world may ask for ──────────────────────
 
-// CreateRecord enregistre un nouvel élément de {{.Dir}}.
+// CreateRecord records a new {{.Dir}} item.
 //
-// Toutes les surfaces appellent CETTE fonction : HTTP, CLI, consommateur
-// d'événements. Ajouter une surface n'en change pas la signature (ADR 005).
+// Every surface calls THIS function: HTTP, CLI, event consumer. Adding a
+// surface does not change its signature (ADR 005).
 //
-// Erreurs : CodeInvalidReference · CodeReferenceTaken · CodeUnavailable ·
+// Errors: CodeInvalidReference · CodeReferenceTaken · CodeUnavailable ·
 // CodeInternal.
 type CreateRecord = func(
 	ctx context.Context,
 	rawReference string,
 ) result.Result[domain.Record, domain.Error]
 
-// ─── Ports secondaires : ce dont le cœur a besoin du monde ───────────────────
+// ─── Secondary ports: what the core needs from the world ────────────────────
 
-// SaveRecord persiste un enregistrement neuf.
+// SaveRecord persists a brand new record.
 //
-// Contrat d'erreur — toute implémentation DOIT respecter :
-//   - CodeReferenceTaken si la contrainte d'unicité est violée
-//   - CodeUnavailable    si le stockage est injoignable ou la requête annulée
-//   - CodeInternal       pour tout le reste, avec la cause attachée
+// Error contract — every implementation MUST honour it:
+//   - CodeReferenceTaken if the uniqueness constraint is violated
+//   - CodeUnavailable    if storage is unreachable or the request is cancelled
+//   - CodeInternal       for everything else, with the cause attached
 //
-// Aucune erreur de pilote ne doit remonter telle quelle.
+// No driver error must come back up as it is.
 type SaveRecord = func(
 	ctx context.Context,
 	record domain.Record,
 ) result.Result[domain.Record, domain.Error]
 
-// ReferenceIsTaken indique si une référence est déjà utilisée.
+// ReferenceIsTaken reports whether a reference is already in use.
 //
-// Contrat d'erreur : CodeUnavailable · CodeInternal. L'absence de ligne n'est
-// PAS une erreur — elle vaut `false`.
+// Error contract: CodeUnavailable · CodeInternal. The absence of a row is NOT
+// an error — it is worth `false`.
 type ReferenceIsTaken = func(
 	ctx context.Context,
 	reference domain.Reference,
 ) result.Result[bool, domain.Error]
 
-// ─── Ports d'effets purs : l'horloge et l'aléa ───────────────────────────────
+// ─── Pure effect ports: the clock and randomness ────────────────────────────
 
-// Now retourne l'instant courant.
+// Now returns the current instant.
 //
-// C'est un port PRÉCISÉMENT pour que les tests soient déterministes : un test
-// qui lit l'horloge réelle est un test qui échouera un jour, sans raison.
+// It is a port PRECISELY so that the tests are deterministic: a test that reads
+// the real clock is a test that will fail one day, for no reason.
 type Now = func() time.Time
 
-// GenerateID produit un identifiant d'enregistrement.
+// GenerateID produces a record identifier.
 type GenerateID = func() domain.RecordID

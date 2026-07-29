@@ -1,13 +1,13 @@
-// Package tests contient les tests en BOÎTE NOIRE des cas d'usage de {{.Dir}}.
+// Package tests holds the BLACK BOX tests of the {{.Dir}} use cases.
 //
-// # Aucune bibliothèque de simulacre, et ce n'est pas une privation
+// # No mocking library, and that is not a deprivation
 //
-// Chaque port est un TYPE FONCTION : un double est donc une closure de trois
-// lignes, écrite là où on la lit. Pas de génération, pas de `.On("Save")`, pas
-// d'assertion d'appel qui casse au premier renommage.
+// Every port is a FUNCTION TYPE: a double is therefore a three-line closure,
+// written where it is read. No generation, no `.On("Save")`, no call assertion
+// that breaks at the first rename.
 //
-// C'est la contrepartie directe de la décision « un port est un type fonction »
-// (ADR 003) : elle se paie en verbosité de déclaration et se rembourse ici.
+// This is the direct counterpart of the decision "a port is a function type"
+// (ADR 003): it is paid for in declaration verbosity and it pays back here.
 package tests
 
 import (
@@ -20,16 +20,16 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// instantFixe est l'horloge des tests. Fixe, donc les assertions ne dépendent
-// pas du moment où la suite tourne.
-var instantFixe = time.Date(2026, time.July, 28, 10, 0, 0, 0, time.UTC)
+// fixedInstant is the clock of the tests. Fixed, so the assertions do not
+// depend on the moment the suite runs.
+var fixedInstant = time.Date(2026, time.July, 28, 10, 0, 0, 0, time.UTC)
 
-// depsQuiPassent rend un jeu de dépendances dont toutes les étapes réussissent.
+// passingDeps returns a set of dependencies whose every step succeeds.
 //
-// Chaque test part de là et REMPLACE la seule étape qui l'intéresse : ce qui
-// diffère du cas nominal est alors visible dans le test lui-même, sans avoir à
-// comparer deux montages.
-func depsQuiPassent() application.Deps {
+// Each test starts from there and REPLACES the single step it cares about: what
+// differs from the nominal case is then visible in the test itself, without
+// having to compare two mounts.
+func passingDeps() application.Deps {
 	return application.Deps{
 		ReferenceIsTaken: func(context.Context, domain.Reference) result.Result[bool, domain.Error] {
 			return result.Ok[bool, domain.Error](false)
@@ -37,27 +37,27 @@ func depsQuiPassent() application.Deps {
 		SaveRecord: func(_ context.Context, r domain.Record) result.Result[domain.Record, domain.Error] {
 			return result.Ok[domain.Record, domain.Error](r)
 		},
-		GenerateID: func() domain.RecordID { return "id-fixe" },
-		Now:        func() time.Time { return instantFixe },
+		GenerateID: func() domain.RecordID { return "fixed-id" },
+		Now:        func() time.Time { return fixedInstant },
 	}
 }
 
-// succes discrimine un Result attendu en succès.
-func succes(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Record {
+// successOf discriminates a Result expected to be a success.
+func successOf(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Record {
 	t.Helper()
 	value, err, ok := r.Get()
 	if !ok {
-		t.Fatalf("un succès était attendu, refusé: %v", err)
+		t.Fatalf("a success was expected, refused: %v", err)
 	}
 	return value
 }
 
-// echec discrimine un Result attendu en échec.
-func echec(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Error {
+// failureOf discriminates a Result expected to be a failure.
+func failureOf(t *testing.T, r result.Result[domain.Record, domain.Error]) domain.Error {
 	t.Helper()
 	_, err, ok := r.Get()
 	if ok {
-		t.Fatal("un échec était attendu, reçu un succès")
+		t.Fatal("a failure was expected, got a success")
 	}
 	return err
 }

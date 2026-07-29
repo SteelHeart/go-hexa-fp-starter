@@ -9,32 +9,32 @@ import (
 	"{{.Module}}/internal/pkg/result"
 )
 
-// TestATakenReferenceIsRefusedBeforeSaving : le refus d'unicité tombe AVANT
-// l'écriture.
+// TestATakenReferenceIsRefusedBeforeSaving: the uniqueness refusal falls BEFORE
+// the write.
 //
-// L'ordre compte pour deux raisons. La première est économique : écrire pour se
-// faire refuser par une contrainte coûte un aller-retour et une transaction
-// avortée. La seconde est plus importante — le code d'erreur rendu au client doit
-// être celui du DOMAINE, pas la traduction d'une violation de contrainte, sinon
-// deux pilotes ne rendent pas la même chose sur la même faute.
+// The order matters for two reasons. The first is economic: writing only to be
+// refused by a constraint costs a round trip and an aborted transaction. The
+// second one matters more — the error code returned to the client must be the
+// one of the DOMAIN, not the translation of a constraint violation, otherwise
+// two drivers do not return the same thing on the same fault.
 func TestATakenReferenceIsRefusedBeforeSaving(t *testing.T) {
 	t.Parallel()
 
-	deps := depsQuiPassent()
+	deps := passingDeps()
 	deps.ReferenceIsTaken = func(context.Context, domain.Reference) result.Result[bool, domain.Error] {
 		return result.Ok[bool, domain.Error](true)
 	}
 	deps.SaveRecord = func(_ context.Context, r domain.Record) result.Result[domain.Record, domain.Error] {
-		t.Error("rien ne doit être écrit quand la référence est déjà prise")
+		t.Error("nothing must be written when the reference is already taken")
 		return result.Ok[domain.Record, domain.Error](r)
 	}
 
-	err := echec(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
+	err := failureOf(t, application.NewCreateRecord(deps)(context.Background(), "ABC-123"))
 
 	if err.Code != domain.CodeReferenceTaken {
-		t.Errorf("code = %q, attendu %q", err.Code, domain.CodeReferenceTaken)
+		t.Errorf("code = %q, want %q", err.Code, domain.CodeReferenceTaken)
 	}
 	if err.Field != "reference" {
-		t.Errorf("field = %q, attendu \"reference\" — sinon la surface ne peut pas dire QUOI corriger", err.Field)
+		t.Errorf("field = %q, want \"reference\" — otherwise the surface cannot say WHAT to fix", err.Field)
 	}
 }

@@ -9,67 +9,67 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Le durcissement que personne n'aurait vu manquer
+// The hardening nobody would have noticed missing
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// `arch-go.yml` interdit à un module métier d'en importer un autre — l'étanchéité
-// entre contextes (ADR 011). Mais la règle NOMME le module en dur :
+// `arch-go.yml` forbids a business module from importing another one — sealing
+// between contexts (ADR 011). But the rule NAMES the module explicitly:
 //
 //	- package: "**.internal.modules.user_registration.**"
 //	  shouldNotDependsOn:
 //	    internal:
 //	      - "**.internal.modules.!(user_registration).**"
 //
-// Un module créé sans y toucher n'est couvert par AUCUNE règle d'étanchéité. Il
-// pourrait importer n'importe quel autre module, et `arch-go` afficherait
-// « 100 % de conformité » — parce qu'il n'a rien à dire sur un module dont
-// personne ne lui a parlé.
+// A module created without touching it is covered by NO sealing rule at all. It
+// could import any other module, and `arch-go` would report "100% compliance" —
+// because it has nothing to say about a module nobody told it about.
 //
-// C'est très exactement la forme de défaut que ce dépôt a payée onze fois : un
-// garde muet est indiscernable d'un garde satisfait. `hexa make:feature` écrit
-// donc la règle en même temps que le module, et REFUSE si elle ne peut pas
-// l'écrire — plutôt que de créer un module hors garde en silence.
+// This is precisely the shape of defect this repository has paid for eleven
+// times: a mute guard is indistinguishable from a satisfied one.
+// `hexa make:feature` therefore writes the rule at the same time as the module,
+// and REFUSES if it cannot write it — rather than silently creating an unguarded
+// module.
 
-// IsolationAnchor repère où insérer la règle d'étanchéité.
+// IsolationAnchor locates where to insert the sealing rule.
 //
-// Un type plutôt que trois retours : la règle des deux retours vaut ici aussi.
+// A type rather than three returns: the two-returns rule holds here too.
 type IsolationAnchor struct {
 	path    string
 	content string
-	// after est l'index de FIN de la dernière règle d'étanchéité existante.
+	// after is the END index of the last existing sealing rule.
 	after int
 }
 
-// isolationPattern reconnaît la dernière ligne d'une règle d'étanchéité.
+// isolationPattern recognises the last line of a sealing rule.
 //
-// L'ancrage porte sur la FORME de la règle, pas sur un commentaire ni sur un
-// numéro de section : ceux-là bougent au premier remaniement du fichier, la forme
-// non. Si elle bouge quand même, la commande refuse — elle ne devine pas.
+// The anchoring rests on the SHAPE of the rule, not on a comment nor on a
+// section number: those move at the first reshuffle of the file, the shape does
+// not. Should it move anyway, the command refuses — it does not guess.
 var isolationPattern = regexp.MustCompile(`(?m)^\s+- "\*\*\.internal\.modules\.!\([a-z0-9_]+\)\.\*\*"$`)
 
-// FindIsolationAnchor lit `arch-go.yml` et localise le point d'insertion.
+// FindIsolationAnchor reads `arch-go.yml` and locates the insertion point.
 func FindIsolationAnchor(root, dir string) (IsolationAnchor, error) {
 	path := filepath.Join(root, "arch-go.yml")
-	// Racine désignée par l'appelant, nom de fichier fixe.
-	//nolint:gosec // racine fournie par l'utilisateur, nom de fichier constant
+	// Root named by the caller, fixed file name.
+	//nolint:gosec // root supplied by the user, constant file name
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return IsolationAnchor{}, fmt.Errorf(
-			"%s illisible — est-ce bien la racine d'un projet issu du socle ? %w", path, err)
+			"%s is unreadable — is this really the root of a project made from the starter? %w", path, err)
 	}
 	content := string(raw)
 
 	if strings.Contains(content, "internal.modules."+dir+".**") {
 		return IsolationAnchor{}, fmt.Errorf(
-			"arch-go.yml déclare déjà une règle pour %q — le module existe-t-il ailleurs ?", dir)
+			"arch-go.yml already declares a rule for %q — does the module exist elsewhere?", dir)
 	}
 
 	positions := isolationPattern.FindAllStringIndex(content, -1)
 	if len(positions) == 0 {
 		return IsolationAnchor{}, fmt.Errorf(
-			"aucune règle d'étanchéité dans %s : impossible d'y ajouter celle de %q.\n"+
-				"       Refus délibéré — créer un module qu'AUCUNE règle ne garde serait pire\n"+
-				"       que ne pas le créer. Ajouter à la main, sous `dependenciesRules:` :\n\n%s",
+			"no sealing rule in %s: cannot add the one for %q.\n"+
+				"       Deliberate refusal — creating a module NO rule guards would be worse\n"+
+				"       than not creating it. Add it by hand, under `dependenciesRules:`:\n\n%s",
 			path, dir, IsolationRule(dir))
 	}
 
@@ -77,7 +77,7 @@ func FindIsolationAnchor(root, dir string) (IsolationAnchor, error) {
 	return IsolationAnchor{path: path, content: content, after: last[1]}, nil
 }
 
-// IsolationRule rend le bloc YAML d'étanchéité d'un module.
+// IsolationRule returns the YAML sealing block of a module.
 func IsolationRule(dir string) string {
 	return fmt.Sprintf(`  - package: "**.internal.modules.%s.**"
     shouldNotDependsOn:
@@ -86,16 +86,16 @@ func IsolationRule(dir string) string {
 `, dir, dir)
 }
 
-// DeclareIsolation insère la règle dans `arch-go.yml`.
+// DeclareIsolation inserts the rule into `arch-go.yml`.
 //
-// L'écriture préserve le reste du fichier à l'octet près : `arch-go.yml` est
-// presque entièrement fait de commentaires qui expliquent POURQUOI chaque règle
-// existe, et un aller-retour YAML les effacerait tous.
+// The write preserves the rest of the file byte for byte: `arch-go.yml` is
+// almost entirely made of comments explaining WHY each rule exists, and a YAML
+// round trip would wipe them all.
 func DeclareIsolation(a IsolationAnchor, dir string) error {
 	merged := a.content[:a.after] + "\n\n" + strings.TrimRight(IsolationRule(dir), "\n") + a.content[a.after:]
 
 	if err := os.WriteFile(a.path, []byte(merged), 0o600); err != nil {
-		return fmt.Errorf("écriture de %s: %w", a.path, err)
+		return fmt.Errorf("writing %s: %w", a.path, err)
 	}
 	return nil
 }
