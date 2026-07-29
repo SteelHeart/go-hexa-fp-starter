@@ -44,16 +44,16 @@ formes que reprendra le prochain.
 |---|---|---|---|
 | **É-01** | 🔴 haute | `internal/infrastructure/dynconf` est un paquet **mort** | corrigé dans ce lot |
 | **É-02** | 🔴 haute | L'ADR 012 impose `surfaces/`, le code écrit `adapters/primary/` | **issue #116** |
-| **É-03** | 🔴 haute | Le garde « Aucune dette dissimulée » n'a **aucun témoin** | **issue #117** |
+| **É-03** | 🔴 haute | Le garde « Aucune dette dissimulée » n'a **aucun témoin** | ~~#117~~ **corrigé** |
 | **É-04** | 🟠 moyenne | `pilotes.md` compte onze pilotes ; il y en a quinze | corrigé dans ce lot |
 | **É-05** | 🟠 moyenne | La carte du dépôt omet huit chemins et en décrit un qui n'existe pas | corrigé dans ce lot |
-| **É-13** | 🔴 haute | Le fichier d'amorçage portait le nom d'un outil d'assistance | **corrigé** — #114 |
-| **É-06** | 🟠 moyenne | La langue du code n'est pas celle de la recommandation #34 | **issue #34** — arbitrage |
+| **É-13** | 🔴 haute | Le fichier d'amorçage portait le nom d'un outil d'assistance | ~~#114~~ **corrigé** |
+| **É-06** | 🟠 moyenne | La langue du code n'est pas celle de la recommandation #34 | ~~#34~~ **corrigé** — ADR 018 |
 | **É-07** | 🟠 moyenne | Le godoc de `config` renvoie vers du code mort et nomme un dossier inexistant | corrigé dans ce lot |
 | **É-08** | 🟡 basse | Un chemin de poste nominatif figure dans deux artefacts versionnés publics | corrigé dans ce lot |
 | **É-09** | 🟡 basse | Quatre modules noyau n'ont pas d'`application/` | **dérogation écrite** — amendement dans #116 |
 | **É-10** | 🟡 basse | La convention « carte des fichiers » n'a pas de forme unique | **issue #118** |
-| **É-11** | 🟡 basse | Le garde de dette ne balaie ni `*.md` ni `*.sh` | **issue #117** |
+| **É-11** | 🟡 basse | Le garde de dette ne balaie ni `*.md` ni `*.sh` | ~~#117~~ **corrigé** |
 | **É-12** | 🟡 basse | Le relevé dit que `user_registration` n'a pas d'adaptateur secondaire — il en a deux | corrigé dans ce lot |
 
 **Ce que ce tableau ne contient pas** compte autant que ce qu'il contient. Les contrôles suivants
@@ -363,14 +363,33 @@ documentation comme on a outillé la forme du code.** Trois candidats immédiats
 
 → Les trois sont réunis dans l'**issue #118**.
 
+## Suivi — où en sont les douze écarts
+
+Relevé du **2026-07-29**, après les lots qui ont suivi cet audit.
+
+| État | Écarts |
+|---|---|
+| **Corrigés** | É-01, É-03, É-04, É-05, É-07, É-08, É-11, É-12, É-13 — plus **É-06**, la langue, par la campagne ADR 018 |
+| **Dérogation écrite** | É-09 |
+| **Restent ouverts** | **É-02** (#116, l'anatomie) et **É-10** (#118, la carte des fichiers) |
+
+**Dix sur douze en trois jours, et les deux qui restent sont des décisions**, pas des tâches. É-02
+demande un amendement d'ADR ; É-10 attend que la forme de la « carte des fichiers » soit fixée avant
+de pouvoir être outillée.
+
+⚠️ **Un écart s'est ajouté après coup** : É-13, le nom du fichier d'amorçage. Il n'était pas dans le
+rapport initial — l'audit ne l'a pas vu parce qu'il cherchait, comme le garde, des mentions dans le
+TEXTE. C'est la limite de sa propre méthode, et elle est écrite ici plutôt que corrigée en silence.
+
 ## Verrous restants avant le transfert
 
 | Verrou | Nature |
 |---|---|
 | **#113 — la licence** | Décision. Tous droits réservés sur un dépôt public : lisible par tous, utilisable par personne |
 | **#34 — la langue** | Décision. É-06 la rend bloquante : le godoc est désormais public |
-| **#116 — l'anatomie** | Amendement d'ADR. Le générateur reconduit le choix à chaque module engendré |
+| **#116 — l'anatomie** | Amendement d'ADR. Le générateur n'engendre NI `surfaces/` NI `adapters/` : un module engendré n'est joignable par aucune surface |
 | **#89 — le tag** | Séquencement. `v0.1.0` déclenche deux publications vers un hôte inexistant |
+| **#129 — les drapeaux de `hexa`** | Interface publique. `--depuis` et `--dans` face à une aide en anglais |
 | **#9 · #27** | Périmètre. Deux issues rouvertes après avoir été comptées faites |
 
 Aucun de ces cinq n'est un défaut de code. **Le transfert n'attend plus que des décisions** — c'est

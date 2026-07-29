@@ -206,6 +206,34 @@ Deux leçons, dans l'ordre où elles se paient :
 ⚠️ **`LICENSE` dit « tous droits réservés »** — le code est donc lisible par tout le monde et
 utilisable par personne. État cohérent, mais non énoncé : voir les arbitrages en attente.
 
+### La langue du CODE est l'anglais — ADR 018, campagne terminée
+
+Six tranches, ~35 000 lignes, 503 fichiers. **Il reste 13 fichiers portant du français, tous
+délibérés** : les `domain.Error.Message` qui sortent sur 422/409/503, le courriel de bienvenue, et
+cinq fixtures dont l'objet *est* le non-ASCII.
+
+Le règlement, les ADR, les messages de commit et les PR **restent en français** — la ligne de
+partage est *« ce qui est publié avec le code »*.
+
+⚠️ **Chercher les accents ne suffit pas à mesurer ce qu'il reste à traduire.** `est indisponible`,
+`une erreur interne est survenue` n'en portent aucun. Sur les gabarits du générateur, un quart des
+chaînes concernées échappaient au `grep`. Tout chiffre obtenu ainsi est un **plancher**, jamais un
+total — consigne écrite dans `rules/references.md`.
+
+**Ce que la campagne a trouvé, et qui vaut plus qu'elle** — traduire oblige à lire chaque ligne, ce
+qu'aucune relecture de PR ne fait :
+
+- **une course de données**, révélée par le job `-race`. L'aide `sequentialIDs` incrémentait un
+  compteur simple depuis seize goroutines. Elle **préexistait** : le détecteur est sûr mais
+  INCOMPLET, il ne signale que ce qu'il observe. Changer la longueur de quelques chaînes a suffi à
+  l'exposer, et elle ne se déclenche toujours pas en local. Une aide qui court rend **invérifiable
+  la garantie même du test** ;
+- **huit godoc qui décrivent l'inverse du code** (#127), dont un qui annonce remonter le corps d'une
+  réponse distante alors qu'un test l'interdit pour raison de sécurité ;
+- **quatre couplages CI**, dont deux documentés nulle part. Le plus discret : le `Taskfile` grepait
+  les libellés du tableau de couverture. **Ce contrôle n'aurait pas échoué** — il aurait affiché
+  moins.
+
 ### Prouvé sur la machine de référence
 
 - `go build ./...` vert
@@ -248,7 +276,8 @@ utilisable par personne. État cohérent, mais non énoncé : voir les arbitrage
   nul et le motif : ce pilote vit dans le processus, un dépileur séparé ne verrait jamais les
   événements du serveur. Il tournerait à vide **sans aucune erreur** — le seul défaut qui ne se
   signale jamais.
-- `go test -shuffle=on ./...` vert — **404 tests de premier niveau**. La table ci-dessous en détaille
+- `go test -race -shuffle=on ./...` vert — **404 tests de premier niveau**, détecteur de courses
+  compris. Une course y a été trouvée et corrigée (voir ci-dessus). La table ci-dessous en détaille
   227 ; les 58 suivants sont dans `internal/pkg/middleware/tests` (12),
   `internal/infrastructure/messaging/tests` (13), `internal/infrastructure/modulebus/tests` (10),
   `internal/infrastructure/httpserver` (3 internes) + `…/httpserver/tests` (11), et
@@ -373,9 +402,14 @@ ils ne peuvent plus diverger. Mesuré le 2026-07-28 :
 
 | Cliquet | Valeur | Seuil | État |
 |---|---|---|---|
-| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **77,6 %** | 70 % | ✅ |
+| **Périmètre unitaire** — ce que `go test ./...` sans tag peut atteindre | **79,4 %** | 70 % | ✅ |
 | **Cœur** `domain/` + `application/`, pondéré par instruction | **92,4 %** | 90 % | ✅ |
-| **Code produit** — tout, pilotes compris | **61,7 %** | cliquet 59 % | ✅ |
+| **Code produit** — tout, pilotes compris | **62,8 %** | cliquet 59 % | ✅ |
+
+Les deux premiers ont gagné 1,7 point sans qu'un seul test soit écrit : la suppression du paquet
+mort `internal/infrastructure/dynconf` (audit #107, É-01) a retiré 188 lignes à 0 % du calcul. Un
+cliquet tiré vers le bas par du code que personne n'exécute finit par bloquer, et la tentation est
+alors d'ajouter une exclusion plutôt que de constater que le code n'a pas lieu d'être.
 
 **Le seuil de 70 % n'a PAS été abaissé.** Il portait sur un profil produit `go test ./...` **sans
 tag**, donc incapable par construction d'exécuter une ligne de pilote Postgres ou Redis : il était
@@ -580,8 +614,10 @@ est écrite à côté :
 ### Prochaines actions, dans l'ordre
 
 **Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
-#93, #10, #11, #13, #19, **#72** et **#18**, et la campagne de signalements. F001, F002, F005,
-F006, F007, F010 et F011 sont **résolues**.
+#93, #10, #11, #13, #19, **#72**, **#18**, **#107** (audit de conformité), **#113** (licence),
+**#114** (nom du fichier d'amorçage), **#34** (langue du code), **#117** (garde de dette), **#91**
+(test de charge), et la campagne de signalements. F001, F002, F005, F006, F007, F010 et F011 sont
+**résolues**.
 
 ⚠️ **#9 et #27 restent ouvertes après avoir été comptées comme faites.** Toutes deux produisent un
 effet observable, et aucune des deux n'a livré l'artefact demandé : pas d'`adapters/primary/events/`
@@ -598,27 +634,31 @@ celle du faux vert, appliquée au suivi.
 > observé, alors que l'artefact demandé n'existe pas, est exactement la dette latente que le
 > règlement interdit de dissimuler.
 
-1. **#107 — l'audit de conformité**, exigé avant tout transfert vers une organisation. Arborescence
-   contre la carte, conventions de fichiers, ADR tenus par le code, véracité de la documentation,
-   hygiène de publication sur TOUT l'historique, et — leçon de ce lot — vérifier que chaque garde
-   sait **échouer**. Le passage en public lui ajoute une ligne : ce qui n'était visible que de nous
-   l'est désormais de tout le monde
-2. **#113 — LA LICENCE.** Un dépôt public sous « tous droits réservés » est un état cohérent mais
-   **jamais choisi**. Se tranche AVANT le transfert : c'est elle qui dit ce que ce transfert
-   signifie juridiquement. Décision produit, pas tâche technique
-3. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
+> 🔴 **Le transfert vers l'organisation n'attend plus AUCUN code — seulement des décisions.**
+> L'audit #107 est clos, la licence est énoncée, le nom du fichier d'amorçage est neutre, le code
+> est en anglais. Ce qui reste ci-dessous se tranche, ça ne se code pas.
+
+1. **#116 — l'anatomie de module.** L'ADR 012 grave `surfaces/`, le code écrit `adapters/primary/`,
+   et le générateur n'engendre **ni l'un ni l'autre** : un module engendré n'est joignable par
+   aucune surface. Amendement d'ADR, donc décision — mais c'est le dernier point qui touche encore
+   la FORME du code, donc le plus cher à repousser
+2. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
    sortantes vers un hôte qui n'existe pas. Ne se corrige pas par du code : c'est un **séquencement**
    à décider — dissocier le tag de la publication, ou fournir la cible
-4. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
+3. **#129 — les drapeaux de `hexa`** sont `--depuis` et `--dans` alors que son aide est en anglais.
+   Renommer change une **interface publique** : à faire tant que personne n'utilise le socle
+4. **#118 — outiller la véracité de la documentation.** La recommandation de l'audit, et la campagne
+   de traduction l'a confirmée trois fois : un fait recopié à la main dérive
+5. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
    charge, tous rouges depuis le début. Une suite de lots individuellement justifiés a composé un
    ordre de priorité que personne n'a choisi
-5. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
-6. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
+6. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
+7. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
    ⚠️ Douze des quatorze règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
    déplacement doit porter son témoin, sinon elle rend 100 % de conformité en ne gardant plus rien
-7. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
+8. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
    d'être levé à moitié
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
@@ -626,6 +666,13 @@ celle du faux vert, appliquée au suivi.
 `election` · `decodedHash` · `RetryPolicy` · `messaging.Broker` · `worker`. La cinquième a été
 attrapée par la règle `arch-go` sur `cmd/**`, pas par une relecture. C'est une faute de réflexe :
 la surveiller par un outil coûte moins cher que de la réapprendre.
+
+⚠️ **Ce compteur vaut CINQ ici, SIX dans `internal/infrastructure/resources` et SEPT dans
+`cmd/cli/composition.go`** — trois valeurs pour un même fait, découvertes en traduisant (#127).
+
+Ce n'est pas une coquetterie : ce chiffre sert d'**argument**, et un argument dont la valeur change
+selon le fichier ne convainc personne. C'est aussi la meilleure démonstration de **#118** — un fait
+recopié à la main dérive, exactement comme la grille des personas et le tableau de `pilotes.md`.
 
 ### Lecture PRODUIT — ce que voit un dev qui veut sortir un SaaS
 
