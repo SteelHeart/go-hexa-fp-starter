@@ -7,38 +7,37 @@ import (
 	"strings"
 )
 
-// ProjectPlan porte les valeurs vérifiées d'une génération de projet.
+// ProjectPlan carries the verified values of a project generation.
 //
-// Un type plutôt que quatre paramètres : la règle des deux retours vaut aussi
-// pour les entrées, et quatre chaînes de suite s'inversent silencieusement.
+// A type rather than four parameters: the two-returns rule holds for inputs too,
+// and four strings in a row get silently swapped.
 type ProjectPlan struct {
-	// Source est la racine du socle recopié.
+	// Source is the root of the copied starter.
 	Source string
-	// Destination est le répertoire du projet créé.
+	// Destination is the directory of the created project.
 	Destination string
-	// SocleModule est le chemin de module du socle, celui qu'on remplace.
+	// SocleModule is the starter's module path, the one being replaced.
 	SocleModule string
-	// TargetModule est le chemin de module du projet créé.
+	// TargetModule is the created project's module path.
 	TargetModule string
 }
 
-// PlanProject vérifie TOUT avant qu'un seul fichier soit écrit.
+// PlanProject checks EVERYTHING before a single file is written.
 //
-// Chaque étape REFUSE plutôt que de réparer : un générateur qui rattrape
-// silencieusement une entrée douteuse produit un projet dont personne ne sait
-// dans quel état il est.
+// Every step REFUSES rather than repairs: a generator silently patching up
+// dubious input produces a project nobody knows the state of.
 func PlanProject(destination, targetModule, source string) (ProjectPlan, error) {
 	if targetModule == "" {
-		return ProjectPlan{}, errors.New("--module est obligatoire : un projet sans chemin de module ne compile pas")
+		return ProjectPlan{}, errors.New("--module is mandatory: a project without a module path does not build")
 	}
 	if !strings.Contains(targetModule, "/") {
 		return ProjectPlan{}, fmt.Errorf(
-			"--module=%q ne ressemble pas à un chemin de module (attendu : hôte/organisation/nom)", targetModule)
+			"--module=%q does not look like a module path (expected: host/organisation/name)", targetModule)
 	}
 
 	absSource, err := filepath.Abs(source)
 	if err != nil {
-		return ProjectPlan{}, fmt.Errorf("chemin du socle: %w", err)
+		return ProjectPlan{}, fmt.Errorf("starter path: %w", err)
 	}
 	socleModule, err := ModulePathOf(absSource)
 	if err != nil {
@@ -46,12 +45,12 @@ func PlanProject(destination, targetModule, source string) (ProjectPlan, error) 
 	}
 	if socleModule == targetModule {
 		return ProjectPlan{}, fmt.Errorf(
-			"--module=%q est déjà le module du socle : rien à réécrire", targetModule)
+			"--module=%q is already the starter's module: nothing to rewrite", targetModule)
 	}
 
 	absDest, err := filepath.Abs(destination)
 	if err != nil {
-		return ProjectPlan{}, fmt.Errorf("chemin de destination: %w", err)
+		return ProjectPlan{}, fmt.Errorf("destination path: %w", err)
 	}
 	if occupied := EmptyDestination(absDest); occupied != nil {
 		return ProjectPlan{}, occupied

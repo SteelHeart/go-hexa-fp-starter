@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-// FlagsWithValue rend les options d'un jeu, sous leurs deux écritures.
+// FlagsWithValue returns a set's options, in both spellings.
 //
-// Dérivé du FlagSet plutôt qu'écrit à la main, et c'est le point : une table
-// écrite à la main énumérait `-module` et `-depuis`. L'ajout de `--dans` par
-// `make:feature` n'y figurait pas, donc sa valeur était classée comme
-// positionnelle et la commande refusait une option pourtant écrite. Une seconde
-// liste des mêmes options ne peut que diverger de la première.
+// Derived from the FlagSet rather than written by hand, and that is the point: a
+// hand-written table listed `-module` and `-from`. The `--into` option added by
+// `make:feature` was not in it, so its value was classified as positional and
+// the command refused an option that had actually been written. A second list of
+// the same options can only diverge from the first.
 func FlagsWithValue(set *flag.FlagSet) map[string]bool {
 	withValue := map[string]bool{}
 	set.VisitAll(func(f *flag.Flag) {
@@ -21,14 +21,14 @@ func FlagsWithValue(set *flag.FlagSet) map[string]bool {
 	return withValue
 }
 
-// SplitArguments range les options d'un côté, les positionnels de l'autre.
+// SplitArguments puts options on one side and positionals on the other.
 //
-// Le paquet `flag` s'arrête au PREMIER argument non-option : sans ce tri,
-// `hexa new ./projet --module x` ignorerait `--module` en silence, et la
-// commande échouerait en accusant l'absence d'une option pourtant écrite.
+// The `flag` package stops at the FIRST non-option argument: without this
+// sorting, `hexa new ./project --module x` would silently ignore `--module`, and
+// the command would fail blaming the absence of an option that was written.
 //
-// Imposer l'ordre `--module x ./projet` serait une friction gratuite dans un
-// outil dont la raison d'être est d'en supprimer.
+// Forcing the `--module x ./project` order would be gratuitous friction in a
+// tool whose whole purpose is to remove it.
 func SplitArguments(args []string, withValue map[string]bool) (options, positional []string) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -36,11 +36,11 @@ func SplitArguments(args []string, withValue map[string]bool) (options, position
 		case !strings.HasPrefix(arg, "-"):
 			positional = append(positional, arg)
 		case withValue[arg] && i+1 < len(args):
-			// Forme `--module x` : la valeur suit, elle n'est pas positionnelle.
+			// Form `--module x`: the value follows, it is not positional.
 			options = append(options, arg, args[i+1])
 			i++
 		default:
-			// Forme `--module=x`, ou option inconnue que `flag` refusera lui-même.
+			// Form `--module=x`, or an unknown option `flag` will refuse itself.
 			options = append(options, arg)
 		}
 	}

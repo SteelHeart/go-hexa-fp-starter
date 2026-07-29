@@ -7,23 +7,23 @@ import (
 	"strings"
 )
 
-// ProjectReport rend compte d'une génération réussie.
+// ProjectReport reports on a successful generation.
 //
-// Un type plutôt qu'un second retour : `CreateProject` en aurait alors trois, ce
-// que la règle `arch-go` refuse — et elle a raison, c'est la leçon apprise cinq
-// fois dans ce dépôt.
+// A type rather than a second return: `CreateProject` would then have three,
+// which the `arch-go` rule refuses — and it is right, that is the lesson learned
+// five times in this repository.
 type ProjectReport struct {
-	// Files est le nombre de fichiers recopiés.
+	// Files is the number of files copied.
 	Files int
-	// GitInitialised dit si le dépôt et ses crochets ont pu être posés.
+	// GitInitialised says whether the repository and its hooks could be set up.
 	GitInitialised bool
 }
 
-// CreateProject déroule la génération, puis la VÉRIFIE.
+// CreateProject runs the generation, then VERIFIES it.
 //
-// La vérification fait partie de la commande, elle n'est pas laissée à
-// l'utilisateur : un projet généré qui ne compile pas doit le dire lui-même,
-// pas attendre le premier `go build` de quelqu'un d'autre.
+// Verification is part of the command, it is not left to the user: a generated
+// project that does not build must say so itself, not wait for somebody else's
+// first `go build`.
 func CreateProject(ctx context.Context, p ProjectPlan) (ProjectReport, error) {
 	files, err := TrackedFiles(ctx, p.Source)
 	if err != nil {
@@ -39,9 +39,9 @@ func CreateProject(ctx context.Context, p ProjectPlan) (ProjectReport, error) {
 	}
 	if len(remaining) > 0 {
 		return ProjectReport{}, fmt.Errorf(
-			"le chemin du socle subsiste dans %d fichier(s) — le projet dépendrait en "+
-				"silence d'un autre dépôt :\n  %s\n\nLes ajouter à la réécriture, ou les "+
-				"déclarer dans CitesSocleByHistory — jamais les laisser passer",
+			"the starter path remains in %d file(s) — the project would silently "+
+				"depend on another repository:\n  %s\n\nAdd them to the rewrite, or "+
+				"declare them in CitesSocleByHistory — never let them through",
 			len(remaining), strings.Join(remaining, "\n  "))
 	}
 
@@ -51,29 +51,29 @@ func CreateProject(ctx context.Context, p ProjectPlan) (ProjectReport, error) {
 	return ProjectReport{Files: len(files), GitInitialised: initGit(ctx, p.Destination) == nil}, nil
 }
 
-// compile éprouve le projet généré.
+// compile exercises the generated project.
 func compile(ctx context.Context, destination string) error {
 	cmd := exec.CommandContext(ctx, "go", "build", "./...")
 	cmd.Dir = destination
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("le projet généré ne compile pas — la génération est fautive, "+
-			"pas le projet :\n%s", out)
+		return fmt.Errorf("the generated project does not build — the generation is at "+
+			"fault, not the project:\n%s", out)
 	}
 	return nil
 }
 
-// initGit pose le dépôt ET le chemin des crochets.
+// initGit sets up the repository AND the hooks path.
 //
-// Les deux vont ensemble : `git init` seul laisserait le crochet `commit-msg`
-// inerte, donc un projet neuf sans son filet anti-accident.
+// The two go together: `git init` alone would leave the `commit-msg` hook inert,
+// hence a brand-new project without its anti-accident net.
 //
-// L'échec n'est pas bloquant — git peut être absent — mais il est RENDU, pas
-// avalé : c'est l'appelant qui décide de le dire, et `ProjectReport` le porte.
+// Failure is not blocking — git may be absent — but it is RETURNED, not
+// swallowed: the caller decides whether to say so, and `ProjectReport` carries
+// it.
 func initGit(ctx context.Context, destination string) error {
-	// Deux appels écrits en toutes lettres plutôt qu'une boucle sur des
-	// arguments variables : `gosec` refuse le second, et il a raison de le
-	// refuser — une commande dont les arguments viennent d'une variable est
-	// exactement la forme qu'on ne veut pas relire sans réfléchir.
+	// Two calls spelled out rather than a loop over variable arguments: `gosec`
+	// refuses the latter, and it is right to — a command whose arguments come
+	// from a variable is exactly the shape one does not want to skim over.
 	steps := []*exec.Cmd{
 		exec.CommandContext(ctx, "git", "init", "--quiet"),
 		exec.CommandContext(ctx, "git", "config", "core.hooksPath", ".githooks"),
@@ -81,7 +81,7 @@ func initGit(ctx context.Context, destination string) error {
 	for _, cmd := range steps {
 		cmd.Dir = destination
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("dépôt git non initialisé: %w\n%s", err, out)
+			return fmt.Errorf("git repository not initialised: %w\n%s", err, out)
 		}
 	}
 	return nil
