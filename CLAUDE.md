@@ -395,8 +395,15 @@ périmètre **en le disant**.
   surface HTTP et son garde d'autorisation ; l'ADR 017 tranche que **le jeton authentifie, il
   n'autorise pas**. ⚠️ Ne toujours pas parler de « zéro faille » : ce module est neuf, il n'a jamais
   été éprouvé ailleurs qu'ici, et rien n'a été audité par un tiers
-- i18n, sinks d'observabilité (configuration écrite, code absent), ADR 010,
-  `deploy/docker-compose.deploy.yml`
+- ~~sinks d'observabilité (configuration écrite, code absent)~~ — **RÉSOLU** (#13). `telemetry.Setup`
+  est appelée par `cmd/server` **et** `cmd/worker` : exportateur OTLP gRPC, lecteur Prometheus,
+  serveur de métriques monté. Cette ligne est restée fausse un lot entier — septième affirmation
+  périmée du même relevé
+- i18n, ADR 010, `deploy/docker-compose.deploy.yml`
+- **`user_registration/adapters/primary/events/`** — le consommateur produit un effet réel, mais il
+  est câblé dans `cmd/worker`, donc le TROISIÈME adaptateur primaire n'existe pas (#9 reste ouverte)
+- **Un pilote de `notification` qui envoie vraiment.** Seul `log` existe : le module démontre
+  l'anatomie, pas le service. Aucun courriel n'est parti nulle part (#27)
 - Les modules `payment`, `ratelimit`, `tenancy`, `secrets`, `workflow`, `search`, `document` :
   décrits dans `documentation/technique/modules-noyau.md`, **aucun code**. `auth` et `notification`
   ne sont plus de cette liste
@@ -548,30 +555,45 @@ est écrite à côté :
 ### Prochaines actions, dans l'ordre
 
 **Terminés** : #2 (barrière verte), #20, #37 (niveau `integration`), #17 (`hexa new`), #75, #84,
-#93, **#72** (CodeQL), et la campagne de signalements. F001, F002, F005, F006, F007, F010 et F011
-sont **résolues**.
+#93, #10, #11, #13, #19, **#72** et **#18**, et la campagne de signalements. F001, F002, F005,
+F006, F007, F010 et F011 sont **résolues**.
 
-> ✅ **LA LIGNE v0.1 EST LIVRÉE EN ENTIER** : #47, #37, #13, #9, #11 et #8. Ce qui reste avant le tag
-> ne dépend plus du code.
+⚠️ **#9 et #27 restent ouvertes après avoir été comptées comme faites.** Toutes deux produisent un
+effet observable, et aucune des deux n'a livré l'artefact demandé : pas d'`adapters/primary/events/`
+pour la première, pas de pilote qui envoie vraiment pour la seconde. Les deux portent désormais leur
+reste-à-faire écrit. **Un résultat observé ne ferme pas une issue** — c'est la même confusion que
+celle du faux vert, appliquée au suivi.
+
+> ✅ **LA LIGNE v0.1 EST LIVRÉE** : #47, #37, #13, #11 et #8, plus #72 et #18 par le passage en
+> public. Ce qui reste avant le tag ne dépend plus du code.
+>
+> ⚠️ **« en entier » était faux, et créditait #9 à tort.** La chaîne d'événements tourne, mais
+> `adapters/primary/events/` n'existe pas : la politique de bienvenue vit dans `cmd/worker`. #9
+> reste **ouverte**, avec son reste-à-faire écrit. Une issue fermée sur la foi d'un résultat
+> observé, alors que l'artefact demandé n'existe pas, est exactement la dette latente que le
+> règlement interdit de dissimuler.
 
 1. **#107 — l'audit de conformité**, exigé avant tout transfert vers une organisation. Arborescence
    contre la carte, conventions de fichiers, ADR tenus par le code, véracité de la documentation,
    hygiène de publication sur TOUT l'historique, et — leçon de ce lot — vérifier que chaque garde
    sait **échouer**. Le passage en public lui ajoute une ligne : ce qui n'était visible que de nous
    l'est désormais de tout le monde
-2. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
+2. **#113 — LA LICENCE.** Un dépôt public sous « tous droits réservés » est un état cohérent mais
+   **jamais choisi**. Se tranche AVANT le transfert : c'est elle qui dit ce que ce transfert
+   signifie juridiquement. Décision produit, pas tâche technique
+3. **#89 — le dernier rouge d'ENVIRONNEMENT.** Poser le tag `v0.1.0` déclencherait deux publications
    sortantes vers un hôte qui n'existe pas. Ne se corrige pas par du code : c'est un **séquencement**
    à décider — dissocier le tag de la publication, ou fournir la cible
-3. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
+4. **P2 n'a reçu aucun gain en trois relevés** — streaming, file de travaux, mémoire, mesure de
    charge, tous rouges depuis le début. Une suite de lots individuellement justifiés a composé un
    ordre de priorité que personne n'a choisi
-4. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
-4. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
+5. **La configuration fermée** (#8 des personas) : le DERNIER blocage de P1. Ligne `v1.0`
+6. **Une application RÉELLE construite avec `hexa new`** — c'est l'étape que l'ADR 015 impose avant
    toute frontière publique : *sa liste d'imports EST la mesure*. Aucun paquet n'est importable
    aujourd'hui, `go list ./... | grep -v /internal/` ne rend que des binaires et un outil de build.
    ⚠️ Douze des quatorze règles de dépendance d'`arch-go` sont indexées sur `internal.` : toute PR de
    déplacement doit porter son témoin, sinon elle rend 100 % de conformité en ne gardant plus rien
-5. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
+7. **#23 `tenancy`** : le second « non » que reçoit tout évaluateur produit — le premier vient
    d'être levé à moitié
 
 ### Invariant appris cinq fois : plus de deux retours = un type manquant
@@ -652,17 +674,17 @@ Ils ne se vérifient ni par `arch-go`, ni par un test Go : ce sont des propriét
   permissions exactes. Un fournisseur externe reste possible **en tant que pilote**, c'est
   précisément ce que l'anatomie de l'ADR 012 rend interchangeable
 - ~~**#18 F002**~~ — **TRANCHÉ** : dépôt public, ruleset serveur actif
-- 🔴 **LA LICENCE, question NEUVE ouverte par le passage en public.** `LICENSE` dit *tous droits
-  réservés* : le code est désormais **lisible par tout le monde et utilisable par personne**. C'est
-  un état cohérent — « source-available » — mais il doit être **choisi et énoncé**, pas subi.
-  Personne ne peut forker, contribuer, ni s'appuyer dessus, et le `README` ne le dit nulle part.
-  Trois issues à ouvrir selon la réponse : licence ouverte (laquelle ?), mention explicite du
-  caractère source-available, ou repassage en privé
+- 🔴 **#113 LA LICENCE** — question NEUVE ouverte par le passage en public. `LICENSE` dit *tous
+  droits réservés* : le code est **lisible par tout le monde et utilisable par personne**. État
+  cohérent — « source-available » — mais **subi, jamais choisi** : il résulte d'un changement de
+  visibilité fait pour débloquer #72 et #18. Se tranche **avant** le transfert vers l'organisation,
+  parce qu'il détermine ce que ce transfert signifie juridiquement
 - **#34** : langue du **code** — recommandation posée, anglais dès maintenant pour `godoc` et les
   identifiants, français pour `rules/` jusqu'à la PR de traduction
 - **#36** : SQLite comme pilote SQL par défaut ?
-- **`CLAUDE.md` porte le nom d'un outil d'assistance** — la règle 🔴 du dépôt, violée par son propre
-  point d'entrée, et désormais visible publiquement. Le garde de contenu ne le voit pas : il cherche
-  des mentions dans le TEXTE, pas dans les noms de fichiers. Recommandation : déplacer la substance
-  dans un fichier au nom neutre et ne garder à la racine qu'une **coquille de chargement**, puis
-  outiller la règle pour qu'elle couvre les noms. À traiter en PR distincte — c'est du périmètre #107
+- **#114 Le fichier d'amorçage porte le nom d'un outil d'assistance** — la règle 🔴 du dépôt, violée
+  par son propre point d'entrée, désormais visible publiquement. Le garde ne le voit pas : il
+  cherche le motif dans le **texte**, pas dans les **noms de fichiers**. Règle d'or n°1 prise en
+  défaut — outillée à 90 %, et les 10 % restants portaient le cas le plus visible. Remède retenu :
+  la substance dans un fichier au nom neutre, une **coquille de chargement** à la racine, et le
+  garde étendu aux noms avec son cas d'échec (ADR 013). Périmètre #107
