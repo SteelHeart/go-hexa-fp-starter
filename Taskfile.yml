@@ -541,8 +541,31 @@ tasks:
       - go test -tags=e2e -count=1 -v ./tests/e2e/...
 
   test:perf:
-    desc: Test de charge k6 (nécessite l'API démarrée)
+    desc: "Test de charge k6 sur POST /v1/users — exige l'API démarrée"
+    silent: true
     cmds:
+      # Deux refus AVANT de lancer quoi que ce soit. Un scénario de charge qui
+      # échoue au bout de cinquante secondes parce que l'outil manque ou que la
+      # cible est éteinte fait perdre les cinquante secondes ET la raison.
+      #
+      # C'est la friction que #91 nommait : la commande existait, pointait un
+      # dossier absent, et échouait sur un message de `k6` qui n'accusait pas la
+      # bonne cause.
+      - cmd: |
+          command -v k6 >/dev/null || {
+            echo "  k6 est absent de cet environnement." >&2
+            echo "  Il est fourni par la toolbox : ./deploy/toolbox/tb task test:perf" >&2
+            echo "  Si vous y êtes déjà, l'image est antérieure à #91 — la reconstruire :" >&2
+            echo "      ./deploy/toolbox/tb --rebuild" >&2
+            exit 1
+          }
+          cible="${E2E_BASE_URL:-http://localhost:8080}"
+          curl -fsS -o /dev/null "$cible/healthz" || {
+            echo "  $cible/healthz ne répond pas — démarrer l'API d'abord :" >&2
+            echo "      go run ./cmd/server" >&2
+            exit 1
+          }
+          echo "  cible : $cible"
       - k6 run tests/perf/registration.js
 
   # ── Contrat d'API ───────────────────────────────────────────────────────────

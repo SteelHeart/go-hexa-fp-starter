@@ -149,7 +149,7 @@ api/openapi.yaml              ⟨absent⟩ — le contrat est SERVI sur /openapi
                               pas encore versionné : un fichier généré à la main dériverait
 tests/e2e/                    tag `e2e` — hors du `go test ./...` par défaut
 tests/integration/            tag `integration` — exige Postgres et Redis (#37)
-tests/perf/                   ⟨absent⟩ — `task test:perf` pointe dessus dans le vide (#91)
+tests/perf/                   scénario de charge k6 — exige l'API démarrée, jamais en CI
 tools/*.sh                    les gardes, UNE définition appelée par la CI et par `task`
 tools/testdata/               les cas qui font ÉCHOUER les gardes (ADR 013) — faux exprès
 tools/covergate/              cliquets de couverture — LA source unique des seuils,

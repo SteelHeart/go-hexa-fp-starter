@@ -60,6 +60,9 @@ ARG ARCH_GO_VERSION=latest
 ARG GOOSE_VERSION=latest
 ARG GOVULNCHECK_VERSION=latest
 ARG GITLEAKS_VERSION=latest
+# k6 est écrit en Go, donc il s'installe comme les autres plutôt que par `apk` :
+# une seule façon d'ajouter un outil, et la même sur toutes les architectures.
+ARG K6_VERSION=latest
 
 # `postgresql17-client` et non `postgresql-client` : la version suit celle de
 # l'image Postgres de `docker-compose.yml`. Un psql plus ancien que le serveur
@@ -84,6 +87,7 @@ RUN go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION} \
  && go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION} \
  && go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} \
  && go install github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION} \
+ && go install go.k6.io/k6@${K6_VERSION} \
  && rm -rf /root/.cache/go-build
 
 # Le dépôt est MONTÉ ici, jamais copié : une image qui embarquerait le code
