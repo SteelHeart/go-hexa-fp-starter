@@ -4,7 +4,7 @@
 # Build : cache des modules séparé du cache de compilation pour que la
 # modification d'un .go ne réinvalide pas le téléchargement des dépendances.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS build
+FROM golang:1.27-alpine AS build
 
 # TARGETOS/TARGETARCH sont fournis par BuildKit (`docker buildx`).
 ARG TARGETOS=linux
